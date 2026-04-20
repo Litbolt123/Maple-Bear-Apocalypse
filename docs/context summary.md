@@ -8,6 +8,76 @@ Running log of **what changed and why** (gameplay, scripts, assets, docs). Used 
 
 **Date:** 2026-03-28
 
+## Block definitions: `format_version` `1.21.130` → `1.26.10` (`BP/blocks/`, `BP - Dev/blocks/`)
+
+- Content log **`[Blocks][error] ... Unexpected version for the loaded data`** for **`snow_layer`**, **`emulsifier_machine`**, **`dusted_dirt`**. **`manifest.json`** already targets **`min_engine_version` [1, 26, 10]**; block files were still **`1.21.130`**. Updated all three to **`1.26.10`** so the engine accepts them on 1.26.10+.
+
+## Property migrations: defer `runWorldPropertyMigrations` (`main.js`)
+
+- **`world.setDynamicProperty`** is not allowed during **early execution**; calling **`saveAllProperties()`** from **`runWorldPropertyMigrations()`** at script top-level caused **`[PropertyHandler] Failed to save world property mb_addon_schema_version`**. **Fix:** wrap **`runWorldPropertyMigrations()`** in **`system.run(() => { ... })`** after **`initializePropertyHandler()`** (BP + **BP - Dev**).
+
+## In-game script self-test: all `mb_*.js` dynamic import sweep (`mb_devScriptSelfTest.js`)
+
+- After existing read-only checks, **`runInGameScriptSelfTest`** **`await`**s **`import()`** on each path in **`SELF_TEST_MODULE_IMPORTS`** (38 modules, sorted; **`main.js`** excluded as pack entry). UI shows **All N modules import OK** or lists **per-file error messages**. **`mb_codex.js`** uses **`await mod.runInGameScriptSelfTest(player)`**. **`BP - Dev/scripts`** synced. **`SCRIPT_TEST_MAP.md`** row updated.
+
+## Docs tree reorganized (`docs/README.md`, `docs/ORGANIZATION.md`)
+
+- **`docs/collaborators/`** — Renamed from `Compoohter/`. Co-creator tasks, UI guide, codex text candidates.
+- **`docs/archive/`** — `VERIFICATION_REPORT.md`, `COMMIT_2026-02-01_session.md`, plus `archive/README.md`.
+- **`development/systems/`** — Added **`CODEX_UNLOCKS.md`**, **`SNOW_STORM_DESIGN.md`**, **`STORM_TROUBLESHOOTING.md`** (moved from `development/` root).
+- **`development/planning/`** — **`QOL_AND_EDGE_CASES.md`**, **`QoL_AND_DEV_TOOLS_IDEAS.md`**, **`STORM_SHELTER_BRAINSTORM.md`** (moved).
+- **`development/guides/`** — **`DEBUG_LOGGING.md`**, **`MINECRAFT_1.26_COMPATIBILITY.md`** (moved).
+- **`development/ai/`** — **`MINING_AI_OPTIMIZATION_OPTIONS.md`** (moved).
+- **Removed duplicate** `docs/TASKS_FOR_CO_CREATOR.md` (root; use **`collaborators/TASKS_FOR_CO_CREATOR.md`**). **Removed duplicate** `development/IDEA_BRAINSTORM.md` (kept **`planning/IDEA_BRAINSTORM.md`**). *Clarification (same date):* content was **not** manually merged into other MDs. Root vs collaborators `TASKS` were identical when added; later edits only touched the collaborators path, so the kept file was authoritative. `IDEA_BRAINSTORM` was earlier a **git rename** into `planning/` (no line diff), not two diverging copies.
+- **`development/ui/Chest_UI_Editor.md`** — Renamed from `Chest UI Editor.md` (spaces).
+- **`docs/README.md`** — Rewritten as master index; **`docs/ORGANIZATION.md`** — layout principles.
+- **Code refs:** `mb_miningAI.js` comment → `docs/development/guides/DEBUG_LOGGING.md`; **`TODO.md`** storm path updated.
+
+## Docs: `docs/development/SCRIPTS_REFERENCE.md`
+
+- **Purpose:** Table-style reference for **each** `BP/scripts/*.js` module (entry, build config, spawn, AI, infection, journal, dev helpers). Links to **`SCRIPT_TEST_MAP.md`** for testing.
+- **`AGENTS.md`**, **`SCRIPT_TEST_MAP.md`:** Cross-links for discoverability.
+
+## In-game dev: `mb_devScriptSelfTest.js` (Journal → Developer Tools → Systems)
+
+- **`mb_devScriptSelfTest.js`:** Read-only diagnostics: current day, **`getInfectionRate`**, **`getAddonDifficultyState`**, spawn-load snapshot (**`refreshSpawnLoadMetrics`** / **`getSpawnLoadDebugSnapshot`**), **`getActiveStormCount`**, script toggles off-list, **`SPAWN_CONFIGS`** length + **`ENTITY_TYPE_CAPS`**, dimensions, block below feet, player count. Plain text **`console.warn`** for Content Log.
+- **`mb_codex.js` (BP + BP - Dev):** **Systems** menu adds **Script self-test (in-game)**; **`PINNABLE_DEV_ITEMS`** entry **Script self-test (in-game)**. Uses **`import("./mb_devScriptSelfTest.js")`** so **`mb_codex`** load order stays safe.
+- **`docs/development/testing/SCRIPT_TEST_MAP.md`:** In-game section + table row for **`mb_devScriptSelfTest.js`**.
+
+## Script testing: `tools/testAllScripts.js`, `SCRIPT_TEST_MAP.md`
+
+- **`tools/testAllScripts.js`:** Walks `BP/scripts/` and `BP - Dev/scripts/`, runs **`node --check`** on each file (cross-platform; fixes Windows vs bash `for` in old `validate:syntax`). Flags: **`--release-only`** (`BP/scripts/` only).
+- **`package.json`:** **`validate:syntax`**, **`test:scripts`**, **`test:scripts:release`** invoke the tool. **`npm run check`** unchanged (JSON + syntax + lint).
+- **`docs/development/testing/SCRIPT_TEST_MAP.md`:** Table of **npm commands** vs **in-game smoke** per script; links to **`TESTING_CHECKLIST.md`**, **`TEST_SCENARIOS.md`**, **`BETA_SMOKE_CHECKLIST.md`**.
+- **`TESTING_CHECKLIST.md`:** Pointer at top to the script map + `npm run check`.
+- **`AGENTS.md`:** Commands table + Tools + Gotchas updated for the above.
+
+**Date:** 2026-04-19
+
+## Maintainability: `mb_balance.js`, feature scripts, migration, telemetry, changelog docs
+
+- **`mb_balance.js`:** Spawn **ENTITY_TYPE_CAPS**, **NATURAL_BUFF_SPAWN_COOLDOWN_TICKS**, mob→bear **conversion pressure** constants, **`MB_CONVERSION_BUFF_NEAR_CAP`**, **`getInfectionRate`**. Wired from **`main.js`** and **`mb_spawnController.js`**.
+- **`mb_miningConstants.js`:** Mining **dimensions / bear types / pathfinding ids / air set** — **`mb_miningAI.js`** imports (flat `scripts/`).
+- **`mb_propertyMigration.js`:** **`runWorldPropertyMigrations()`** after **`initializePropertyHandler()`**; bump **`CURRENT_PROPERTY_SCHEMA`** when adding key renames.
+- **`mb_bearTelemetry.js`:** Dev-only; **`[BEAR TELEMETRY]`** to content log when Spawn → **Bear telemetry** on. **`ALL_MB_MOB_TYPES`** exported from **`mb_spawnLoadMetrics.js`**.
+- **`mb_playerChangelog.js`**, **`mb_journalWhatsNew.js`**, **`docs/PLAYER_CHANGELOG.md`**, **`docs/development/testing/BETA_SMOKE_CHECKLIST.md`**, **`AGENTS.md`** updated. **`BP - Dev/scripts`** synced.
+
+## Spawn + conversion caps: infected / flying (buff limits reverted + natural cooldown)
+
+- **`ENTITY_TYPE_CAPS`:** infected **26→17**, flying **30→20**; **`SPAWN_CONFIGS` `maxCountCap`** tightened for infected/flying day20 ramps (see commit).
+- **Buff bears:** mob→bear conversion near-cap restored to **5** (not **3**). Per-player buff **max** spawn rules restored (**1 / 2 / 3** by group size). Buff **`maxCountCap`** in configs restored to **2** where it had been lowered.
+- **Natural buff spawn cooldown:** world-wide **2 minutes** between successful **spawn-controller** buff spawns (`NATURAL_BUFF_SPAWN_COOLDOWN_TICKS`); **does not** apply to conversions in `main.js`. **`lastNaturalBuffSpawnTick`** updates only when a buff variant actually spawns (not fallback-to-non-buff). **BP - Dev** synced from `BP/`.
+
+## Dev reference: `dev/biomes stuff` (review only)
+
+- **Folder contents:** ~80+ vanilla-style **`*.biome.json`** definitions (overworld, nether, end, oceans, mutated variants, **pale_garden**, etc.) plus **`Custom_Biome_Template.mcpack`** and unpacked **`Template Biome/`** (Bridge-generated behavior **data** pack).
+- **Biome JSONs:** Appear to be **reference dumps** of Bedrock biome components (`minecraft:climate`, `multinoise_generation_rules`, `overworld_generation_rules`, `tags`, etc.) at mixed **`format_version`** values (e.g. **1.20.60** plains vs **1.21.40** pale garden) — useful for comparing **noise / climate / surface** tuning without opening vanilla packs.
+- **Template pack pattern:** **`feature_rules/biome_overworld.json`** runs **`before_surface_pass`**, filters **`has_biome_tag` == `plains`**, **`fixed_grid`** distribution (256 iterations, 16×16 footprint), **`y`** at heightmap−1 — i.e. **surface decoration tied to an existing biome tag**, not a new biome registration by itself.
+- **Custom patch feature:** **`custom_biome.json`** is a **`single_block_feature`** that replaces **`minecraft:grass`** with a placeholder block (comment says swap for custom grass); **`determinant_overworld`** + **`block_picker_overworld`** use Molang noise to pick a **`biome_idx`** and only place when **`t.biome_idx == 2`** — a **deterministic “which sub-patch of this chunk”** pattern.
+- **Attribution:** Template manifest credits **BigChungus21220**, **Bridge 2.6.1**, **`min_engine_version` [1, 20, 30]** — align namespace **`yourid:`** and engine version if folded into Maple Bear packs.
+
+**Date:** 2026-03-28
+
 ## Buff AI Debug: “Show Countdown” button clarity (`mb_codex.js`)
 
 - **Issue:** **Show Countdown** only re-opened the menu; stuck / explosion text was already in the body, so it looked like it did nothing.
@@ -1796,3 +1866,12 @@ Long-form **Recent Changes** bullets and **Current Project State** from the form
 
 - **`mb_codex.js` (BP + BP - Dev):** **`getJournalMainPinnableItems()`** adds pin-eligible **journal** shortcuts (Infection, Symptoms, Mobs, … Settings, Search when enabled) with **`journalPin`** so release builds skip the admin disclaimer for those. **`getPinEligibleDevItems()`** merges journal shortcuts with **all** **`PINNABLE_DEV_ITEMS`** when **`INCLUDE_ADMIN_TOOLS`** or full dev **`INCLUDE_FULL_DEVELOPER_TOOLS`** (release admin no longer limited to two pins). Main menu resolves pins via **`findPinnableItemById`**.
 - **`main.js`:** Removed hard **nearby 30** conversion cutoff. **Nearby** (64m) and **world-wide** addon bear counts (via **`refreshSpawnLoadMetrics` / `getSpawnLoadDebugSnapshot`**) apply a **ramped multiplier** to **`getInfectionRate`** for pig/cow infected conversions and normal mob→bear rolls. **Buff-bear outcomes** (large mob + day 8+, storm or bear kill) keep the **full** conversion rate so boss-tier pressure stays. **Buff bear count ≥5 nearby** still blocks **new** buff spawns. Constants: **`MB_CONVERSION_NEARBY_PRESSURE_*`**, **`MB_CONVERSION_WORLD_PRESSURE_*`**.
+
+### 2026-03-28 — Refactor: spawn configs + entity IDs; mob conversion module
+
+- **`mb_spawnEntityIds.js`:** Canonical **`TINY_BEAR_ID`** / tier IDs + **`MAPLE_BEAR_*`** aliases, **`INFECTED_PIG_ID` / `INFECTED_COW_ID`**.
+- **`mb_spawnConfigs.js`:** **`SPAWN_CONFIGS`** + **`SPAWN_CONFIG_DISPLAY_NAMES`** (numeric natural-spawn tuning in one file). **`mb_spawnController.js`** imports these; **`mb_balance.js`** header points here instead of inline controller tables.
+- **`mb_mainMobConversion.js`:** **`handleMobConversion`**, **`handleStormMobConversion`**, internal helpers (`convertEntity`, pressure ramps, **`getMobSize`**, pig/cow conversions, storm-at-location). **`main.js`** wires **`entityDie`** only; bear **`typeId`** lists import from **`mb_spawnEntityIds.js`**.
+- **`docs/development/ui/Notifications.md`:** Short **future** note (toasts vs chat, quests/achievements log, buff-kill rewards / rare rolls) — not implemented.
+- **Codex:** **`mb_codexDebugMenus.js`** not split this pass (debug UI still lives inside **`showCodexBook`**); next step is factory or per-hub files to avoid a huge risky move.
+- **`BP - Dev/scripts`:** Synced for touched files.

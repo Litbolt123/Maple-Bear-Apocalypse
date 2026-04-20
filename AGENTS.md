@@ -9,7 +9,7 @@ MapleBear TakeOver is a Minecraft Bedrock Edition addon (behavior pack + resourc
 - `RP/` — Resource Pack (models, textures, sounds, particles, animations)
 - `RP - Dev/` — Dev twin; keep manifest versions aligned with `BP - Dev/`
 - `tools/` — Node.js developer tooling scripts
-- `docs/` — Design docs, planning, and reference material
+- `docs/` — Design docs, planning, and reference material. **Index:** `docs/README.md`. **Per-script overview:** `docs/development/SCRIPTS_REFERENCE.md`.
 
 ### Context log (single file)
 
@@ -17,6 +17,9 @@ MapleBear TakeOver is a Minecraft Bedrock Edition addon (behavior pack + resourc
 - Add new work as **dated sections at the top** (newest first). Do **not** create or duplicate a second long-form context file; **`docs/ai/CONTEXT_SUMMARY.md`** is only a **stub** that links to the canonical file.
 
 The JavaScript in `BP/scripts/` uses ES modules with `@minecraft/server` and `@minecraft/server-ui` APIs (provided at runtime by Minecraft, not npm packages).
+
+**Balance / tuning:** `mb_balance.js` centralizes spawn **entity-type caps**, **natural buff cooldown** tick length, **mob→bear conversion pressure** multipliers, **buff conversion near-cap**, and **getInfectionRate** (day-step table). **`mb_spawnConfigs.js`** owns **`SPAWN_CONFIGS`** (per-entity spawn curves). **`mb_spawnEntityIds.js`** centralizes spawn/conversion entity IDs.  
+**Helpers (flat `scripts/`):** `mb_propertyMigration.js` (world schema version + one-shot key migrations), `mb_playerChangelog.js` / `mb_journalWhatsNew.js` (in-game **What's new**), `mb_bearTelemetry.js` (dev-only bear counts by type → content log when Spawn → **Bear telemetry** is on), `mb_miningConstants.js` (dimension IDs + mining bear types + pathfinding union + air set).
 
 ## Cursor Cloud specific instructions
 
@@ -29,7 +32,9 @@ All commands are defined in `package.json`:
 | `npm run lint` | ESLint check on `BP/scripts/` and `tools/` |
 | `npm run lint:fix` | ESLint with auto-fix |
 | `npm run validate:json` | Validate all JSON files in `BP/` and `RP/` |
-| `npm run validate:syntax` | Node.js `--check` on all JS files |
+| `npm run validate:syntax` | Node.js `--check` on all BP scripts (`tools/testAllScripts.js`; works on Windows) |
+| `npm run test:scripts` | Same as `validate:syntax` |
+| `npm run test:scripts:release` | Syntax check `BP/scripts/` only |
 | `npm run validate` | JSON + syntax validation |
 | `npm run check` | Full validation + lint |
 
@@ -41,6 +46,8 @@ All commands are defined in `package.json`:
 
 ### Tools
 
+- `tools/testAllScripts.js` — Cross-platform **`node --check`** on every `*.js` under `BP/scripts/` and `BP - Dev/scripts/`. Used by **`npm run validate:syntax`** and **`npm run test:scripts`**. Per-script manual smoke ideas: **`docs/development/testing/SCRIPT_TEST_MAP.md`**.
+- **In-game (dev pack):** **Journal → Developer Tools → Systems → Script self-test** runs **`mb_devScriptSelfTest.js`** (day, spawn load snapshot, storms, toggles, dimensions, etc.); also **`console.warn`**’d for the Content Log. Not a substitute for **`npm run check`** on your PC.
 - `tools/updateMiningBlocks.js` copies `MINING_BREAKABLE_BLOCKS` from `BP/scripts/mb_miningBlockList.js` into `minecraft:break_blocks` on mining bear entities (optional consistency with the list the **script** uses). **Actual digging** is done in `mb_miningAI.js` via `dimension.setPermutation` / break logic, not by vanilla entity break components. Run: `node tools/updateMiningBlocks.js` from repo root (requires Node on PATH).
 
 **Other script-driven block clearing**: `mb_torpedoAI.js` clears blocks with `setType("minecraft:air")` in path bursts — same idea (no reliance on entity `break_blocks`).
@@ -71,6 +78,6 @@ When folding work from **`BP - Dev/`** / **`RP - Dev/`** into a store or public 
 
 ### Gotchas
 
-- There are no automated test frameworks. Testing is done manually inside Minecraft. See `docs/development/testing/TESTING_CHECKLIST.md` for manual test scenarios.
-- The 21 JS files in `BP/scripts/` total ~25k lines. The main entry point `main.js` alone is ~8.5k lines.
+- There are no in-game automated test frameworks. Run **`npm run check`** before commits (JSON + syntax + ESLint). Use **`docs/development/testing/SCRIPT_TEST_MAP.md`** for per-script manual checks; **`TESTING_CHECKLIST.md`** for deeper historical scenarios.
+- The behavior pack has many JS modules under `BP/scripts/` (entry: `main.js` is large; total line count grows with features).
 - ESLint reports ~220 warnings (all `no-unused-vars`). These are pre-existing and expected — many variables/functions are reserved for future use or disabled debug features.

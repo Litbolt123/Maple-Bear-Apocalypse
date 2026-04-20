@@ -18,7 +18,7 @@ Brainstormed quality-of-life features and edge cases to consider for the addon. 
 
 ### Codex & Journal
 
-- ⚠️ **Simpler wording** – See `docs/Compoohter/CODEX_TEXT_SIMPLIFY_CANDIDATES.md`. *Candidates doc exists; apply as needed.*
+- ⚠️ **Simpler wording** – See `docs/collaborators/CODEX_TEXT_SIMPLIFY_CANDIDATES.md`. *Candidates doc exists; apply as needed.*
 
 ### World & Day
 

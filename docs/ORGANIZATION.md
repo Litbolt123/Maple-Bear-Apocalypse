@@ -1,98 +1,59 @@
-# Documentation Organization
+# Documentation layout
 
-This document explains how the documentation is organized in this project.
+How `docs/` is organized. **The canonical index with links to every file is [README.md](README.md).**
 
-## 📁 Structure
+---
+
+## Principles
+
+1. **`docs/context summary.md`** stays at **`docs/` root** (canonical session log; see `AGENTS.md`).
+2. **`docs/PLAYER_CHANGELOG.md`** stays at **`docs/` root** (in-game string points at `docs/PLAYER_CHANGELOG.md`).
+3. **`docs/collaborators/`** — non-programmer tasks (textures, lore, UI copy). *(Renamed from `Compoohter/` in 2026.)*
+4. **`docs/archive/`** — one-off reports and old session dumps, not primary reading.
+5. **`docs/development/`** — technical work, grouped by **guides**, **systems**, **planning**, **testing**, **ai**, **sounds**, **ui**, **prompts**, **tracking**.
+
+---
+
+## Folder tree (summary)
 
 ```
 docs/
-├── README.md                    # Documentation index (start here)
-├── ORGANIZATION.md              # This file - explains organization
-│
-├── design/                      # Design & Vision Documents
-│   ├── DESIGN_VISION.md         # Core design philosophy and vision
-│   └── SAFE_BIOMES.md           # Analysis of safer biomes
-│
-├── development/                 # Development Planning & Mechanics
-│   ├── guides/                  # How-to guides and tutorials
-│   │   └── HOW_TO_ADD_SOUNDS.md
-│   ├── sounds/                  # Sound-related documentation
-│   │   ├── SOUND_PROGRESS.md
-│   │   ├── SOUND_GENERATION_PROMPT.md
-│   │   └── maple_bear_sound_prompts.md
-│   ├── ai/                      # AI and behavior documentation
-│   │   ├── MINING_BEAR_INTELLIGENCE_PLAN.md
-│   │   ├── AI_OPTIMIZATION_AUDIT.md
-│   │   └── HEAT_SEEKING_VISION.md
-│   ├── systems/                 # System documentation
-│   │   ├── SPAWN_SYSTEM_EXPLANATION.md
-│   │   ├── BIOME_GENERATION_VARIABLE_SIZES.md
-│   │   ├── DIMENSION_ADAPTATIONS.md
-│   │   └── LEADER_DEATH_HANDLER.md
-│   ├── planning/                # Planning and brainstorming
-│   │   ├── IMPLEMENTATION_PLAN.md
-│   │   ├── TASK_PRIORITY.md
-│   │   └── IDEA_BRAINSTORM.md
-│   ├── tracking/                # Progress tracking and summaries
-│   │   ├── CHANGELOG.md
-│   │   ├── SESSION_SUMMARY.md
-│   │   └── MECHANICS_SUMMARY.md
-│   ├── prompts/                 # Prompt files for AI generation
-│   │   └── maple_bear_condensed_prompts.md
-│   └── testing/                 # Testing documentation
-│       ├── TEST_SCENARIOS.md
-│       └── TESTING_CHECKLIST.md
-│
-├── reference/                   # External Documentation Resources
-│   ├── DOCUMENTATION_INDEX.md   # Index of official docs
-│   ├── INDEXING_URLS.md         # URLs to index (verify first)
-│   ├── INDEXING_URLS_VERIFIED.md # Verified URLs approach
-│   ├── USEFUL_LINKS.md          # Helpful development links
-│   └── COLORS_AND_STYLING.md    # UI color codes and styling reference
-│
-├── context summary.md           # Session / change log (canonical; humans + AI)
-├── ai/
-│   └── CONTEXT_SUMMARY.md       # Stub → links to ../context summary.md
-│
-└── Compoohter/                  # Co-Creator Resources
-    ├── TASKS_FOR_CO_CREATOR.md  # Task list with file locations
-    ├── UI_CREATION_GUIDE.md     # UI creation guide
-    └── NEXT_SESSION_TASKS.md    # Planned improvements
+├── README.md                 # Master index (start here)
+├── ORGANIZATION.md           # This file
+├── context summary.md        # Session / change log (canonical)
+├── PLAYER_CHANGELOG.md       # Player-facing beta notes
+├── ai/                       # Stub → context summary
+├── archive/                  # Historical reports
+├── collaborators/            # Co-creator tasks & guides
+├── design/                   # Vision & world
+├── development/
+│   ├── guides/               # How-to, debug, compatibility
+│   ├── sounds/               # Audio docs
+│   ├── ai/                   # Bear AI & pathing
+│   ├── systems/              # Spawn, infection, storms, codex unlocks…
+│   ├── planning/             # Roadmaps, ideas, QoL
+│   ├── tracking/             # Changelogs, session summaries
+│   ├── testing/              # QA, script test map
+│   ├── ui/                   # UI reference notes
+│   ├── prompts/              # AI prompt files
+│   ├── SCRIPTS_REFERENCE.md
+│   ├── DEVELOPER_ONBOARDING.md
+│   ├── ADDON_SYSTEMS_AND_FEATURES.md
+│   └── PROJECT_STATUS.md
+└── reference/                # External Bedrock links & styling
 ```
 
-## 🎯 Root-Level Files
+---
 
-- `README.md` - Main project README with quick links
-- `TODO.md` - Current task list and project status
+## When moving files
 
-## 📝 File Categories
+- Update **[README.md](README.md)** (master list).
+- Search the repo for **old paths** (`grep` the filename).
+- Prefer **kebab-case or underscores** in new filenames (avoid spaces).
 
-### Design Documents (`design/`)
-High-level design philosophy, vision, and world-building decisions. These documents define **what** the addon should be and **how** it should feel.
+---
 
-### Development Documents (`development/`)
-Technical documentation, planning, and mechanics. These documents explain **how** things work and **what** needs to be built.
+## Related
 
-### Reference Documents (`reference/`)
-External resources and links for Minecraft Bedrock development. These are reference materials, not project-specific documentation.
-
-### AI Context (`ai/`)
-Files specifically for AI assistant understanding. These help maintain context across development sessions.
-
-### Co-Creator Resources (`Compoohter/`)
-Documentation for team members working on textures, lore, and design (non-scripting work). Includes task lists with file locations and line numbers, UI creation guides, and planning documents.
-
-## 🔄 When to Update
-
-- **Design docs**: Update when design philosophy or vision changes
-- **Development docs**: Update when mechanics change or new features are planned
-- **Reference docs**: Update when new resources are found or links change
-- **AI context**: Updated automatically during development sessions
-
-## 📌 Best Practices
-
-1. **Keep root clean**: Only `README.md` and `TODO.md` should be in root
-2. **Categorize properly**: Put files in the most appropriate category
-3. **Update references**: When moving files, update all links that reference them
-4. **Document changes**: Note significant organizational changes in this file
-
+- **[AGENTS.md](../AGENTS.md)** — tooling and `context summary` rules
+- **[README.md](README.md)** — full file index

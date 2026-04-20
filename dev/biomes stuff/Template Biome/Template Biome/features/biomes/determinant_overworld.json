@@ -1,0 +1,13 @@
+{
+	"format_version": "1.13.0",
+	"minecraft:scatter_feature": {
+		"description": {
+			"identifier": "yourid:biomes/determinant_overworld"
+		},
+		"places_feature": "yourid:biomes/block_picker_overworld",
+		"iterations": "v.o = q.noise(v.originx/128, v.originz/128)*0.25;v.px = v.originx/256 + v.o;v.pz = v.originz/256 + v.o;t.r = 0;v.n1 = 999;v.n2 = 999;v.i = 0;loop(9,{    v.x = math.mod(v.i,3) - 1;    v.z = math.floor(v.i/3) - 1;    v.p2x = math.floor(v.px) + v.x;    v.p2z = math.floor(v.pz) + v.z;    v.rx = 0;    v.rz = 0;    v.p3x = math.mod(v.p2x*0.1031,1);    v.p3y = math.mod(v.p2z*0.1030,1);    v.p3z = math.mod(v.p2x*0.0973,1);    v.p3d = v.p3x*(v.p3y + 33.33) + v.p3y*(v.p3z + 33.33) + v.p3z*(v.p3x + 33.33);    v.p3x = v.p3x + v.p3d;    v.p3y = v.p3y + v.p3d;    v.p3z = v.p3z + v.p3d;    v.rx = math.mod((v.p3x + v.p3y)*v.p3z,1);    v.rz = math.mod((v.p3x + v.p3z)*v.p3y,1);    v.d4x = v.p2x + v.rx - v.px;    v.d4z = v.p2z + v.rz - v.pz;    v.d2 = v.d4x*v.d4x + v.d4z*v.d4z;            (v.d2 < v.n1) ? {        v.n2 = v.n1;        v.n1 = v.d2;        t.r = v.rx;    } : {        (v.d2 < v.n2) ? {            v.n2 = v.d2;        };    };        v.i = v.i + 1;});t.d = math.abs(math.sqrt(v.n2) - math.sqrt(v.n1));t.biome_idx = math.floor(t.r*4);return 1;",
+		"x": 0,
+		"y": 0,
+		"z": 0
+	}
+}

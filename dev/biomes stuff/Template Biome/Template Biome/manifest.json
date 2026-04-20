@@ -1,0 +1,39 @@
+{
+	"format_version": 2,
+	"header": {
+		"name": "Custom Biome Template",
+		"description": "Shows you how to determine where custom biomes should spawn",
+		"uuid": "08ba83c2-8af2-d246-aff5-1bbd85fa56f0",
+		"version": [
+			1,
+			0,
+			5
+		],
+		"min_engine_version": [1, 20, 30]
+	},
+	"metadata": {
+		"authors": [
+			"BigChungus21220"
+		],
+		"generated_with": {
+			"bridge": [
+				"2.6.1"
+			],
+			"dash": [
+				"0.10.10"
+			]
+		}
+	},
+	"modules": [
+		{
+			"description": "Behavior",
+			"version": [
+				1,
+				0,
+				0
+			],
+			"uuid": "19e752d7-aa35-113b-188e-abb939c88c18",
+			"type": "data"
+		}
+	]
+}

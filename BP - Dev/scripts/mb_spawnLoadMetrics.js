@@ -16,7 +16,7 @@ export const SPAWN_LOAD_BIAS_PROPERTY = "mb_spawn_load_bias";
 const DIMENSION_IDS = ["overworld", "nether", "the_end"];
 
 /** All addon bear / infected mobs that add ongoing script or pathfinding load. */
-const ALL_MB_MOB_TYPES = [
+export const ALL_MB_MOB_TYPES = [
     "mb:mb_day00",
     "mb:mb_day04",
     "mb:mb_day08",

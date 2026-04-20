@@ -11,29 +11,10 @@ import { isDebugEnabled } from "./mb_codex.js";
 import { isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
 import { getCachedPlayers, getCachedPlayerPositions, getCachedMobs } from "./mb_sharedCache.js";
 import { getMiningWorkMultiplier } from "./mb_performanceProfile.js";
+import { DIMENSION_IDS, MINING_BEAR_TYPES, PATHFINDING_ENTITY_TYPES, AIR_BLOCKS } from "./mb_miningConstants.js";
 
 // Basic debug to verify script is loaded
 // console.warn("[MINING AI] Script loaded successfully");
-
-const DIMENSION_IDS = ["overworld", "nether", "the_end"];
-const MINING_BEAR_TYPES = [
-    { id: "mb:mining_mb", tunnelHeight: 2 }, // Standard 1x2 tunnel (1 wide, 2 tall)
-    { id: "mb:mining_mb_day20", tunnelHeight: 2 } // Standard 1x2 tunnel (1 wide, 2 tall)
-];
-
-// Entity types that use shared pathfinding (for processPathfindingChunk + cleanup entity lookup)
-// Includes infected bears/pig/cow - same nox7 pathfinding as mining bears
-const PATHFINDING_ENTITY_TYPES = [
-    "mb:mining_mb", "mb:mining_mb_day20",
-    "mb:infected", "mb:infected_day08", "mb:infected_day13", "mb:infected_day20",
-    "mb:infected_pig", "mb:infected_cow"
-];
-
-const AIR_BLOCKS = new Set([
-    "minecraft:air",
-    "minecraft:cave_air",
-    "minecraft:void_air"
-]);
 
 // Blocks that entities can walk through (non-solid blocks)
 // These should not block pathfinding - entities can walk through them
@@ -249,7 +230,7 @@ const PATHFINDING_MAX_CONCURRENT = 3; // Maximum concurrent pathfinding operatio
 
 // Debug flags - now controlled via Debug Menu in Journal (Basic Journal → Debug).
 // (isDebugEnabled is imported at the top of the file)
-// See docs/development/DEBUG_LOGGING.md for what each flag enables.
+// See docs/development/guides/DEBUG_LOGGING.md for what each flag enables.
 // For stair/step-block issues: enable "mining" + "pitfall" (or "all"); "stairCreation" logs step-block refusals.
 
 // Helper functions to check debug flags dynamically

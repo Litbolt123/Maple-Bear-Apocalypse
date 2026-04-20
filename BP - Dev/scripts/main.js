@@ -6,7 +6,7 @@ import { initializeDayTracking, getCurrentDay, setCurrentDay, getInfectionMessag
 import { registerDustedDirtBlock, unregisterDustedDirtBlock, countNearbyDustedDirtBlocks, upsertEmulsifierZoneAtBlock, removeEmulsifierZoneAtBlock, getEmulsifierZoneAtBlock, getZoneFuelQueueForUI, isInsideEmulsifierNoSpawnZone } from "./mb_spawnController.js";
 import { initializePropertyHandler, getPlayerProperty, setPlayerProperty, getWorldProperty, setWorldProperty, getAddonDifficultyState } from "./mb_dynamicPropertyHandler.js";
 import { initializeAdaptivePerformanceWatch, getPerfWallStress01, getPerfMobPressureForSpawn01 } from "./mb_performanceProfile.js";
-import { registerSpawnLoadProbes, initializeSpawnLoadScalerWatch, refreshSpawnLoadMetrics, getSpawnLoadDebugSnapshot } from "./mb_spawnLoadMetrics.js";
+import { registerSpawnLoadProbes, initializeSpawnLoadScalerWatch } from "./mb_spawnLoadMetrics.js";
 import { getActiveStormCount } from "./mb_snowStorm.js";
 import { isDustStormsEnabled, isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
 import { ACTION_BAR_SLOT, setHudActionBarSegment, clearHudActionBarSegment, pushHudActionBarToast } from "./mb_actionBarHud.js";
@@ -27,6 +27,33 @@ import { tickInfectionCoughAndBreath, playPowderHiccup, playCureSighRelief, rese
 import { hasInfectionExposureLineOfSight } from "./mb_infectionExposureLos.js";
 import { SNOW_REPLACEABLE_BLOCKS, SNOW_TWO_BLOCK_PLANTS } from "./mb_blockLists.js";
 import { CHAT_ACHIEVEMENT, CHAT_DANGER, CHAT_DANGER_STRONG, CHAT_SUCCESS, CHAT_WARNING, CHAT_INFO, CHAT_DEV, CHAT_HIGHLIGHT, CHAT_SPECIAL } from "./mb_chatColors.js";
+import {
+    MAPLE_BEAR_ID,
+    MAPLE_BEAR_DAY4_ID,
+    MAPLE_BEAR_DAY8_ID,
+    MAPLE_BEAR_DAY13_ID,
+    MAPLE_BEAR_DAY20_ID,
+    INFECTED_BEAR_ID,
+    INFECTED_BEAR_DAY8_ID,
+    INFECTED_BEAR_DAY13_ID,
+    INFECTED_BEAR_DAY20_ID,
+    BUFF_BEAR_ID,
+    BUFF_BEAR_DAY8_ID,
+    BUFF_BEAR_DAY13_ID,
+    BUFF_BEAR_DAY20_ID,
+    FLYING_BEAR_ID,
+    FLYING_BEAR_DAY15_ID,
+    FLYING_BEAR_DAY20_ID,
+    MINING_BEAR_ID,
+    MINING_BEAR_DAY20_ID,
+    TORPEDO_BEAR_ID,
+    TORPEDO_BEAR_DAY20_ID,
+    INFECTED_PIG_ID,
+    INFECTED_COW_ID
+} from "./mb_spawnEntityIds.js";
+import { handleMobConversion, handleStormMobConversion } from "./mb_mainMobConversion.js";
+import { runWorldPropertyMigrations } from "./mb_propertyMigration.js";
+import { registerBearTelemetryTick } from "./mb_bearTelemetry.js";
 
 // NOTE: Debug and testing features have been commented out for playability
 // To re-enable testing features, uncomment the following sections:
@@ -91,42 +118,9 @@ function applyEffect(target, effectId, duration, options = {}, trackSkip = true)
     }
 }
 
-// Constants for Maple Bear behavior
-const MAPLE_BEAR_ID = "mb:mb_day00";
-const MAPLE_BEAR_DAY4_ID = "mb:mb_day04";
-const MAPLE_BEAR_DAY8_ID = "mb:mb_day08";
-const MAPLE_BEAR_DAY13_ID = "mb:mb_day13";
-const MAPLE_BEAR_DAY20_ID = "mb:mb_day20";
-const INFECTED_BEAR_ID = "mb:infected";
-const INFECTED_BEAR_DAY8_ID = "mb:infected_day08";
-const INFECTED_BEAR_DAY13_ID = "mb:infected_day13";
-const INFECTED_BEAR_DAY20_ID = "mb:infected_day20";
-const BUFF_BEAR_ID = "mb:buff_mb";
-const BUFF_BEAR_DAY8_ID = "mb:buff_mb_day8";
-const BUFF_BEAR_DAY13_ID = "mb:buff_mb_day13";
-const BUFF_BEAR_DAY20_ID = "mb:buff_mb_day20";
-const FLYING_BEAR_ID = "mb:flying_mb";
-const FLYING_BEAR_DAY15_ID = "mb:flying_mb_day15";
-const FLYING_BEAR_DAY20_ID = "mb:flying_mb_day20";
-const MINING_BEAR_ID = "mb:mining_mb";
-const MINING_BEAR_DAY20_ID = "mb:mining_mb_day20";
-const TORPEDO_BEAR_ID = "mb:torpedo_mb";
-const TORPEDO_BEAR_DAY20_ID = "mb:torpedo_mb_day20";
-const INFECTED_PIG_ID = "mb:infected_pig";
-const INFECTED_COW_ID = "mb:infected_cow";
 const SNOW_ITEM_ID = "mb:snow";
 const INFECTED_TAG = "mb_infected";
 const INFECTED_CORPSE_ID = "mb:infected_corpse";
-/** Below this nearby count (64m), mob→bear conversions use full pressure mult (1.0). */
-const MB_CONVERSION_NEARBY_PRESSURE_START = 24;
-/** Above this nearby count, nearby pressure mult bottoms out at MB_CONVERSION_NEARBY_MULT_MIN. */
-const MB_CONVERSION_NEARBY_PRESSURE_END = 96;
-const MB_CONVERSION_NEARBY_MULT_MIN = 0.035;
-
-/** World-wide addon bear total: start extra dampening (spread-out herds). */
-const MB_CONVERSION_WORLD_PRESSURE_START = 60;
-const MB_CONVERSION_WORLD_PRESSURE_END = 300;
-const MB_CONVERSION_WORLD_MULT_MIN = 0.025;
 const SNOW_LAYER_BLOCK = "minecraft:snow_layer";
 const INFECTED_GROUND_BLOCKS = new Set(["mb:dusted_dirt", "mb:snow_layer"]);
 // SNOW_REPLACEABLE_BLOCKS and SNOW_TWO_BLOCK_PLANTS imported from mb_blockLists.js
@@ -190,34 +184,6 @@ function getBiomeIdAt(dimension, location) {
         }
     } catch { }
     return null;
-}
-
-// Progressive Infection Rate System Constants
-const INFECTION_RATE_STEPS = [
-    { day: 2, rate: 0.20 }, // 20% on day 2
-    { day: 3, rate: 0.30 }, // 30% on day 3
-    { day: 4, rate: 0.40 }, // 40% on day 4
-    { day: 5, rate: 0.40 }, // 40% on day 5
-    { day: 6, rate: 0.50 }, // 50% on day 6
-    { day: 7, rate: 0.50 }, // 50% on day 7
-    { day: 8, rate: 0.60 }, // 60% on day 8
-    { day: 11, rate: 0.70 }, // 70% on day 11
-    { day: 15, rate: 0.80 }, // 80% on day 15
-    { day: 17, rate: 0.90 }, // 90% on day 17
-    { day: 20, rate: 1.00 }  // 100% on day 20+
-];
-
-function getInfectionRate(day) {
-    if (day < 2) return 0; // No infection before day 2
-    let currentRate = 0;
-    for (const step of INFECTION_RATE_STEPS) {
-        if (day >= step.day) {
-            currentRate = step.rate;
-        } else {
-            break;
-        }
-    }
-    return currentRate;
 }
 
 // --- Player Codex (Unlock System) ---
@@ -1758,397 +1724,6 @@ function sendDiscoveryMessage(player, codex, messageType = "interesting", itemTy
     return true;
 }
 
-// --- Helper: Common entity conversion logic ---
-function convertEntity(deadEntity, killer, targetEntityId, conversionName) {
-    // Validate entity; killer is optional (null for storm conversions)
-    if (!deadEntity || !deadEntity.isValid) {
-        // console.log(`[${conversionName}] Skipping - entity is invalid`);
-        return null;
-    }
-    if (killer && !killer.isValid) {
-        // console.log(`[${conversionName}] Skipping - killer is invalid`);
-        return null;
-    }
-    
-    const location = deadEntity.location;
-    const dimension = deadEntity.dimension;
-    
-    // Check chunk is loaded
-    try {
-        dimension.getBlock({ 
-            x: Math.floor(location.x), 
-            y: Math.floor(location.y), 
-            z: Math.floor(location.z) 
-        });
-        } catch (chunkError) {
-        // console.log(`[${conversionName}] Skipping - chunk not loaded at ${Math.floor(location.x)}, ${Math.floor(location.y)}, ${Math.floor(location.z)}`);
-        return null;
-        }
-        
-    // Spawn replacement entity
-    const newEntity = dimension.spawnEntity(targetEntityId, location);
-        
-    // Add visual feedback
-        dimension.spawnParticle("mb:white_dust_particle", location);
-    
-    // Place snow layer at spawn location (all Maple Bears spawn on snow)
-    // Don't place on top of mb:snow_layer; replace minecraft:snow_layer with mb:snow_layer
-    try {
-        const spawnY = Math.floor(location.y - 1);
-        const snowLoc = { x: Math.floor(location.x), y: spawnY, z: Math.floor(location.z) };
-        const snowBlock = dimension.getBlock(snowLoc);
-        const aboveBlock = dimension.getBlock({ x: snowLoc.x, y: spawnY + 1, z: snowLoc.z });
-        const belowType = snowBlock?.typeId;
-        if (belowType === "minecraft:snow_layer") {
-            try { snowBlock.setType("mb:snow_layer"); } catch { snowBlock.setType(SNOW_LAYER_BLOCK); }
-        } else if (belowType !== "mb:snow_layer" && snowBlock && aboveBlock && snowBlock.isAir !== undefined && !snowBlock.isAir && snowBlock.isLiquid !== undefined && !snowBlock.isLiquid && aboveBlock.isAir !== undefined && aboveBlock.isAir) {
-            try { aboveBlock.setType("mb:snow_layer"); } catch { aboveBlock.setType(SNOW_LAYER_BLOCK); }
-        }
-    } catch {
-        // Ignore snow placement errors
-    }
-        
-    // console.log(`[${conversionName}] Conversion complete`);
-    return newEntity;
-}
-
-// --- Helper: Convert at location (for storm kills when entity may be invalid) ---
-function convertEntityAtLocation(deadEntityOrLoc, killer, targetEntityId, conversionName) {
-    const location = deadEntityOrLoc?.location ?? deadEntityOrLoc;
-    const dimension = deadEntityOrLoc?.dimension ?? deadEntityOrLoc?.dimension;
-    if (!location || !dimension) return null;
-    if (killer && !killer.isValid) return null;
-    
-    try {
-        dimension.getBlock({ x: Math.floor(location.x), y: Math.floor(location.y), z: Math.floor(location.z) });
-    } catch {
-        return null;
-    }
-    
-    const newEntity = dimension.spawnEntity(targetEntityId, location);
-    dimension.spawnParticle("mb:white_dust_particle", location);
-    
-    try {
-        const spawnY = Math.floor(location.y - 1);
-        const snowLoc = { x: Math.floor(location.x), y: spawnY, z: Math.floor(location.z) };
-        const snowBlock = dimension.getBlock(snowLoc);
-        const aboveBlock = dimension.getBlock({ x: snowLoc.x, y: spawnY + 1, z: snowLoc.z });
-        const belowType = snowBlock?.typeId;
-        if (belowType === "minecraft:snow_layer") {
-            try { snowBlock.setType("mb:snow_layer"); } catch { snowBlock.setType(SNOW_LAYER_BLOCK); }
-        } else if (belowType !== "mb:snow_layer" && snowBlock && aboveBlock && !snowBlock.isAir && !snowBlock.isLiquid && aboveBlock.isAir) {
-            try { aboveBlock.setType("mb:snow_layer"); } catch { aboveBlock.setType(SNOW_LAYER_BLOCK); }
-        }
-    } catch { }
-    
-    return newEntity;
-}
-
-// --- Helper: Convert pig to infected pig ---
-function convertPigToInfectedPig(deadPig, killer) {
-    try {
-        const killerType = killer.typeId;
-        const currentDay = getCurrentDay();
-        
-        // Use shared conversion logic
-        const infectedPig = convertEntity(deadPig, killer, INFECTED_PIG_ID, "PIG CONVERSION");
-        
-        if (infectedPig) {
-        // console.log(`[PIG CONVERSION] Day ${currentDay}: Pig killed by ${killerType} → spawned Infected Pig`);
-        }
-        
-    } catch (error) {
-        // console.warn(`[PIG CONVERSION] Error converting pig to infected pig:`, error);
-    }
-}
-
-// --- Helper: Convert cow to infected cow ---
-function convertCowToInfectedCow(deadCow, killer) {
-    try {
-        const killerType = killer.typeId;
-        const currentDay = getCurrentDay();
-        
-        // Use shared conversion logic
-        const infectedCow = convertEntity(deadCow, killer, INFECTED_COW_ID, "COW CONVERSION");
-        
-        if (infectedCow) {
-        // console.log(`[COW CONVERSION] Day ${currentDay}: Cow killed by ${killerType} → spawned Infected Cow`);
-        }
-        
-    } catch (error) {
-        // console.warn(`[COW CONVERSION] Error converting cow to infected cow:`, error);
-    }
-}
-
-// --- Helper: Convert mob to Maple Bear based on size and day ---
-function convertMobToMapleBear(deadMob, killer) {
-    try {
-        const mobType = deadMob.typeId;
-        
-        // Don't convert pigs and cows - they're handled by their respective conversion systems
-        if (mobType === "minecraft:pig") {
-            // console.log(`[CONVERSION] Ignoring pig conversion - handled by pig conversion system`);
-            return;
-        }
-        if (mobType === "minecraft:cow") {
-            // console.log(`[CONVERSION] Ignoring cow conversion - handled by cow conversion system`);
-            return;
-        }
-        
-        // Buff bear cap nearby (conversion chance already throttled by world/nearby pressure in handleMobConversion)
-        try {
-            const { buff: buffBearCount } = countNearbyAddonBears(deadMob.dimension, deadMob.location, 64);
-            if (buffBearCount >= 5) {
-                const willBeBuff = (mobType.includes('warden') || mobType.includes('ravager') ||
-                                  mobType.includes('iron_golem') || mobType.includes('wither') ||
-                                  mobType.includes('ender_dragon') || mobType.includes('giant') ||
-                                  mobType.includes('shulker') || mobType.includes('elder_guardian'));
-                if (willBeBuff) {
-                    return;
-                }
-            }
-        } catch { /* ignore */ }
-        
-        const killerType = killer.typeId;
-        const currentDay = getCurrentDay();
-        
-        // Determine Maple Bear type to spawn based on killer, mob size, and current day
-        let newBearType;
-        let bearSize = "normal";
-        
-        // Buff Maple Bears always spawn normal human-sized Maple Bears
-        if (killerType === BUFF_BEAR_ID || killerType === BUFF_BEAR_DAY8_ID || killerType === BUFF_BEAR_DAY13_ID || killerType === BUFF_BEAR_DAY20_ID) {
-            newBearType = MAPLE_BEAR_ID;
-            bearSize = "normal";
-        } else if (killerType === MAPLE_BEAR_ID || killerType === MAPLE_BEAR_DAY4_ID || killerType === MAPLE_BEAR_DAY8_ID || killerType === MAPLE_BEAR_DAY13_ID || killerType === MAPLE_BEAR_DAY20_ID) {
-            // Tiny Maple Bears behavior changes based on day
-            // console.log(`[CONVERSION] Tiny bear detected (${killerType}), current day: ${currentDay}`);
-            if (currentDay < 4) {
-                // Before day 4: Tiny Maple Bears always spawn tiny Maple Bears (regardless of victim size)
-                newBearType = MAPLE_BEAR_ID; // Always spawn tiny Maple Bear (mb:mb_day00)
-                bearSize = "tiny";
-                // console.log(`[CONVERSION] Pre-day 4: Tiny bear spawning tiny bear (${newBearType})`);
-            } else if (currentDay >= 4 && currentDay < 8) {
-                // Day 4-7: Tiny Maple Bears use size-based system with day 4+ variants
-                const mobSize = getMobSize(mobType);
-                if (mobSize === "tiny") {
-                    newBearType = MAPLE_BEAR_DAY4_ID; // Day 4+ tiny bears
-                    bearSize = "tiny";
-                } else if (mobSize === "large") {
-                    newBearType = INFECTED_BEAR_ID; // infected.json for normal bears
-                    bearSize = "normal";
-                } else {
-                    newBearType = INFECTED_BEAR_ID; // infected.json for normal bears
-                    bearSize = "normal";
-                }
-            } else if (currentDay < 13) {
-                // Day 8-12: Tiny Maple Bears use size-based system with day 8+ variants
-                const mobSize = getMobSize(mobType);
-                if (mobSize === "tiny") {
-                    newBearType = MAPLE_BEAR_DAY8_ID; // Day 8+ tiny bears
-                    bearSize = "tiny";
-                } else if (mobSize === "large") {
-                    newBearType = BUFF_BEAR_ID; // Buff Maple Bears for large mobs
-                    bearSize = "buff";
-                } else {
-                    newBearType = INFECTED_BEAR_DAY8_ID; // Day 8+ normal bears
-                    bearSize = "normal";
-                }
-            } else if (currentDay < 20) {
-                // Day 13-19: Tiny Maple Bears use size-based system with day 13+ variants
-                const mobSize = getMobSize(mobType);
-                if (mobSize === "tiny") {
-                    newBearType = MAPLE_BEAR_DAY13_ID; // Day 13+ tiny bears
-                    bearSize = "tiny";
-                } else if (mobSize === "large") {
-                    newBearType = BUFF_BEAR_DAY13_ID; // Day 13+ Buff Maple Bears for large mobs
-                    bearSize = "buff";
-                } else {
-                    newBearType = INFECTED_BEAR_DAY13_ID; // Day 13+ normal bears
-                    bearSize = "normal";
-                }
-            } else {
-                // Day 20+: Tiny Maple Bears use size-based system with day 20+ variants
-                const mobSize = getMobSize(mobType);
-                if (mobSize === "tiny") {
-                    newBearType = MAPLE_BEAR_DAY20_ID; // Day 20+ tiny bears
-                    bearSize = "tiny";
-                } else if (mobSize === "large") {
-                    newBearType = BUFF_BEAR_DAY20_ID; // Day 20+ Buff Maple Bears for large mobs
-                    bearSize = "buff";
-                } else {
-                    newBearType = INFECTED_BEAR_DAY20_ID; // Day 20+ normal bears
-                    bearSize = "normal";
-                }
-            }
-        } else {
-            // Normal/Infected Maple Bears spawn based on victim's size and day
-            const mobSize = getMobSize(mobType);
-            
-            if (mobSize === "tiny") {
-                // Choose appropriate tiny bear variant based on day
-                if (currentDay >= 20) {
-                    newBearType = MAPLE_BEAR_DAY20_ID;
-                } else if (currentDay >= 13) {
-                    newBearType = MAPLE_BEAR_DAY13_ID; // Day 13+ tiny bears
-                } else if (currentDay >= 8) {
-                    newBearType = MAPLE_BEAR_DAY8_ID; // Day 8+ tiny bears
-                } else if (currentDay >= 4) {
-                    newBearType = MAPLE_BEAR_DAY4_ID; // Day 4+ tiny bears
-                } else {
-                    newBearType = MAPLE_BEAR_ID; // Original tiny bears
-                }
-                bearSize = "tiny";
-            } else if (mobSize === "large") {
-                // Large mobs become Buff Maple Bears based on day
-                if (currentDay >= 20) {
-                    newBearType = BUFF_BEAR_DAY20_ID;
-                    bearSize = "buff";
-                } else if (currentDay >= 13) {
-                    newBearType = BUFF_BEAR_DAY13_ID; // Day 13+ Buff Maple Bears
-                    bearSize = "buff";
-                } else if (currentDay >= 8) {
-                    newBearType = BUFF_BEAR_DAY8_ID; // Day 8-12 Buff Maple Bears (from large mob kills)
-                    bearSize = "buff";
-                } else {
-                    newBearType = INFECTED_BEAR_ID; // Before day 8 - normal bears
-                    bearSize = "normal";
-                }
-            } else {
-                // Choose appropriate normal bear variant based on day
-                if (currentDay >= 20) {
-                    newBearType = INFECTED_BEAR_DAY20_ID;
-                } else if (currentDay >= 13) {
-                    newBearType = INFECTED_BEAR_DAY13_ID; // Day 13+ normal bears
-                } else if (currentDay >= 8) {
-                    newBearType = INFECTED_BEAR_DAY8_ID; // Day 8+ normal bears
-                } else {
-                    newBearType = INFECTED_BEAR_ID; // Original normal bears
-                }
-                bearSize = "normal";
-            }
-        }
-        
-        // Use shared conversion logic
-        const newBear = convertEntity(deadMob, killer, newBearType, "MOB CONVERSION");
-        
-        if (newBear) {
-            // console.log(`[CONVERSION] Day ${currentDay}: ${mobType} killed by ${killerType} → spawned ${newBearType} (${bearSize})`);
-        }
-        
-    } catch (error) {
-        // console.warn(`[MOB CONVERSION] Error converting ${deadMob.typeId} to Maple Bear:`, error);
-    }
-}
-
-// --- Helper: Get mob size category ---
-function getMobSize(mobType) {
-    // Tiny mobs (bats, chickens, etc.)
-    const tinyMobs = [
-        "minecraft:bat", "minecraft:chicken", "minecraft:parrot", "minecraft:rabbit",
-        "minecraft:silverfish", "minecraft:endermite", "minecraft:bee", "minecraft:cod",
-        "minecraft:salmon", "minecraft:tropical_fish", "minecraft:pufferfish", "minecraft:tadpole", 
-        "minecraft:axolotl", "minecraft:armadillo", "minecraft:fox", "minecraft:cat", "minecraft:ocelot",
-        "minecraft:allay", "minecraft:frog", "minecraft:squid"
-    ];
-    
-    // Large/boss mobs that should spawn Buff Maple Bears (day 8+)
-    const largeMobs = [
-        "minecraft:warden", "minecraft:sniffer", "minecraft:ravager", "minecraft:iron_golem",
-        "minecraft:elder_guardian", "minecraft:ender_dragon", "minecraft:wither", "minecraft:ghast",
-        "minecraft:giant"
-    ];
-    
-    // Normal-sized mobs (horses, cows, etc.) - these should spawn normal Maple Bears
-    // Note: Pigs are excluded and handled separately by the pig conversion system
-    const normalMobs = [
-        "minecraft:horse", "minecraft:cow", "minecraft:mooshroom", "minecraft:llama",
-        "minecraft:donkey", "minecraft:mule", "minecraft:sheep",
-        "minecraft:goat", "minecraft:zombie", "minecraft:skeleton", "minecraft:creeper",
-        "minecraft:spider", "minecraft:cave_spider", "minecraft:zombie_villager", "minecraft:husk",
-        "minecraft:stray", "minecraft:drowned", "minecraft:witch", "minecraft:pillager",
-        "minecraft:vindicator", "minecraft:evoker", "minecraft:vex", "minecraft:zombified_piglin",
-        "minecraft:piglin", "minecraft:piglin_brute", "minecraft:hoglin", "minecraft:zoglin",
-        "minecraft:blaze", "minecraft:magma_cube", "minecraft:slime", "minecraft:phantom",
-        "minecraft:enderman", "minecraft:villager", "minecraft:villager_v2", "minecraft:wandering_trader",
-        "minecraft:zombie_pigman", "minecraft:zombie_horse", "minecraft:skeleton_horse","minecraft:glow_squid", , "minecraft:turtle",
-        "minecraft:strider", "minecraft:guardian", "minecraft:wolf", "minecraft:panda", "minecraft:polar_bear", "minecraft:shulker" 
-    ];
-    
-    if (tinyMobs.includes(mobType)) {
-        return "tiny";
-    } else if (largeMobs.includes(mobType)) {
-        return "large";
-    } else if (mobType === "minecraft:pig") {
-        return "pig"; // Special category for pigs - handled separately
-    } else if (normalMobs.includes(mobType)) {
-        return "normal";
-    } else {
-        return "normal"; // Default size for most mobs
-    }
-}
-
-const MB_TYPE_PREFIXES_FOR_CONVERSION = ["mb:mb_day00", "mb:infected", "mb:buff_mb", "mb:flying_mb", "mb:mining_mb", "mb:torpedo_mb"];
-
-function countNearbyAddonBears(dimension, location, maxDistance = 64) {
-    let total = 0;
-    let buff = 0;
-    try {
-        const nearbyEntities = dimension.getEntities({
-            location,
-            maxDistance,
-            families: ["maple_bear", "infected"]
-        });
-        for (const nearby of nearbyEntities) {
-            const typeId = nearby.typeId;
-            if (!MB_TYPE_PREFIXES_FOR_CONVERSION.some((prefix) => typeId.startsWith(prefix))) continue;
-            total++;
-            if (typeId === BUFF_BEAR_ID || typeId === BUFF_BEAR_DAY8_ID || typeId === BUFF_BEAR_DAY13_ID || typeId === BUFF_BEAR_DAY20_ID) {
-                buff++;
-            }
-        }
-    } catch { /* ignore */ }
-    return { total, buff };
-}
-
-function rampMultiplierFromCount(count, start, end, multMin) {
-    if (count <= start) return 1;
-    if (count >= end) return multMin;
-    const t = (count - start) / (end - start);
-    return multMin + (1 - multMin) * (1 - t);
-}
-
-function getConversionWorldBearPressureMultiplier() {
-    try {
-        refreshSpawnLoadMetrics(system.currentTick);
-        const n = Math.max(0, getSpawnLoadDebugSnapshot().bears | 0);
-        return rampMultiplierFromCount(n, MB_CONVERSION_WORLD_PRESSURE_START, MB_CONVERSION_WORLD_PRESSURE_END, MB_CONVERSION_WORLD_MULT_MIN);
-    } catch {
-        return 1;
-    }
-}
-
-function getConversionNearbyPressureMultiplier(nearbyTotal) {
-    return rampMultiplierFromCount(nearbyTotal, MB_CONVERSION_NEARBY_PRESSURE_START, MB_CONVERSION_NEARBY_PRESSURE_END, MB_CONVERSION_NEARBY_MULT_MIN);
-}
-
-/** True if this kill would spawn a buff-maple outcome (large mob + day), excluding buff-bear killers (they force normal tiny). */
-function wouldSpawnBuffBearFromMobKill(mobType, killerType, currentDay) {
-    const mobSize = getMobSize(mobType);
-    if (mobSize === "tiny" || mobSize === "pig") return false;
-    const buffKillers = [BUFF_BEAR_ID, BUFF_BEAR_DAY8_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID];
-    if (buffKillers.includes(killerType)) return false;
-    const tinyKillers = [MAPLE_BEAR_ID, MAPLE_BEAR_DAY4_ID, MAPLE_BEAR_DAY8_ID, MAPLE_BEAR_DAY13_ID, MAPLE_BEAR_DAY20_ID];
-    if (tinyKillers.includes(killerType)) {
-        return mobSize === "large" && currentDay >= 8;
-    }
-    return mobSize === "large" && currentDay >= 8;
-}
-
-function wouldSpawnBuffBearFromStorm(mobType, currentDay) {
-    return getMobSize(mobType) === "large" && currentDay >= 8;
-}
-
 // Note: Spawn rate calculation removed - now handled via spawn rules and multiple entity files
 
 // Random effect application is now handled inline in the infection system
@@ -3251,228 +2826,6 @@ function handlePlayerDeath(player) {
     } catch (error) {
         console.warn(`[DEATH] Error in handlePlayerDeath for ${player?.name}:`, error);
     }
-}
-
-// Handle mob conversion when killed by storm (small damage over time in storm radius)
-function handleStormMobConversion(entity) {
-    if (!entity || !entity.isValid) return;
-    
-    const entityType = entity.typeId;
-    
-    // Don't convert items, XP orbs, or other non-mob entities
-    if (entityType === "minecraft:item" || entityType === "minecraft:xp_orb" || entityType === "minecraft:arrow" ||
-        entityType === "minecraft:fireball" || entityType === "minecraft:small_fireball" || entityType === "minecraft:firework_rocket") {
-        return;
-    }
-    
-    const currentDay = getCurrentDay();
-    const conversionRate = getInfectionRate(currentDay);
-    
-    // Don't convert Maple Bears or already-infected creatures
-    const allMapleBearTypes = [
-        MAPLE_BEAR_ID, MAPLE_BEAR_DAY4_ID, MAPLE_BEAR_DAY8_ID, MAPLE_BEAR_DAY13_ID, MAPLE_BEAR_DAY20_ID,
-        INFECTED_BEAR_ID, INFECTED_BEAR_DAY8_ID, INFECTED_BEAR_DAY13_ID, INFECTED_BEAR_DAY20_ID,
-        BUFF_BEAR_ID, BUFF_BEAR_DAY8_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID,
-        FLYING_BEAR_ID, FLYING_BEAR_DAY15_ID, FLYING_BEAR_DAY20_ID,
-        MINING_BEAR_ID, MINING_BEAR_DAY20_ID,
-        TORPEDO_BEAR_ID, TORPEDO_BEAR_DAY20_ID
-    ];
-    if (allMapleBearTypes.includes(entityType) || entityType === INFECTED_PIG_ID || entityType === INFECTED_COW_ID) {
-        return;
-    }
-    
-    let totalBearCount = 0;
-    let buffBearCount = 0;
-    try {
-        const nb = countNearbyAddonBears(entity.dimension, entity.location, 64);
-        totalBearCount = nb.total;
-        buffBearCount = nb.buff;
-    } catch { /* ignore */ }
-
-    if (buffBearCount >= 5) {
-        const willBeBuff = (entityType.includes('warden') || entityType.includes('ravager') ||
-            entityType.includes('iron_golem') || entityType.includes('wither') ||
-            entityType.includes('ender_dragon') || entityType.includes('giant'));
-        if (willBeBuff) return;
-    }
-
-    const nearbyMult = getConversionNearbyPressureMultiplier(totalBearCount);
-    const worldMult = getConversionWorldBearPressureMultiplier();
-    const pressureMult = Math.max(0, Math.min(1, nearbyMult * worldMult));
-    const buffStorm = wouldSpawnBuffBearFromStorm(entityType, currentDay);
-    const effectiveRate = buffStorm ? conversionRate : Math.min(1, conversionRate * pressureMult);
-
-    if (Math.random() >= effectiveRate) return;
-    
-    const loc = entity.location;
-    const dim = entity.dimension;
-    const entType = entityType;
-    
-    system.run(() => {
-        try {
-            if (entType === "minecraft:pig") {
-                const r = convertEntityAtLocation({ location: loc, dimension: dim }, null, INFECTED_PIG_ID, "STORM PIG CONVERSION");
-                if (r) console.warn(`[SNOW STORM] Conversion: pig -> infected_pig at (${Math.floor(loc.x)}, ${Math.floor(loc.y)}, ${Math.floor(loc.z)})`);
-            } else if (entType === "minecraft:cow") {
-                const r = convertEntityAtLocation({ location: loc, dimension: dim }, null, INFECTED_COW_ID, "STORM COW CONVERSION");
-                if (r) console.warn(`[SNOW STORM] Conversion: cow -> infected_cow at (${Math.floor(loc.x)}, ${Math.floor(loc.y)}, ${Math.floor(loc.z)})`);
-            } else {
-                const r = convertMobToMapleBearFromStormAtLocation(loc, dim, entType);
-                if (r) console.warn(`[SNOW STORM] Conversion: ${entType} -> Maple Bear at (${Math.floor(loc.x)}, ${Math.floor(loc.y)}, ${Math.floor(loc.z)})`);
-            }
-        } catch (err) {
-            console.warn("[STORM CONVERSION] Error:", err);
-        }
-    });
-}
-
-// Convert mob to Maple Bear when killed by storm (uses mob size + day; takes location/dimension for deferred run)
-function convertMobToMapleBearFromStormAtLocation(location, dimension, mobType) {
-    try {
-        if (mobType === "minecraft:pig" || mobType === "minecraft:cow") return null;
-        
-        const currentDay = getCurrentDay();
-        const mobSize = getMobSize(mobType);
-        let newBearType;
-        
-        if (mobSize === "tiny") {
-            if (currentDay >= 20) newBearType = MAPLE_BEAR_DAY20_ID;
-            else if (currentDay >= 13) newBearType = MAPLE_BEAR_DAY13_ID;
-            else if (currentDay >= 8) newBearType = MAPLE_BEAR_DAY8_ID;
-            else if (currentDay >= 4) newBearType = MAPLE_BEAR_DAY4_ID;
-            else newBearType = MAPLE_BEAR_ID;
-        } else if (mobSize === "large") {
-            if (currentDay >= 20) newBearType = BUFF_BEAR_DAY20_ID;
-            else if (currentDay >= 13) newBearType = BUFF_BEAR_DAY13_ID;
-            else if (currentDay >= 8) newBearType = BUFF_BEAR_DAY8_ID;
-            else newBearType = INFECTED_BEAR_ID;
-        } else {
-            if (currentDay >= 20) newBearType = INFECTED_BEAR_DAY20_ID;
-            else if (currentDay >= 13) newBearType = INFECTED_BEAR_DAY13_ID;
-            else if (currentDay >= 8) newBearType = INFECTED_BEAR_DAY8_ID;
-            else newBearType = INFECTED_BEAR_ID;
-        }
-        
-        return convertEntityAtLocation({ location, dimension }, null, newBearType, "STORM MOB CONVERSION");
-    } catch (err) {
-        console.warn("[STORM CONVERSION] Mob conversion error:", err);
-        return null;
-    }
-}
-
-// Handle mob conversion when killed by Maple Bears
-function handleMobConversion(entity, killer) {
-    // Validate entities are still valid before processing
-    if (!entity || !entity.isValid || !killer || !killer.isValid) {
-        // console.log(`[CONVERSION] Skipping conversion - entity or killer is invalid`);
-        return;
-    }
-    
-    const killerType = killer.typeId;
-    const entityType = entity.typeId;
-    
-    // Don't convert items, XP orbs, or other non-mob entities
-    if (entityType === "minecraft:item" || entityType === "minecraft:xp_orb" || entityType === "minecraft:arrow" || 
-        entityType === "minecraft:fireball" || entityType === "minecraft:small_fireball" || entityType === "minecraft:firework_rocket") {
-        // console.log(`[CONVERSION] Skipping conversion - ${entityType} is not a valid mob for conversion`);
-        return;
-    }
-    
-    // Progressive conversion rate based on current day
-    const currentDay = getCurrentDay();
-    const conversionRate = getInfectionRate(currentDay);
-    
-    // Check if killer is a Maple Bear (including all variants: tiny, infected, buff, flying, mining, torpedo)
-    const mapleBearKillerTypes = [
-        MAPLE_BEAR_ID, MAPLE_BEAR_DAY4_ID, MAPLE_BEAR_DAY8_ID, MAPLE_BEAR_DAY13_ID, MAPLE_BEAR_DAY20_ID,
-        INFECTED_BEAR_ID, INFECTED_BEAR_DAY8_ID, INFECTED_BEAR_DAY13_ID, INFECTED_BEAR_DAY20_ID,
-        BUFF_BEAR_ID, BUFF_BEAR_DAY8_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID,
-        FLYING_BEAR_ID, FLYING_BEAR_DAY15_ID, FLYING_BEAR_DAY20_ID,
-        MINING_BEAR_ID, MINING_BEAR_DAY20_ID,
-        TORPEDO_BEAR_ID, TORPEDO_BEAR_DAY20_ID,
-        INFECTED_PIG_ID, INFECTED_COW_ID
-    ];
-    
-    if (mapleBearKillerTypes.includes(killerType)) {
-        
-        // PREVENT BEAR-TO-BEAR CONVERSION: Don't convert Maple Bears or infected creatures
-        const allMapleBearTypes = [
-            MAPLE_BEAR_ID, MAPLE_BEAR_DAY4_ID, MAPLE_BEAR_DAY8_ID, MAPLE_BEAR_DAY13_ID, MAPLE_BEAR_DAY20_ID,
-            INFECTED_BEAR_ID, INFECTED_BEAR_DAY8_ID, INFECTED_BEAR_DAY13_ID, INFECTED_BEAR_DAY20_ID,
-            BUFF_BEAR_ID, BUFF_BEAR_DAY8_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID,
-            FLYING_BEAR_ID, FLYING_BEAR_DAY15_ID, FLYING_BEAR_DAY20_ID,
-            MINING_BEAR_ID, MINING_BEAR_DAY20_ID,
-            TORPEDO_BEAR_ID, TORPEDO_BEAR_DAY20_ID
-        ];
-        const isVictimABear = allMapleBearTypes.includes(entityType);
-        const isVictimInfected = entityType === INFECTED_PIG_ID || entityType === INFECTED_COW_ID;
-        
-        if (isVictimABear || isVictimInfected) {
-            // console.log(`[CONVERSION] Skipping conversion - ${killerType} killed ${entityType} (bear-to-bear/infected conversion prevented)`);
-            return;
-        }
-        
-        let totalBearCount = 0;
-        let buffBearCount = 0;
-        try {
-            const nb = countNearbyAddonBears(entity.dimension, entity.location, 64);
-            totalBearCount = nb.total;
-            buffBearCount = nb.buff;
-        } catch { /* ignore */ }
-
-        if (buffBearCount >= 5) {
-            const willBeBuff = (entityType.includes('warden') || entityType.includes('ravager') ||
-                entityType.includes('iron_golem') || entityType.includes('wither') ||
-                entityType.includes('ender_dragon') || entityType.includes('giant'));
-            if (willBeBuff) {
-                return;
-            }
-        }
-
-        const nearbyMult = getConversionNearbyPressureMultiplier(totalBearCount);
-        const worldMult = getConversionWorldBearPressureMultiplier();
-        const pressureMult = Math.max(0, Math.min(1, nearbyMult * worldMult));
-        const buffOutcome = wouldSpawnBuffBearFromMobKill(entityType, killerType, currentDay);
-        const effectiveRate = buffOutcome ? conversionRate : Math.min(1, conversionRate * pressureMult);
-
-        // Check if victim is a pig and convert to infected pig
-        if (entityType === "minecraft:pig") {
-            if (Math.random() < effectiveRate) {
-                system.run(() => {
-                    convertPigToInfectedPig(entity, killer);
-                });
-            }
-            return;
-        }
-        if (entityType === "minecraft:cow") {
-            if (Math.random() < effectiveRate) {
-                system.run(() => {
-                    convertCowToInfectedCow(entity, killer);
-                });
-            }
-            return;
-        }
-        if (Math.random() < effectiveRate) {
-            system.run(() => {
-                convertMobToMapleBear(entity, killer);
-            });
-        }
-    } else {
-        // console.log(`[CONVERSION] Non-Maple Bear killing ${entityType} on day ${currentDay} - no conversion (only Maple Bears can convert mobs)`);
-    }
-        // Unlock mob sightings for nearby players
-        for (const p of world.getAllPlayers()) {
-            if (!p || !p.dimension || p.dimension.id !== killer.dimension.id) continue;
-            const dx = p.location.x - killer.location.x;
-            const dy = p.location.y - killer.location.y;
-            const dz = p.location.z - killer.location.z;
-            if (dx * dx + dy * dy + dz * dz <= 64 * 64) {
-                // Mob discovery is now handled through proper kill tracking system
-                // No direct unlocks - must reach kill requirements
-                
-                // Note: Infected pig discovery is now handled in convertPigToInfectedPig function
-            }
-        }
 }
 
 // Handle Maple Bear kill tracking
@@ -8765,6 +8118,14 @@ try {
 // --- Initialize Dynamic Property Handler ---
 // Initialize handler early to cache properties
 initializePropertyHandler();
+// Defer migrations: saveAllProperties uses world.setDynamicProperty, which throws during early execution.
+system.run(() => {
+    try {
+        runWorldPropertyMigrations();
+    } catch (e) {
+        console.warn("[PropertyHandler] runWorldPropertyMigrations (deferred):", e);
+    }
+});
 initializeAdaptivePerformanceWatch();
 initializeSpawnLoadScalerWatch();
 registerSpawnLoadProbes({
@@ -8776,6 +8137,7 @@ registerSpawnLoadProbes({
 // --- Initialize Item Registry ---
 // Initialize item registry for modular item handlers
 initializeItemRegistry();
+registerBearTelemetryTick();
 
 // --- Initialize Basic Journal for Existing Players on Script Load ---
 // This ensures players who load into an existing world (not joining) also get the journal

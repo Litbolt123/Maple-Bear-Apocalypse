@@ -119,8 +119,8 @@ Shared helpers and **consistent chat color tokens** for UI and messages.
 | [`MECHANICS_SUMMARY.md`](tracking/MECHANICS_SUMMARY.md) | Detailed current mechanics |
 | [`SPAWN_SYSTEM_EXPLANATION.md`](systems/SPAWN_SYSTEM_EXPLANATION.md) | Spawn algorithm |
 | [`DIMENSION_ADAPTATIONS.md`](systems/DIMENSION_ADAPTATIONS.md) | Nether fire resist, End spawn bias |
-| [`SNOW_STORM_DESIGN.md`](SNOW_STORM_DESIGN.md) | Storm design notes |
-| [`CODEX_UNLOCKS.md`](../CODEX_UNLOCKS.md) | Every codex unlock condition |
+| [`SNOW_STORM_DESIGN.md`](systems/SNOW_STORM_DESIGN.md) | Storm design notes |
+| [`CODEX_UNLOCKS.md`](systems/CODEX_UNLOCKS.md) | Every codex unlock condition |
 | [`TESTING_CHECKLIST.md`](testing/TESTING_CHECKLIST.md) | Manual QA |
 
 ---

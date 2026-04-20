@@ -1,0 +1,13 @@
+{
+	"format_version": "1.20.30",
+	"minecraft:scatter_feature": {
+		"description": {
+			"identifier": "yourid:biomes/block_picker_overworld"
+		},
+		"places_feature": "yourid:biomes/custom_biome",
+		"iterations": "t.biome_idx == 2",
+		"x": 0,
+		"y": 0,
+		"z": 0
+	}
+}

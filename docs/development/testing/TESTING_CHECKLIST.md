@@ -1,5 +1,7 @@
 # Testing Checklist - Performance Optimization & Snow Drop Balancing
 
+**Per-script map (automated commands + in-game smoke per file):** see **`SCRIPT_TEST_MAP.md`**. **Repo gate:** `npm run check` (JSON + `node --check` on all scripts + ESLint).
+
 This checklist covers all changes made during the performance optimization and snow drop balancing implementation.
 
 ## ✅ Verified Working (2026-01-18)

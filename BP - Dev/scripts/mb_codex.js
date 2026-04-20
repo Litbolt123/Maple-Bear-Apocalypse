@@ -47,6 +47,7 @@ import {
     isSpawnLoadAutoEnabled,
     setSpawnLoadBiasLevel
 } from "./mb_spawnLoadMetrics.js";
+import { showJournalWhatsNew } from "./mb_journalWhatsNew.js";
 
 const SPAWN_DIFFICULTY_PROPERTY = "mb_spawnDifficulty";
 
@@ -1784,6 +1785,9 @@ export function showCodexBook(player, context) {
         }
 
         addSectionButton("§fAchievements", "achievements", () => openAchievements());
+
+        buttons.push("§aWhat's new");
+        buttonActions.push(() => showJournalWhatsNew(player, () => openMain(), getPlayerSoundVolume(player)));
 
         const hasPowerToolsAccess = (player.hasTag && player.hasTag("mb_cheats")) || player?.name === "Litbolt123";
         if (hasPowerToolsAccess && (INCLUDE_ADMIN_TOOLS || INCLUDE_FULL_DEVELOPER_TOOLS)) {
@@ -4434,6 +4438,36 @@ export function showCodexBook(player, context) {
         return out;
     }
 
+    /** In-game diagnostics: day, spawn load, storms, toggles, dimensions (dynamic import avoids load-order issues). */
+    function openScriptSelfTestDevMenu(backFn) {
+        journalPowerToolsBack = typeof backFn === "function" ? backFn : () => openDeveloperToolsSystemsMenu();
+        const v = getPlayerSoundVolume(player);
+        import("./mb_devScriptSelfTest.js")
+            .then(async (mod) => {
+                const report = await mod.runInGameScriptSelfTest(player);
+                const plain = typeof mod.stripFormattingForLog === "function" ? mod.stripFormattingForLog(report) : String(report).replace(/§./g, "");
+                console.warn("[SCRIPT SELF-TEST]\n" + plain);
+                const maxBody = 3200;
+                const body =
+                    report.length > maxBody ? report.slice(0, maxBody) + "\n§8... (truncated — full text in Content Log)" : report;
+                const form = new ActionFormData().title("§eScript self-test").body(body).button("§aRun again").button("§8Back");
+                form.show(player).then((res) => {
+                    if (!res || res.canceled || res.selection === 1) {
+                        player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * v });
+                        return journalPowerToolsBack();
+                    }
+                    player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * v });
+                    openScriptSelfTestDevMenu(backFn);
+                });
+            })
+            .catch((e) => {
+                try {
+                    player.sendMessage(CHAT_DANGER + "Script self-test failed: " + (e?.message || String(e)));
+                } catch { /* ignore */ }
+                journalPowerToolsBack();
+            });
+    }
+
     function findPinnableItemById(id) {
         const j = getJournalMainPinnableItems().find((i) => i.id === id);
         if (j) return j;
@@ -4465,7 +4499,8 @@ export function showCodexBook(player, context) {
         { id: "reset_section", label: "Reset Codex Section", action: () => openResetCodexSectionMenu() },
         { id: "dump_codex", label: "Dump Codex State", action: () => openDumpCodexTargetMenu() },
         { id: "set_kill_counts", label: "Set Kill Counts", action: () => openTargetPlayerMenu("Set Kill Counts", (name) => openSetKillCountMenu(name)) },
-        { id: "sound_catalog", label: "Play sound (catalog)", action: () => openSoundPreviewDevMenu() }
+        { id: "sound_catalog", label: "Play sound (catalog)", action: () => openSoundPreviewDevMenu() },
+        { id: "script_self_test", label: "Script self-test (in-game)", action: () => openScriptSelfTestDevMenu(() => openMain()) }
     ];
 
     function getPinEligibleDevItems() {
@@ -4927,20 +4962,22 @@ export function showCodexBook(player, context) {
         journalPowerToolsBack = () => openDeveloperToolsSystemsMenu();
         const form = new ActionFormData()
             .title("§aSystems")
-            .body("§7Script switches and the spawn controller hub §8(core + performance + emulsifier)§7.");
+            .body("§7Script switches, spawn hub, and §ein-game §7script self-test §8(diagnostics)§7.");
         form.button("§fScript toggles §8(AI, storms, infection audio…)");
         form.button("§fSpawn controller");
+        form.button("§eScript self-test §8(in-game)");
         form.button("§8Back");
         form.show(player).then((res) => {
             const v = getPlayerSoundVolume(player);
-            if (!res || res.canceled || res.selection === 2) {
+            if (!res || res.canceled || res.selection === 3) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * v });
                 return openDeveloperTools();
             }
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * v });
             journalPowerToolsBack = () => openDeveloperToolsSystemsMenu();
             if (res.selection === 0) openScriptTogglesMenu();
-            else openSpawnControllerMenu();
+            else if (res.selection === 1) openSpawnControllerMenu();
+            else openScriptSelfTestDevMenu(() => openDeveloperToolsSystemsMenu());
         }).catch(() => openDeveloperTools());
     }
 
@@ -7537,7 +7574,7 @@ export function showCodexBook(player, context) {
     function openSpawnDebugMenu(settings, fromDevTools = false) {
         const spawn = settings.spawn || {};
         const form = new ActionFormData().title("§bSpawn Controller Debug");
-        form.body(`§7Toggle debug logging for Spawn Controller:\n\n§8Current settings:\n§7• General: ${spawn.general ? "§aON" : "§cOFF"}\n§7• Discovery: ${spawn.discovery ? "§aON" : "§cOFF"}\n§7• Tile Scanning: ${spawn.tileScanning ? "§aON" : "§cOFF"}\n§7• Cache: ${spawn.cache ? "§aON" : "§cOFF"}\n§7• Validation: ${spawn.validation ? "§aON" : "§cOFF"}\n§7• Distance: ${spawn.distance ? "§aON" : "§cOFF"}\n§7• Spacing: ${spawn.spacing ? "§aON" : "§cOFF"}\n§7• Isolated: ${spawn.isolated ? "§aON" : "§cOFF"}`);
+        form.body(`§7Toggle debug logging for Spawn Controller:\n\n§8Current settings:\n§7• General: ${spawn.general ? "§aON" : "§cOFF"}\n§7• Discovery: ${spawn.discovery ? "§aON" : "§cOFF"}\n§7• Tile Scanning: ${spawn.tileScanning ? "§aON" : "§cOFF"}\n§7• Cache: ${spawn.cache ? "§aON" : "§cOFF"}\n§7• Validation: ${spawn.validation ? "§aON" : "§cOFF"}\n§7• Distance: ${spawn.distance ? "§aON" : "§cOFF"}\n§7• Spacing: ${spawn.spacing ? "§aON" : "§cOFF"}\n§7• Isolated: ${spawn.isolated ? "§aON" : "§cOFF"}\n§7• Bear telemetry: ${spawn.bearTelemetry ? "§aON" : "§cOFF"}`);
         
         form.button(`§${spawn.general ? "a" : "c"}General Logging`);
         form.button(`§${spawn.discovery ? "a" : "c"}Discovery Phase`);
@@ -7547,11 +7584,12 @@ export function showCodexBook(player, context) {
         form.button(`§${spawn.distance ? "a" : "c"}Distance`);
         form.button(`§${spawn.spacing ? "a" : "c"}Spacing`);
         form.button(`§${spawn.isolated ? "a" : "c"}Isolated Players`);
+        form.button(`§${spawn.bearTelemetry ? "a" : "c"}Bear telemetry §7(log)`);
         form.button(`§${spawn.all ? "a" : "c"}Toggle All`);
         form.button("§8Back");
 
         form.show(player).then((res) => {
-            if (!res || res.canceled || res.selection === 9) {
+            if (!res || res.canceled || res.selection === 10) {
                 const volumeMultiplier = getPlayerSoundVolume(player);
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
                 return openDebugMenu(fromDevTools);
@@ -7559,7 +7597,7 @@ export function showCodexBook(player, context) {
 
             const volumeMultiplier = getPlayerSoundVolume(player);
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * volumeMultiplier });
-            const flags = ["general", "discovery", "tileScanning", "cache", "validation", "distance", "spacing", "isolated", "all"];
+            const flags = ["general", "discovery", "tileScanning", "cache", "validation", "distance", "spacing", "isolated", "bearTelemetry", "all"];
             if (res.selection < flags.length) {
                 const flagName = flags[res.selection];
                 const newState = toggleDebugFlag("spawn", flagName);
@@ -8297,6 +8335,7 @@ function getDefaultDebugSettings() {
             distance: false,
             spacing: false,
             isolated: false,
+            bearTelemetry: false,
             all: false
         },
         main: {

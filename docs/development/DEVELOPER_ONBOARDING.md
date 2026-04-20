@@ -9,7 +9,7 @@ Short path for new contributors to the Maple Bear TakeOver Bedrock addon (behavi
 | `BP/` | Behavior pack: entity/block/item JSON, `BP/scripts/` (JavaScript, Minecraft Script API) |
 | `RP/` | Resource pack: models, textures, sounds, particles |
 | `tools/` | Node scripts (e.g. sync mining `break_blocks` from `mb_miningBlockList.js`) |
-| `docs/` | Design and system references |
+| `docs/` | Design and system references — start at [`docs/README.md`](../README.md) |
 
 ## Where logic lives
 

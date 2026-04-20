@@ -152,7 +152,7 @@ Recommendation: Start with **particles + placement** everywhere; add **optional*
 ### Future Ideas (Not Implemented Now)
 - **Mask item**: Grants immunity to storm infection, has durability that decreases with usage
 - **Filter items**: Similar to mask, provides protection
-- Add to `docs/development/IDEA_BRAINSTORM.md` for future reference
+- Add to `docs/development/planning/IDEA_BRAINSTORM.md` for future reference
 
 ---
 

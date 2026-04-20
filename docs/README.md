@@ -1,93 +1,179 @@
-# Documentation Index
+# Documentation index (`docs/`)
 
-This directory contains all project documentation organized by category.
-
-- **[context summary.md](context%20summary.md)** — Session / change log (canonical; append new work at the top as dated sections).
-
-## 📁 Directory Structure
-
-### `/design/` - Design & Vision Documents
-Core design philosophy and vision for the addon:
-- **[DESIGN_VISION.md](design/DESIGN_VISION.md)** - Complete design vision, intentions, and principles
-- **[SAFE_BIOMES.md](design/SAFE_BIOMES.md)** - Analysis of which biomes are safer from Maple Bear spawning
-
-### `/development/` - Development Planning & Mechanics
-Technical documentation, planning, and mechanics organized by category:
-
-#### Guides (`development/guides/`)
-- **[HOW_TO_ADD_SOUNDS.md](development/guides/HOW_TO_ADD_SOUNDS.md)** - Guide for adding new sounds to the addon
-
-#### Sounds (`development/sounds/`)
-- **[SOUND_PROGRESS.md](development/sounds/SOUND_PROGRESS.md)** - Sound integration progress and status
-- **[SOUND_GENERATION_PROMPT.md](development/sounds/SOUND_GENERATION_PROMPT.md)** - Prompts for generating sounds
-- **[maple_bear_sound_prompts.md](development/sounds/maple_bear_sound_prompts.md)** - Sound generation prompts
-
-#### AI & Behavior (`development/ai/`)
-- **[MINING_BEAR_INTELLIGENCE_PLAN.md](development/ai/MINING_BEAR_INTELLIGENCE_PLAN.md)** - Plan for enhancing mining bear AI
-- **[AI_OPTIMIZATION_AUDIT.md](development/ai/AI_OPTIMIZATION_AUDIT.md)** - AI optimization analysis
-- **[HEAT_SEEKING_VISION.md](development/ai/HEAT_SEEKING_VISION.md)** - Heat-seeking vision system documentation
-
-#### Systems (`development/systems/`)
-- **[SPAWN_SYSTEM_EXPLANATION.md](development/systems/SPAWN_SYSTEM_EXPLANATION.md)** - Explanation of the spawn system
-- **[INFECTION_SYSTEM.md](development/systems/INFECTION_SYSTEM.md)** - Player infection (minor/major), powder tiers, environmental pressure, cures, transformation, mob conversion
-- **[BIOME_GENERATION_VARIABLE_SIZES.md](development/systems/BIOME_GENERATION_VARIABLE_SIZES.md)** - Biome generation with variable sizes
-- **[DIMENSION_ADAPTATIONS.md](development/systems/DIMENSION_ADAPTATIONS.md)** - Dimension-specific adaptations
-- **[LEADER_DEATH_HANDLER.md](development/systems/LEADER_DEATH_HANDLER.md)** - Leader death handling system
-
-#### Planning (`development/planning/`)
-- **[IMPLEMENTATION_PLAN.md](development/planning/IMPLEMENTATION_PLAN.md)** - Implementation planning documents
-- **[TASK_PRIORITY.md](development/planning/TASK_PRIORITY.md)** - Task prioritization
-- **[IDEA_BRAINSTORM.md](development/planning/IDEA_BRAINSTORM.md)** - 100+ feature ideas for future development
-
-#### Tracking (`development/tracking/`)
-- **[MECHANICS_SUMMARY.md](development/tracking/MECHANICS_SUMMARY.md)** - Summary of currently implemented game mechanics
-- **[CHANGELOG.md](development/tracking/CHANGELOG.md)** - Project changelog
-- **[SESSION_SUMMARY.md](development/tracking/SESSION_SUMMARY.md)** - Development session summaries
-
-#### Overview (`development/` root)
-- **[DEVELOPER_ONBOARDING.md](development/DEVELOPER_ONBOARDING.md)** - Where code lives, `npm run check`, in-game testing, common pitfalls
-- **[ADDON_SYSTEMS_AND_FEATURES.md](development/ADDON_SYSTEMS_AND_FEATURES.md)** - Each script module, JSON systems, and player-facing features
-- **[PROJECT_STATUS.md](development/PROJECT_STATUS.md)** - Snapshot: recently done, gaps, suggested next steps
-
-#### Prompts (`development/prompts/`)
-- **[maple_bear_condensed_prompts.md](development/prompts/maple_bear_condensed_prompts.md)** - Condensed prompts for Maple Bear
-
-#### Testing (`development/testing/`)
-- **[TEST_SCENARIOS.md](development/testing/TEST_SCENARIOS.md)** - Testing scenarios and test cases
-- **[TESTING_CHECKLIST.md](development/testing/TESTING_CHECKLIST.md)** - Testing checklist and verification status
-
-### `/reference/` - External Documentation Resources
-Links and guides for Minecraft Bedrock development:
-- **[DOCUMENTATION_INDEX.md](reference/DOCUMENTATION_INDEX.md)** - Comprehensive index of official and community documentation
-- **[INDEXING_URLS.md](reference/INDEXING_URLS.md)** - Complete list of URLs to index (⚠️ verify URLs first)
-- **[INDEXING_URLS_VERIFIED.md](reference/INDEXING_URLS_VERIFIED.md)** - Safer approach: verified base URLs and verification methods
-- **[USEFUL_LINKS.md](reference/USEFUL_LINKS.md)** - Collection of helpful links for Minecraft Bedrock development
-
-### `/ai/` - AI assistant (redirect)
-- **[CONTEXT_SUMMARY.md](ai/CONTEXT_SUMMARY.md)** - Stub; canonical log is **[context summary.md](context%20summary.md)** (session history + merged archive).
-
-### `/Compoohter/` - Co-Creator Resources
-Documentation for team members working on textures, lore, and design:
-- **[TASKS_FOR_CO_CREATOR.md](Compoohter/TASKS_FOR_CO_CREATOR.md)** - Detailed task list with file locations and line numbers
-- **[UI_CREATION_GUIDE.md](Compoohter/UI_CREATION_GUIDE.md)** - Guide for creating and modifying UI elements
-- **[NEXT_SESSION_TASKS.md](Compoohter/NEXT_SESSION_TASKS.md)** - Planned improvements for next development session
+Start here to navigate the repo. **Session log:** [context summary.md](context%20summary.md) (canonical; append dated sections at the top).
 
 ---
 
-## 📄 Root-Level Documents
+## Top-level files (keep stable paths)
 
-- **[../README.md](../README.md)** - Main project README
-- **[../TODO.md](../TODO.md)** - Current task list and project status
-- **[../VERIFICATION_REPORT.md](../VERIFICATION_REPORT.md)** - Code verification report (latest changes)
+| File | Purpose |
+|------|---------|
+| [context summary.md](context%20summary.md) | Running change log (humans + AI) |
+| [PLAYER_CHANGELOG.md](PLAYER_CHANGELOG.md) | Player-facing beta notes (referenced in-game) |
+| [README.md](README.md) | This index |
+| [ORGANIZATION.md](ORGANIZATION.md) | Folder tree and conventions |
 
 ---
 
-## 🎯 Quick Links
+## `design/` — Vision & world
 
-- **New to the project?** Start with [DESIGN_VISION.md](design/DESIGN_VISION.md)
-- **Architecture & features?** Read [ADDON_SYSTEMS_AND_FEATURES.md](development/ADDON_SYSTEMS_AND_FEATURES.md)
-- **Current status & next steps?** See [PROJECT_STATUS.md](development/PROJECT_STATUS.md)
-- **Want mechanics detail?** Read [MECHANICS_SUMMARY.md](development/tracking/MECHANICS_SUMMARY.md)
-- **Looking for feature ideas?** Check [IDEA_BRAINSTORM.md](development/IDEA_BRAINSTORM.md)
-- **Need development resources?** See [DOCUMENTATION_INDEX.md](reference/DOCUMENTATION_INDEX.md)
+| File | Purpose |
+|------|---------|
+| [DESIGN_VISION.md](design/DESIGN_VISION.md) | Design intent and principles |
+| [SAFE_BIOMES.md](design/SAFE_BIOMES.md) | Safer biomes vs Maple Bear pressure |
 
+---
+
+## `development/` — Engineering
+
+### Root (overview)
+
+| File | Purpose |
+|------|---------|
+| [DEVELOPER_ONBOARDING.md](development/DEVELOPER_ONBOARDING.md) | Repo layout, `npm run check`, testing |
+| [ADDON_SYSTEMS_AND_FEATURES.md](development/ADDON_SYSTEMS_AND_FEATURES.md) | Systems map + links to deep docs |
+| [PROJECT_STATUS.md](development/PROJECT_STATUS.md) | Snapshot: done / gaps / next steps |
+| [SCRIPTS_REFERENCE.md](development/SCRIPTS_REFERENCE.md) | What each `BP/scripts/*.js` module does |
+
+### `development/guides/` — How-to & compatibility
+
+| File | Purpose |
+|------|---------|
+| [HOW_TO_ADD_SOUNDS.md](development/guides/HOW_TO_ADD_SOUNDS.md) | Adding sounds |
+| [DEBUG_LOGGING.md](development/guides/DEBUG_LOGGING.md) | Debug logging notes |
+| [MINECRAFT_1.26_COMPATIBILITY.md](development/guides/MINECRAFT_1.26_COMPATIBILITY.md) | Version compatibility notes |
+
+### `development/sounds/` — Audio
+
+| File | Purpose |
+|------|---------|
+| [SOUND_PROGRESS.md](development/sounds/SOUND_PROGRESS.md) | Integration status |
+| [SOUND_GENERATION_PROMPT.md](development/sounds/SOUND_GENERATION_PROMPT.md) | Generation prompts |
+| [maple_bear_sound_prompts.md](development/sounds/maple_bear_sound_prompts.md) | Extra prompts |
+
+### `development/ai/` — Bear AI & pathing
+
+| File | Purpose |
+|------|---------|
+| [MINING_BEAR_INTELLIGENCE_PLAN.md](development/ai/MINING_BEAR_INTELLIGENCE_PLAN.md) | Mining bear AI plan |
+| [MINING_AI_OPTIMIZATION_OPTIONS.md](development/ai/MINING_AI_OPTIMIZATION_OPTIONS.md) | Performance options |
+| [AI_OPTIMIZATION_AUDIT.md](development/ai/AI_OPTIMIZATION_AUDIT.md) | Audit |
+| [HEAT_SEEKING_VISION.md](development/ai/HEAT_SEEKING_VISION.md) | Heat-seeking vision |
+| [PATHFINDER_COMPARISON.md](development/ai/PATHFINDER_COMPARISON.md) | Pathfinder notes |
+| [stair-pattern.md](development/ai/stair-pattern.md), [downward-spiral-stair-pattern.md](development/ai/downward-spiral-stair-pattern.md), [mining-stop-distance.md](development/ai/mining-stop-distance.md) | Mining movement / stairs |
+
+### `development/systems/` — Game systems
+
+| File | Purpose |
+|------|---------|
+| [SPAWN_SYSTEM_EXPLANATION.md](development/systems/SPAWN_SYSTEM_EXPLANATION.md) | Spawn algorithm |
+| [INFECTION_SYSTEM.md](development/systems/INFECTION_SYSTEM.md) | Infection, cures, conversion |
+| [CODEX_UNLOCKS.md](development/systems/CODEX_UNLOCKS.md) | Codex unlock conditions |
+| [SNOW_STORM_DESIGN.md](development/systems/SNOW_STORM_DESIGN.md) | Storm design |
+| [STORM_TROUBLESHOOTING.md](development/systems/STORM_TROUBLESHOOTING.md) | Storm / village recovery |
+| [DIMENSION_ADAPTATIONS.md](development/systems/DIMENSION_ADAPTATIONS.md) | Nether / End |
+| [BIOME_GENERATION_VARIABLE_SIZES.md](development/systems/BIOME_GENERATION_VARIABLE_SIZES.md) | Biome gen notes |
+| [LEADER_DEATH_HANDLER.md](development/systems/LEADER_DEATH_HANDLER.md) | Leader death handling |
+
+### `development/planning/` — Roadmaps & ideas
+
+| File | Purpose |
+|------|---------|
+| [IMPLEMENTATION_PLAN.md](development/planning/IMPLEMENTATION_PLAN.md) | Implementation plan |
+| [TASK_PRIORITY.md](development/planning/TASK_PRIORITY.md) | Priorities |
+| [IDEA_BRAINSTORM.md](development/planning/IDEA_BRAINSTORM.md) | 100+ feature ideas |
+| [QOL_AND_EDGE_CASES.md](development/planning/QOL_AND_EDGE_CASES.md) | QoL edge cases |
+| [QoL_AND_DEV_TOOLS_IDEAS.md](development/planning/QoL_AND_DEV_TOOLS_IDEAS.md) | QoL & dev-tool ideas |
+| [STORM_SHELTER_BRAINSTORM.md](development/planning/STORM_SHELTER_BRAINSTORM.md) | Shelter brainstorm |
+
+### `development/tracking/` — Changelogs & sessions
+
+| File | Purpose |
+|------|---------|
+| [MECHANICS_SUMMARY.md](development/tracking/MECHANICS_SUMMARY.md) | Implemented mechanics |
+| [CHANGELOG.md](development/tracking/CHANGELOG.md) | Project changelog |
+| [SESSION_SUMMARY.md](development/tracking/SESSION_SUMMARY.md) | Session summaries |
+
+### `development/testing/` — QA
+
+| File | Purpose |
+|------|---------|
+| [TEST_SCENARIOS.md](development/testing/TEST_SCENARIOS.md) | Scenarios |
+| [TESTING_CHECKLIST.md](development/testing/TESTING_CHECKLIST.md) | Manual checklist |
+| [SCRIPT_TEST_MAP.md](development/testing/SCRIPT_TEST_MAP.md) | Per-script tests + npm commands |
+| [BETA_SMOKE_CHECKLIST.md](development/testing/BETA_SMOKE_CHECKLIST.md) | Beta smoke |
+
+### `development/ui/` — UI references
+
+| File | Purpose |
+|------|---------|
+| [Notifications.md](development/ui/Notifications.md) | Toast-style notification pattern (reference) |
+| [Chest_UI_Editor.md](development/ui/Chest_UI_Editor.md) | Chest UI editor notes |
+
+### `development/prompts/` — AI / generation prompts
+
+| File | Purpose |
+|------|---------|
+| [maple_bear_condensed_prompts.md](development/prompts/maple_bear_condensed_prompts.md) | Condensed prompts |
+| [Mining AI FIX/mining_ai_fixes.md](development/prompts/Mining%20AI%20FIX/mining_ai_fixes.md) | Mining AI fix notes |
+
+---
+
+## `reference/` — External Bedrock resources
+
+| File | Purpose |
+|------|---------|
+| [DOCUMENTATION_INDEX.md](reference/DOCUMENTATION_INDEX.md) | Official + community doc index |
+| [INDEXING_URLS.md](reference/INDEXING_URLS.md), [INDEXING_URLS_VERIFIED.md](reference/INDEXING_URLS_VERIFIED.md) | URL lists |
+| [USEFUL_LINKS.md](reference/USEFUL_LINKS.md) | Quick links |
+| [COLORS_AND_STYLING.md](reference/COLORS_AND_STYLING.md) | UI color codes |
+
+---
+
+## `collaborators/` — Art, lore, non-code tasks
+
+| File | Purpose |
+|------|---------|
+| [TASKS_FOR_CO_CREATOR.md](collaborators/TASKS_FOR_CO_CREATOR.md) | Texture / lore tasks |
+| [UI_CREATION_GUIDE.md](collaborators/UI_CREATION_GUIDE.md) | UI for collaborators |
+| [NEXT_SESSION_TASKS.md](collaborators/NEXT_SESSION_TASKS.md) | Next session ideas |
+| [CODEX_TEXT_SIMPLIFY_CANDIDATES.md](collaborators/CODEX_TEXT_SIMPLIFY_CANDIDATES.md) | Codex copy simplification |
+
+---
+
+## `archive/` — Historical snapshots
+
+| File | Purpose |
+|------|---------|
+| [README.md](archive/README.md) | What this folder is |
+| [VERIFICATION_REPORT.md](archive/VERIFICATION_REPORT.md) | Old verification report |
+| [COMMIT_2026-02-01_session.md](archive/COMMIT_2026-02-01_session.md) | Session commit notes |
+
+---
+
+## `ai/` — Redirect stub
+
+| File | Purpose |
+|------|---------|
+| [CONTEXT_SUMMARY.md](ai/CONTEXT_SUMMARY.md) | Points to [context summary.md](context%20summary.md) |
+
+---
+
+## Repo root (outside `docs/`)
+
+| File | Purpose |
+|------|---------|
+| [../README.md](../README.md) | Project README |
+| [../TODO.md](../TODO.md) | Task list |
+| [../AGENTS.md](../AGENTS.md) | Agent / tooling notes |
+
+---
+
+## Quick links
+
+- **Vision:** [DESIGN_VISION.md](design/DESIGN_VISION.md)
+- **Systems & features:** [ADDON_SYSTEMS_AND_FEATURES.md](development/ADDON_SYSTEMS_AND_FEATURES.md)
+- **Scripts:** [SCRIPTS_REFERENCE.md](development/SCRIPTS_REFERENCE.md)
+- **Testing:** [SCRIPT_TEST_MAP.md](development/testing/SCRIPT_TEST_MAP.md)
+- **Ideas:** [IDEA_BRAINSTORM.md](development/planning/IDEA_BRAINSTORM.md)
+- **Bedrock docs:** [DOCUMENTATION_INDEX.md](reference/DOCUMENTATION_INDEX.md)

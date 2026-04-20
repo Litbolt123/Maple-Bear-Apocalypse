@@ -121,7 +121,7 @@
 - [ ] Verify external URL indexes against current Microsoft Learn structure  
 - [ ] Developer onboarding guide  
 - [ ] API usage patterns doc (Script API gotchas)  
-- [ ] Troubleshooting guide (pack load, experiments, storm recovery — partial: `docs/development/STORM_TROUBLESHOOTING.md`)  
+- [ ] Troubleshooting guide (pack load, experiments, storm recovery — partial: `docs/development/systems/STORM_TROUBLESHOOTING.md`)  
 
 ---
 
