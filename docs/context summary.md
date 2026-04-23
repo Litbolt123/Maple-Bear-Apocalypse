@@ -8,6 +8,32 @@ Running log of **what changed and why** (gameplay, scripts, assets, docs). Used 
 
 **Date:** 2026-03-28
 
+## Day narrative action bar on join / world init restored (`mb_dayTracker.js`, `mb_actionBarHud.js`)
+
+- **`initializeDayTracking`** and **join welcome** (first-time after intro + returning) again set the **NARRATIVE** slot via **`showPlayerActionbar`** using **`getReturningPlayerWelcome(day, player).actionbar`**, gated by **`showDayNarrativeActionBar !== false`** (same as sunrise). Auto-clear after **280** ticks unchanged.
+
+## Infected & mining Maple Bear: smaller mob inventory + faster despawn (`BP/entities/`, `BP - Dev/entities/`)
+
+- **Infected + mining Maple Bear** (all six entity files): **`minecraft:inventory` `inventory_size` unified to 5** (same cap for base/day8/day13/day20 infected and `mining_mb` / `mining_mb_day20`).
+- **`minecraft:despawn`** (same six files): **`despawn_from_distance`** **max_distance 128→96**, **min_distance 64→52** (tighter “no nearby player” bubble so distance-based cleanup can run sooner); **`min_range_inactivity_timer` 40→20**; **`min_range_random_chance` 520→260** (roughly double random-despawn roll frequency vs before). Render/simulation distance is still engine-controlled; this only tunes the entity despawn component.
+
+## Tile scans + bounds: Overworld/End max Y **319** (build height), not **320** (`mb_spawnController.js`, `BP - Dev` mirror)
+
+- **`OVERWORLD_END_BUILD_HEIGHT_MAX_Y = 319`** (1.18+ top placeable layer). **`getDimensionYBounds`** and **`MINING_SPAWN_SETTINGS`** day20 already used it; **`collectMiningSpawnTiles`** / **`collectDustedTiles`** still hard-coded **320** in Y loops and clamps — replaced with **`dimYMax = getDimensionYBounds(...).max`** so dusted/mining discovery matches real build column (**127** Nether unchanged).
+
+## Flying / torpedo air spawn tiles: use dimension Y cap (`mb_spawnController.js`)
+
+- Extra **`generateAirSpawnTiles`** band was **`minAbsoluteY + 60`** (~Y150), so sky spawns rarely used **`getDimensionYBounds` max** (Overworld/End **319**, Nether **127**). Now passes **`getDimensionYBounds(dimension.id).max`**; slightly more candidate tiles (**24**).
+
+## Spawn HUD broadcast toggle: persist OFF + menu copy (`mb_spawnController.js`, `mb_codex.js`)
+
+- **`setSpawnHudBroadcastEnabled`:** Write **`true`** when on; when off use **`setWorldProperty(..., undefined)`** plus immediate **`world.setDynamicProperty(..., undefined)`** with **`false`** fallback so the world flag actually clears (numeric **`0`** was unreliable for OFF). **`isSpawnHudBroadcastEnabled`** only treats **`true` / `1` / `"1"`** as ON. **HUD** menus label **`Broadcast (world)`** and note **`You see`** can stay ON from **legacy world scan HUD** even when broadcast is OFF.
+
+## Action bar: day narrative auto-clear, join/init + sunrise, settings + dev clear (`mb_dayTracker.js`, `mb_codex.js`, `mb_actionBarHud.js`)
+
+- **Cause:** Day tracker set merged **NARRATIVE** action bar on **world init** and **player join** and at **sunrise** but never cleared — text stayed until overwritten.
+- **Fix:** `showPlayerActionbar` schedules **`clearHudActionBarSegment(NARRATIVE)`** after **280 ticks** (~14s); reschedules on each new line; clears pending timeout on **player leave**. **World first init** (`initializeDayTracking`) and **join welcome** paths (first-time after intro + returning player) again call **`showPlayerActionbar`** with **`getReturningPlayerWelcome(...).actionbar`** when **`showDayNarrativeActionBar !== false`**. **Sunrise** unchanged. **`cancelAndClearDayNarrativeHud`** for **Developer → HUD → Clear day / ambient**. **`mb_actionBarHud.js`** slot blurb updated. **BP - Dev** synced.
+
 ## Block definitions: `format_version` `1.21.130` → `1.26.10` (`BP/blocks/`, `BP - Dev/blocks/`)
 
 - Content log **`[Blocks][error] ... Unexpected version for the loaded data`** for **`snow_layer`**, **`emulsifier_machine`**, **`dusted_dirt`**. **`manifest.json`** already targets **`min_engine_version` [1, 26, 10]**; block files were still **`1.21.130`**. Updated all three to **`1.26.10`** so the engine accepts them on 1.26.10+.

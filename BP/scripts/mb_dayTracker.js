@@ -45,6 +45,58 @@ const welcomedPlayers = new Set();
 // Track players who have joined before (for first-time welcome message)
 const returningPlayers = new Set();
 
+/**
+ * Title timings (ticks): fadeIn + stay + fadeOut. Narrative HUD clears shortly after the matching title ends.
+ * Join/init use shorter stays so "Day 40!!" style titles do not linger; sunrise uses a moderate pulse.
+ */
+const TITLE_TIMING_JOIN = Object.freeze({ fadeInDuration: 8, stayDuration: 34, fadeOutDuration: 12 });
+const TITLE_TIMING_DAY_PULSE = Object.freeze({ fadeInDuration: 8, stayDuration: 28, fadeOutDuration: 12 });
+const TITLE_TIMING_SUNRISE = Object.freeze({ fadeInDuration: 8, stayDuration: 48, fadeOutDuration: 14 });
+/** Extra ticks after title fade-out before clearing the narrative slot (lets fade feel finished). */
+const NARRATIVE_CLEAR_PAD_AFTER_TITLE_TICKS = 6;
+
+/** @param {object} [options] TitleDisplayOptions subset */
+function getTitleDisplayDurationTicks(options = {}) {
+    const fadeIn = options.fadeInDuration ?? 10;
+    const stay = options.stayDuration ?? 60;
+    const fadeOut = options.fadeOutDuration ?? 20;
+    return fadeIn + stay + fadeOut;
+}
+
+/** Narrative auto-clear ticks aligned to a title built with the same options object. */
+function narrativeClearTicksForTitle(titleTiming) {
+    return getTitleDisplayDurationTicks(titleTiming) + NARRATIVE_CLEAR_PAD_AFTER_TITLE_TICKS;
+}
+
+/** @type {Map<string, number>} player id -> system.runTimeout id */
+const narrativeHudClearRunIds = new Map();
+
+function cancelNarrativeHudClearSchedule(playerId) {
+    const rid = narrativeHudClearRunIds.get(playerId);
+    if (typeof rid === "number") {
+        try {
+            system.clearRun(rid);
+        } catch {
+            /* ignore */
+        }
+    }
+    narrativeHudClearRunIds.delete(playerId);
+}
+
+/**
+ * Dev / journal: cancel pending auto-clear and remove day-tracker line from merged HUD only.
+ * @param {import("@minecraft/server").Player} player
+ */
+export function cancelAndClearDayNarrativeHud(player) {
+    if (!player?.id) return;
+    cancelNarrativeHudClearSchedule(player.id);
+    try {
+        clearHudActionBarSegment(player, ACTION_BAR_SLOT.NARRATIVE);
+    } catch {
+        /* ignore */
+    }
+}
+
 // Track if the loop is running
 let dayCycleLoopId = null;
 
@@ -559,19 +611,34 @@ function actionBarInputToLegacyString(text) {
 }
 
 /**
- * Shows an actionbar message to a player
+ * Shows an actionbar message to a player (narrative segment). Clears after `autoClearTicks`, or default = vanilla-style title length + pad.
  * @param {Player} player The player to show the message to
  * @param {string|RawMessage} text The text to display
+ * @param {number} [autoClearTicks] ticks until clear — pass same timing as the paired `showPlayerTitle` options via `narrativeClearTicksForTitle(...)`.
  */
-export function showPlayerActionbar(player, text) {
+export function showPlayerActionbar(player, text, autoClearTicks) {
     try {
         if (player && player.isValid) {
+            const pid = player.id;
+            cancelNarrativeHudClearSchedule(pid);
             const legacy = actionBarInputToLegacyString(text);
             if (legacy === null || legacy === "") {
                 clearHudActionBarSegment(player, ACTION_BAR_SLOT.NARRATIVE);
-            } else {
-                setHudActionBarSegment(player, ACTION_BAR_SLOT.NARRATIVE, legacy);
+                return;
             }
+            setHudActionBarSegment(player, ACTION_BAR_SLOT.NARRATIVE, legacy);
+            const clearTicks = typeof autoClearTicks === "number" && autoClearTicks >= 10
+                ? autoClearTicks
+                : narrativeClearTicksForTitle({});
+            const runId = system.runTimeout(() => {
+                narrativeHudClearRunIds.delete(pid);
+                try {
+                    if (player.isValid) clearHudActionBarSegment(player, ACTION_BAR_SLOT.NARRATIVE);
+                } catch {
+                    /* ignore */
+                }
+            }, clearTicks);
+            narrativeHudClearRunIds.set(pid, runId);
         }
     } catch (error) {
         console.warn("Error showing actionbar to player:", error);
@@ -726,7 +793,7 @@ function startDayCycleLoop() {
                             titleText = `${displayInfo.color}${displayInfo.symbols} Day ${newDay} §7(+${daysPastVictory} past victory)`;
                         }
                         
-                        showPlayerTitle(player, titleText, undefined, {}, newDay);
+                        showPlayerTitle(player, titleText, undefined, TITLE_TIMING_SUNRISE, newDay);
                         
                         let actionbarText = "";
                         if (showDayMessage) {
@@ -743,7 +810,9 @@ function startDayCycleLoop() {
                         } else {
                             actionbarText = `§7Day ${newDay}`;
                         }
-                        showPlayerActionbar(player, actionbarText);
+                        const narrHud = getPlayerSettings(player).showDayNarrativeActionBar !== false;
+                        const narrClear = narrativeClearTicksForTitle(TITLE_TIMING_SUNRISE);
+                        showPlayerActionbar(player, narrHud ? actionbarText : "", narrClear);
                         
                         // Post-victory periodic warnings (every 5 days)
                         if (newDay > 25 && (newDay - 25) % 5 === 0) {
@@ -1110,19 +1179,19 @@ export function initializeDayTracking() {
         for (const player of world.getAllPlayers()) {
             if (player && player.isValid) {
                 system.run(() => {
-                    // Use nice sound for world start
+                    // World first init: title + optional day narrative action bar (auto-clears; respects Journal → showDayNarrativeActionBar)
                     const volumeMultiplier = getPlayerSoundVolume(player);
                     if (currentDay < 2) {
                         player.playSound("random.levelup", { pitch: 1.2, volume: 0.6 * volumeMultiplier });
-                        showPlayerTitle(player, "§aa completely normal world...", undefined, {}, currentDay);
-                        showPlayerActionbar(player, "Everything seems peaceful here...");
+                        showPlayerTitle(player, "§aa completely normal world...", undefined, TITLE_TIMING_JOIN, currentDay);
                     } else {
-                        // Use infection-based sound for progressed worlds
                         const soundConfig = getInfectionSound(currentDay);
                         player.playSound(soundConfig.sound, { pitch: soundConfig.pitch, volume: soundConfig.volume * volumeMultiplier });
-                        showPlayerTitle(player, `${displayInfo.color}${displayInfo.symbols} Day ${currentDay}`, undefined, {}, currentDay);
-                        showPlayerActionbar(player, "The Maple Bear infection continues...");
+                        showPlayerTitle(player, `${displayInfo.color}${displayInfo.symbols} Day ${currentDay}`, undefined, TITLE_TIMING_JOIN, currentDay);
                     }
+                    const welcomeLine = getReturningPlayerWelcome(currentDay, player);
+                    const narrHudInit = getPlayerSettings(player).showDayNarrativeActionBar !== false;
+                    showPlayerActionbar(player, narrHudInit ? welcomeLine.actionbar : "", narrativeClearTicksForTitle(TITLE_TIMING_JOIN));
                 });
             }
         }
@@ -1257,13 +1326,14 @@ world.afterEvents.playerJoin.subscribe((event) => {
                                     const displayInfo = getDayDisplayInfo(currentDay);
                                     if (currentDay < 2) {
                                         sendPlayerMessage(player, CHAT_SUCCESS + "Welcome to a completely normal world...");
-                                        showPlayerTitle(player, "§aWelcome...", undefined, { stayDuration: 40 }, currentDay);
-                                        showPlayerActionbar(player, "Everything seems peaceful here...");
+                                        showPlayerTitle(player, "§aWelcome...", undefined, TITLE_TIMING_JOIN, currentDay);
                                     } else {
                                         sendPlayerMessage(player, `${displayInfo.color}${displayInfo.symbols} Welcome to Day ${currentDay}...`);
-                                        showPlayerTitle(player, `${displayInfo.color}${displayInfo.symbols} Welcome...`, undefined, { stayDuration: 40 }, currentDay);
-                                        showPlayerActionbar(player, "The Maple Bear infection continues...");
+                                        showPlayerTitle(player, `${displayInfo.color}${displayInfo.symbols} Welcome...`, undefined, TITLE_TIMING_JOIN, currentDay);
                                     }
+                                    const welcomeLine = getReturningPlayerWelcome(currentDay, player);
+                                    const narrHudJoin = getPlayerSettings(player).showDayNarrativeActionBar !== false;
+                                    showPlayerActionbar(player, narrHudJoin ? welcomeLine.actionbar : "", narrativeClearTicksForTitle(TITLE_TIMING_JOIN));
 
                                     // Mark as returning player for future joins
                                     returningPlayers.add(playerName);
@@ -1271,20 +1341,24 @@ world.afterEvents.playerJoin.subscribe((event) => {
                                     // Show day info after a delay (same format as returning players)
                                     system.runTimeout(() => {
                                         if (!player || !player.isValid) return;
-                                        const displayInfo = getDayDisplayInfo(currentDay);
-                                        sendPlayerMessage(player, `${displayInfo.color}${displayInfo.symbols} Day ${currentDay}`);
-                                        showPlayerTitle(player, `${displayInfo.color}${displayInfo.symbols} Day ${currentDay}`, undefined, {}, currentDay);
-                                        showPlayerActionbar(player, "The Maple Bear infection continues...");
-                                    }, 3000); // 3 second delay
+                                        const displayInfoInner = getDayDisplayInfo(currentDay);
+                                        sendPlayerMessage(player, `${displayInfoInner.color}${displayInfoInner.symbols} Day ${currentDay}`);
+                                        showPlayerTitle(player, `${displayInfoInner.color}${displayInfoInner.symbols} Day ${currentDay}`, undefined, TITLE_TIMING_DAY_PULSE, currentDay);
+                                        const wl = getReturningPlayerWelcome(currentDay, player);
+                                        const narrPulse = getPlayerSettings(player).showDayNarrativeActionBar !== false;
+                                        showPlayerActionbar(player, narrPulse ? wl.actionbar : "", narrativeClearTicksForTitle(TITLE_TIMING_DAY_PULSE));
+                                    }, 60); // 3 seconds (60 ticks @ 20/s); was 3000 ticks (~150s) by mistake
                                 }, 400); // 20 second delay to ensure intro sequence is completely done (intro takes ~15 seconds)
                                 
                                 console.log(`[DAY TRACKER] Scheduling welcome message check for ${playerName} after intro sequence completes`);
                             } else {
-                                // Returning player - show the day with proper sound immediately
+                                // Returning player — title + chat + day narrative action bar (auto-clears)
                                 const displayInfo = getDayDisplayInfo(currentDay);
                                 sendPlayerMessage(player, `${displayInfo.color}${displayInfo.symbols} Day ${currentDay}`);
-                                showPlayerTitle(player, `${displayInfo.color}${displayInfo.symbols} Day ${currentDay}`, undefined, {}, currentDay); // Use currentDay for proper infection sound
-                                showPlayerActionbar(player, "The Maple Bear infection continues...");
+                                showPlayerTitle(player, `${displayInfo.color}${displayInfo.symbols} Day ${currentDay}`, undefined, TITLE_TIMING_JOIN, currentDay);
+                                const welcomeLine = getReturningPlayerWelcome(currentDay, player);
+                                const narrHudReturn = getPlayerSettings(player).showDayNarrativeActionBar !== false;
+                                showPlayerActionbar(player, narrHudReturn ? welcomeLine.actionbar : "", narrativeClearTicksForTitle(TITLE_TIMING_JOIN));
                             }
                         }
 
@@ -1312,6 +1386,7 @@ world.afterEvents.playerLeave.subscribe((event) => {
             console.warn("Leave event has no playerId, skipping");
             return;
         }
+        cancelNarrativeHudClearSchedule(playerId);
 
         const player = getPlayerById(playerId);
         if (player) {

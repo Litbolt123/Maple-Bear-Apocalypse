@@ -2,7 +2,7 @@ import { system, world, ItemStack } from "@minecraft/server";
 import { ActionFormData, ModalFormData, FormCancelationReason } from "@minecraft/server-ui";
 import { getPlayerProperty, setPlayerProperty, getWorldProperty, setWorldProperty, getPlayerPropertyChunked, setPlayerPropertyChunked, getWorldPropertyChunked, setWorldPropertyChunked, saveAllProperties, ADDON_DIFFICULTY_PROPERTY, getAddonDifficultyState } from "./mb_dynamicPropertyHandler.js";
 import { getAllScriptToggles, setScriptEnabled, SCRIPT_IDS, isScriptEnabled, isBetaInfectedAIEnabled, setBetaInfectedAIEnabled, isDustStormsEnabled, setDustStormsEnabled, isBetaVisibleToAll, setBetaVisibleToAll, getBetaOwnerId, setBetaOwnerId } from "./mb_scriptToggles.js";
-import { recordDailyEvent, getCurrentDay, getDayDisplayInfo } from "./mb_dayTracker.js";
+import { recordDailyEvent, getCurrentDay, getDayDisplayInfo, cancelAndClearDayNarrativeHud } from "./mb_dayTracker.js";
 import { playerInfection, curedPlayers, formatTicksDuration, formatMillisDuration, formatInfectionHudTimeRemaining, HITS_TO_INFECT, bearHitCount, maxSnowLevels, MINOR_INFECTION_TYPE, MAJOR_INFECTION_TYPE, MINOR_HITS_TO_INFECT, IMMUNE_HITS_TO_INFECT, PERMANENT_IMMUNITY_PROPERTY, MINOR_CURE_GOLDEN_APPLE_PROPERTY, MINOR_CURE_GOLDEN_CARROT_PROPERTY } from "./main.js";
 import { CHAT_ACHIEVEMENT, CHAT_DANGER, CHAT_SUCCESS, CHAT_WARNING, CHAT_INFO, CHAT_DEV, CHAT_HIGHLIGHT, CHAT_SPECIAL } from "./mb_chatColors.js";
 import { getBuffBearCountdowns } from "./mb_buffAI.js";
@@ -716,7 +716,7 @@ export function getInfectionCueHearOthersTier(player) {
  * Get player settings used by main/dayTracker (infection timer, critical warnings only).
  * Infection timer is **Dusted / Powdery Journal only** (not in Basic); critical warnings can come from Basic or codex.
  * @param {Player} player
- * @returns {{ showInfectionTimer: boolean, criticalWarningsOnly: boolean }}
+ * @returns {{ showInfectionTimer: boolean, criticalWarningsOnly: boolean, showDayNarrativeActionBar: boolean }}
  */
 export function getPlayerSettings(player) {
     try {
@@ -724,6 +724,8 @@ export function getPlayerSettings(player) {
         const s = codex?.settings;
         // Infection timer: Powdery Journal only (not in Basic Journal)
         const showInfectionTimer = Boolean(s?.showInfectionTimer);
+        /** Dawn / new-day one-liner on merged action bar (auto-clears after a few seconds). */
+        const showDayNarrativeActionBar = s?.showDayNarrativeActionBar !== false;
         const settingsKey = `mb_player_settings_${player.id}`;
         const raw = getWorldPropertyChunked(settingsKey);
         if (raw) {
@@ -732,7 +734,8 @@ export function getPlayerSettings(player) {
                 const fromParsed = {
                     showInfectionTimer: ('showInfectionTimer' in parsed) ? Boolean(parsed.showInfectionTimer) : showInfectionTimer,
                     criticalWarningsOnly: ('criticalWarningsOnly' in parsed) ? Boolean(parsed.criticalWarningsOnly) : Boolean(s?.criticalWarningsOnly),
-                    stormParticles: typeof parsed.stormParticles === 'number' ? Math.max(0, Math.min(2, parsed.stormParticles)) : (s?.stormParticles ?? 0)
+                    stormParticles: typeof parsed.stormParticles === 'number' ? Math.max(0, Math.min(2, parsed.stormParticles)) : (s?.stormParticles ?? 0),
+                    showDayNarrativeActionBar: ('showDayNarrativeActionBar' in parsed) ? Boolean(parsed.showDayNarrativeActionBar) : showDayNarrativeActionBar
                 };
                 return fromParsed;
             }
@@ -740,10 +743,11 @@ export function getPlayerSettings(player) {
         return {
             showInfectionTimer,
             criticalWarningsOnly: Boolean(s?.criticalWarningsOnly),
-            stormParticles: s?.stormParticles ?? 0
+            stormParticles: s?.stormParticles ?? 0,
+            showDayNarrativeActionBar
         };
     } catch (e) {
-        return { showInfectionTimer: false, criticalWarningsOnly: false, stormParticles: 0 };
+        return { showInfectionTimer: false, criticalWarningsOnly: false, stormParticles: 0, showDayNarrativeActionBar: true };
     }
 }
 
@@ -1444,7 +1448,8 @@ export function showCodexBook(player, context) {
                     audioMessages: true,
                     showInfectionTimer: false,
                     criticalWarningsOnly: false,
-                    stormParticles: 0 // 0=Less, 1=Medium, 2=More
+                    stormParticles: 0, // 0=Less, 1=Medium, 2=More
+                    showDayNarrativeActionBar: true
                 };
                 saveCodex(player, codex);
             } else {
@@ -1466,6 +1471,9 @@ export function showCodexBook(player, context) {
                 }
                 if (codex.settings.stormParticles === undefined) {
                     codex.settings.stormParticles = 0;
+                }
+                if (codex.settings.showDayNarrativeActionBar === undefined) {
+                    codex.settings.showDayNarrativeActionBar = true;
                 }
                 if (codex.settings.infectionCueEmitterVolume === undefined) {
                     codex.settings.infectionCueEmitterVolume = 2;
@@ -1508,6 +1516,9 @@ export function showCodexBook(player, context) {
                     }
                     if (typeof parsedBasicSettings.stormParticles === 'number') {
                         codex.settings.stormParticles = Math.max(0, Math.min(2, parsedBasicSettings.stormParticles));
+                    }
+                    if ("showDayNarrativeActionBar" in parsedBasicSettings) {
+                        codex.settings.showDayNarrativeActionBar = Boolean(parsedBasicSettings.showDayNarrativeActionBar);
                     }
                 }
             }
@@ -5148,8 +5159,8 @@ export function showCodexBook(player, context) {
             .body(
                 `§7Bedrock allows §fone §7action-bar line. Spawn scan/preset HUDs are §fper player§7; optional §ebroadcast§7 shows them to everyone if any dev has theirs on.\n` +
                     `${formatHudMergeOrderForMenu()}\n\n` +
-                    `§8Your toggles §7scan ${scanPersonal ? "§aON" : "§7OFF"} §8preset ${presetPersonal ? "§aON" : "§7OFF"} §8| §8Broadcast §7${broadcastHud ? "§aON" : "§7OFF"}\n` +
-                    `§8You see §7scan ${scanSee ? "§aON" : "§7OFF"} §8preset ${presetSee ? "§aON" : "§7OFF"}` +
+                    `§8Your toggles §7scan ${scanPersonal ? "§aON" : "§7OFF"} §8preset ${presetPersonal ? "§aON" : "§7OFF"} §8| §8Broadcast §7(world) ${broadcastHud ? "§aON" : "§7OFF"}\n` +
+                    `§8You see §7scan ${scanSee ? "§aON" : "§7OFF"} §8preset ${presetSee ? "§aON" : "§7OFF"} §8§o(includes legacy world scan if ever ON)` +
                     (legacyScanWorld ? "\n§8Legacy world scan HUD §7was ON §8— toggle scan to migrate to per-player." : "") +
                     `\n\n§8Live §7(${dbg.count} seg): §r${preview}`
             );
@@ -5159,13 +5170,14 @@ export function showCodexBook(player, context) {
         form.button(broadcastHud ? "§cBroadcast spawn HUDs §8→ OFF §7(all players)" : "§aBroadcast spawn HUDs §8→ ON §7(all players)");
         form.button(campWatch ? "§cRemove §bcamp watch §7tag" : "§aAdd §bcamp watch §7tag");
         form.button("§eClear all merged segments §8(your line)");
+        form.button("§6Clear day / ambient §8(narrative slot only)");
         form.button("§fTest toast §8(~3s, merged)");
         form.button("§aSpawn AUTO hub §8(preset+scan+load)…");
         form.button("§bSpawn — World tuning §8(presets & combos)…");
         form.button("§8Back");
         form.show(player).then((res) => {
             const v = getPlayerSoundVolume(player);
-            if (!res || res.canceled || res.selection === 8) {
+            if (!res || res.canceled || res.selection === 9) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * v });
                 return goBack();
             }
@@ -5202,14 +5214,19 @@ export function showCodexBook(player, context) {
                 return openDeveloperToolsHudMenu(onBack);
             }
             if (res.selection === 5) {
-                pushHudActionBarToast(player, "§7HUD test toast §8(merged)", 60);
+                cancelAndClearDayNarrativeHud(player);
+                player.sendMessage(CHAT_INFO + "Cleared day / ambient action bar (narrative) and its auto-hide timer.");
                 return openDeveloperToolsHudMenu(onBack);
             }
             if (res.selection === 6) {
+                pushHudActionBarToast(player, "§7HUD test toast §8(merged)", 60);
+                return openDeveloperToolsHudMenu(onBack);
+            }
+            if (res.selection === 7) {
                 journalPowerToolsBack = () => openDeveloperToolsHudMenu(onBack);
                 return openSpawnAutoModesMenu(() => openDeveloperToolsHudMenu(onBack));
             }
-            if (res.selection === 7) {
+            if (res.selection === 8) {
                 journalPowerToolsBack = () => openDeveloperToolsHudMenu(onBack);
                 return openSpawnPerformanceHub();
             }
@@ -5556,8 +5573,8 @@ export function showCodexBook(player, context) {
                     `§8Preset+scan AUTO / load: §7§aAuto modes§7.\n\n` +
                     `${tuneActive.menuBody}\n\n` +
                     `${loadLine}\n` +
-                    `§8Your toggles §7scan ${scanPersonal ? "§aON" : "§7OFF"} §8preset ${presetPersonal ? "§aON" : "§7OFF"} §8| §8Broadcast §7${broadcastHud ? "§aON" : "§7OFF"}\n` +
-                    `§8You see §7scan ${scanSee ? "§aON" : "§7OFF"} §8preset ${presetSee ? "§aON" : "§7OFF"}\n` +
+                    `§8Your toggles §7scan ${scanPersonal ? "§aON" : "§7OFF"} §8preset ${presetPersonal ? "§aON" : "§7OFF"} §8| §8Broadcast §7(world) ${broadcastHud ? "§aON" : "§7OFF"}\n` +
+                    `§8You see §7scan ${scanSee ? "§aON" : "§7OFF"} §8preset ${presetSee ? "§aON" : "§7OFF"} §8§o(not only broadcast; legacy world scan still shows)\n` +
                     `§8Spatial groups: §7${spatialOn ? "ON" : "OFF"}`
             );
         form.button(scanPersonal ? "§cTurn off §e§lmy§r §7scan perf HUD" : "§aTurn on §e§lmy§r §7scan perf HUD");
@@ -8052,6 +8069,7 @@ export function showCodexBook(player, context) {
         
         const showInfectionTimer = settings.showInfectionTimer === true;
         const criticalWarningsOnly = settings.criticalWarningsOnly === true;
+        const showDayNarrativeActionBar = settings.showDayNarrativeActionBar !== false;
         const stormParticlesIndex = Math.max(0, Math.min(2, settings.stormParticles ?? 0));
         const particleOptions = ["Less", "Medium", "More"];
         try {
@@ -8068,12 +8086,13 @@ export function showCodexBook(player, context) {
                 .toggle("Show Search Button", { defaultValue: settings.showSearchButton !== false })
                 .toggle("Infection timer on screen (action bar)", { defaultValue: showInfectionTimer })
                 .toggle("Only critical infection/day warnings", { defaultValue: criticalWarningsOnly })
+                .toggle("Day / dawn line on action bar §8(new day at sunrise; auto-hides)", { defaultValue: showDayNarrativeActionBar })
                 .dropdown((hasCheats(player) ? "Addon Difficulty — Spawn: E 0.7× N 1× H 1.3×. Major hits (from nothing): E 4 N 3 H 2. Major hits (from minor): E 3 N 2 H 1. Infection decay: E 0.8× N 1× H 1.2×. Mining interval: E 1.2× N 1× H 0.5×. Torpedo max blocks: E 0.85× N 1× H 2×." : "Addon Difficulty") + (canEditDifficulty ? "" : " §8(read-only)"), difficultyOptions, { defaultValueIndex: addonDifficultyIndex });
             
             form.show(player).then((res) => {
                 const volumeMultiplier = getPlayerSoundVolume(player);
                 
-                if (res && res.formValues && Array.isArray(res.formValues) && res.formValues.length >= 12) {
+                if (res && res.formValues && Array.isArray(res.formValues) && res.formValues.length >= 13) {
                     const sliderValue = typeof res.formValues[0] === 'number' 
                         ? Math.max(0, Math.min(10, Math.round(Number(res.formValues[0]))))
                         : volumeSliderValue;
@@ -8090,9 +8109,10 @@ export function showCodexBook(player, context) {
                     settings.showSearchButton = Boolean(res.formValues[8]);
                     settings.showInfectionTimer = Boolean(res.formValues[9]);
                     settings.criticalWarningsOnly = Boolean(res.formValues[10]);
+                    settings.showDayNarrativeActionBar = Boolean(res.formValues[11]);
                     
-                    if (canEditDifficulty && typeof res.formValues[11] === 'number') {
-                        const selectedIndex = Math.max(0, Math.min(2, Math.floor(res.formValues[11])));
+                    if (canEditDifficulty && typeof res.formValues[12] === 'number') {
+                        const selectedIndex = Math.max(0, Math.min(2, Math.floor(res.formValues[12])));
                         const newAddonValue = selectedIndex === 0 ? -1 : selectedIndex === 1 ? 0 : 1;
                         setWorldProperty(ADDON_DIFFICULTY_PROPERTY, newAddonValue);
                         setWorldProperty(SPAWN_DIFFICULTY_PROPERTY, newAddonValue);
@@ -8109,7 +8129,8 @@ export function showCodexBook(player, context) {
                         audioMessages: settings.audioMessages,
                         showInfectionTimer: settings.showInfectionTimer,
                         criticalWarningsOnly: settings.criticalWarningsOnly,
-                        stormParticles: settings.stormParticles ?? 0
+                        stormParticles: settings.stormParticles ?? 0,
+                        showDayNarrativeActionBar: settings.showDayNarrativeActionBar
                     };
                     try {
                         setWorldPropertyChunked(basicSettingsKey, JSON.stringify(basicSettings));

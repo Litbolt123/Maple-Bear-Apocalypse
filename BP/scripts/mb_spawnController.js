@@ -1695,11 +1695,30 @@ export function isSpawnScanPerfOverlayEnabled() {
 
 export function isSpawnHudBroadcastEnabled() {
     const raw = getWorldProperty(MB_DEV_SPAWN_HUD_BROADCAST);
-    return raw === 1 || raw === true || raw === "1";
+    // Only explicit on — 0/false/undefined/absent must read as OFF (some builds did not persist numeric 0 reliably).
+    return raw === true || raw === 1 || raw === "1";
 }
 
 export function setSpawnHudBroadcastEnabled(on) {
-    setWorldProperty(MB_DEV_SPAWN_HUD_BROADCAST, on ? 1 : 0);
+    try {
+        if (on) {
+            setWorldProperty(MB_DEV_SPAWN_HUD_BROADCAST, true);
+            world.setDynamicProperty(MB_DEV_SPAWN_HUD_BROADCAST, true);
+        } else {
+            setWorldProperty(MB_DEV_SPAWN_HUD_BROADCAST, undefined);
+            try {
+                world.setDynamicProperty(MB_DEV_SPAWN_HUD_BROADCAST, undefined);
+            } catch {
+                try {
+                    world.setDynamicProperty(MB_DEV_SPAWN_HUD_BROADCAST, false);
+                } catch {
+                    /* ignore */
+                }
+            }
+        }
+    } catch (e) {
+        console.warn("[SPAWN] setSpawnHudBroadcastEnabled:", e);
+    }
 }
 
 /** @param {import("@minecraft/server").Player} player */
@@ -2082,6 +2101,9 @@ const AIR_BLOCKS = new Set([
     "minecraft:void_air"
 ]);
 
+/** Inclusive max Y for Overworld & End (Bedrock/Java 1.18+ build column: blocks Y=-64..319). */
+const OVERWORLD_END_BUILD_HEIGHT_MAX_Y = 319;
+
 const FLYING_SPAWN_SETTINGS = {
     [FLYING_BEAR_ID]: { minAbsoluteY: 70, offset: 5, maxLift: 8, skyClearance: 6 },
     [FLYING_BEAR_DAY15_ID]: { minAbsoluteY: 74, offset: 6, maxLift: 9, skyClearance: 7 },
@@ -2096,7 +2118,7 @@ const FLYING_SPAWN_SETTINGS = {
 
 const MINING_SPAWN_SETTINGS = {
     [MINING_BEAR_ID]: { maxAbsoluteY: 55, roofProbe: 6, requiredRoofBlocks: 2, clearance: 3, allowSurface: false },
-    [MINING_BEAR_DAY20_ID]: { maxAbsoluteY: 320, roofProbe: 7, requiredRoofBlocks: 2, clearance: 4, allowSurface: true }
+    [MINING_BEAR_DAY20_ID]: { maxAbsoluteY: OVERWORLD_END_BUILD_HEIGHT_MAX_Y, roofProbe: 7, requiredRoofBlocks: 2, clearance: 4, allowSurface: true }
 };
 
 // ============================================================================
@@ -2199,11 +2221,11 @@ function hasRoof(dimension, x, z, startY, probe, requiredSolid) {
 function getDimensionYBounds(dimensionId) {
     if (dimensionId === "minecraft:nether") {
         return { min: -64, max: 127 }; // Nether ceiling is at Y=128, but we use 127 to be safe
-    } else if (dimensionId === "minecraft:the_end") {
-        return { min: -64, max: 320 }; // End has no ceiling
-    } else {
-        return { min: -64, max: 320 }; // Overworld
     }
+    if (dimensionId === "minecraft:the_end") {
+        return { min: -64, max: OVERWORLD_END_BUILD_HEIGHT_MAX_Y };
+    }
+    return { min: -64, max: OVERWORLD_END_BUILD_HEIGHT_MAX_Y }; // Overworld (and any non-Nether, non-End id)
 }
 
 // Check if a chunk is loaded before scanning blocks in it
@@ -4059,6 +4081,7 @@ function collectMiningSpawnTiles(dimension, center, minDistance, maxDistance, li
     const cx = Math.floor(center.x);
     const cy = Math.floor(center.y);
     const cz = Math.floor(center.z);
+    const dimYMax = getDimensionYBounds(dimension.id).max;
     const minSq = minDistance * minDistance;
     const maxSq = maxDistance * maxDistance;
     const candidates = [];
@@ -4120,7 +4143,7 @@ function collectMiningSpawnTiles(dimension, center, minDistance, maxDistance, li
         const xEnd = cx + maxDistance;
         const zStart = cz - maxDistance;
         const zEnd = cz + maxDistance;
-        const yStart = Math.min(cy + 10, 320);
+        const yStart = Math.min(cy + 10, dimYMax);
         const yEnd = Math.max(cy - 10, -64);
         
         // Use roofProbe from MINING_SPAWN_SETTINGS for consistency
@@ -4137,7 +4160,7 @@ function collectMiningSpawnTiles(dimension, center, minDistance, maxDistance, li
                 
                 // Check Y levels from top to bottom
                 for (let y = yStart; y >= yEnd && candidates.length < limit && blockQueryCount < stoneBudget; y--) {
-                    if (y < -64 || y > 320) continue;
+                    if (y < -64 || y > dimYMax) continue;
                     
                     const key = `${x},${y},${z}`;
                     if (seen.has(key)) continue;
@@ -4163,7 +4186,7 @@ function collectMiningSpawnTiles(dimension, center, minDistance, maxDistance, li
                                 // Check for roof (cave requirement) - check up to roofProbeRange blocks
                                 let hasRoof = false;
                                 const roofCheckStart = y + 3;
-                                const roofCheckEnd = Math.min(y + 3 + roofProbeRange - 1, 320);
+                                const roofCheckEnd = Math.min(y + 3 + roofProbeRange - 1, dimYMax);
                                 for (let checkY = roofCheckStart; checkY <= roofCheckEnd && blockQueryCount < stoneBudget; checkY++) {
                                     try {
                                         const roofBlock = dimension.getBlock({ x, y: checkY, z });
@@ -4229,6 +4252,7 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
     
     const dimensionId = dimension.id;
     const isNetherOrEnd = dimensionId === "minecraft:nether" || dimensionId === "minecraft:the_end";
+    const dimYMax = getDimensionYBounds(dimensionId).max;
     const adaptiveDiscoveryRadiusBase = getAdaptiveDiscoveryRadius(totalPlayerCount, isTightGroup, isIsolated, false, scanLoadCount);
     
     // Use scaled query limit based on player count (reduces lag with multiple players)
@@ -4461,11 +4485,11 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
                     if (distFromCenter < minDistance || distFromCenter > maxDistance) continue;
                     
                     // Check Y levels around the cached tile's Y level
-                    const checkYStart = Math.min(cachedTile.y + 5, 320);
+                    const checkYStart = Math.min(cachedTile.y + 5, dimYMax);
                     const checkYEnd = Math.max(cachedTile.y - 5, -64);
                     
                     for (let checkY = checkYStart; checkY >= checkYEnd && candidates.length < limit && blockQueryCount < queryLimit; checkY--) {
-                        if (checkY < -64 || checkY > 320) continue;
+                        if (checkY < -64 || checkY > dimYMax) continue;
                         
                         const tileKey = `${checkX},${checkY},${checkZ}`;
                         if (seen.has(tileKey)) continue;
@@ -4753,7 +4777,7 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
                 if (qdistSq > quickCheckRadiusSq) continue;
                 
                 // Check Y range around player
-                const quickYStart = Math.min(cy + 10, 320);
+                const quickYStart = Math.min(cy + 10, dimYMax);
                 const quickYEnd = Math.max(cy - 10, -64);
                 
                 for (let qy = quickYStart; qy >= quickYEnd && blockQueryCount < queryLimit; qy--) {
@@ -4937,7 +4961,7 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
         // This finds the first solid block (surface) which is more reliable
         let foundSurface = false;
         let waterDepth = 0; // Track how deep we are in water
-        for (let sy = Math.min(cy + 20, 320); sy >= Math.max(cy - 15, -64) && sampleQueryCount < maxSampleQueries && blockQueryCount < queryLimit; sy--) {
+        for (let sy = Math.min(cy + 20, dimYMax); sy >= Math.max(cy - 15, -64) && sampleQueryCount < maxSampleQueries && blockQueryCount < queryLimit; sy--) {
             try {
                 const sampleBlock = dimension.getBlock({ x: pos.x, y: sy, z: pos.z });
                 sampleQueryCount++;
@@ -5009,7 +5033,7 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
         const surfaceY = Math.floor(surfaceYLevel);
         yRangeUp = 8; // Only 8 blocks above surface
         yRangeDown = 8; // Only 8 blocks below surface
-        yStart = Math.min(surfaceY + yRangeUp, 320);
+        yStart = Math.min(surfaceY + yRangeUp, dimYMax);
         yEnd = Math.max(surfaceY - yRangeDown, -64);
         
         if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
@@ -5025,7 +5049,7 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
             yRangeUp = 15; // Reduced from 30 for Nether/End
             yRangeDown = 15; // Keep at 15
             // Cap Y start to avoid Nether ceiling (Y=128) - leave some buffer
-            const maxY = dimensionId === "minecraft:nether" ? 125 : 320; // Nether ceiling buffer, End has no ceiling
+            const maxY = dimensionId === "minecraft:nether" ? 125 : dimYMax; // Nether ceiling buffer; OW/End use build-height max
             yStart = Math.min(cy + yRangeUp, maxY);
             yEnd = Math.max(cy - yRangeDown, -64);
         } else {
@@ -5128,9 +5152,9 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
     const blockTypeCounts = new Map(); // Track block types found for debugging
     
     // Check Y levels from top to bottom - define constants once outside loops
-    // Minecraft Bedrock minimum Y is -64, maximum is 320
+    // Minecraft Bedrock minimum Y is -64; max build layer is dimension-specific (see getDimensionYBounds)
     const MIN_Y = -64;
-    const MAX_Y = 320;
+    const MAX_Y = dimYMax;
     const clampedYStart = Math.min(yStart, MAX_Y);
     const clampedYEnd = Math.max(yEnd, MIN_Y);
     
@@ -5448,9 +5472,8 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
             const z = pos.z;
                 
                 // Check expanded Y range (skip already checked area)
-                // Minecraft Bedrock minimum Y is -64, maximum is 320
                 const MIN_Y = -64;
-                const MAX_Y = 320;
+                const MAX_Y = dimYMax;
                 const clampedYStart = Math.min(expandedYStart, MAX_Y);
                 const clampedYEnd = Math.max(expandedYEnd, MIN_Y);
                 
@@ -5539,7 +5562,7 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
                     const bioXEnd = bx + biomeScanRadius;
                     const bioZStart = bz - biomeScanRadius;
                     const bioZEnd = bz + biomeScanRadius;
-                    const bioYStart = Math.min(by + 15, 320);
+                    const bioYStart = Math.min(by + 15, dimYMax);
                     const bioYEnd = Math.max(by - 15, -64);
                     if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
                         console.warn(`[SPAWN DEBUG] Infected biome fallback: Scanning around biome at (${bx}, ${by}, ${bz}), dist: ${distToBiome.toFixed(1)}`);
@@ -6972,7 +6995,15 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
     if (isFlyingOrTorpedo) {
         const settings = FLYING_SPAWN_SETTINGS[config.id];
         if (settings) {
-            const airTiles = generateAirSpawnTiles(dimension, playerPos, settings.minAbsoluteY, settings.minAbsoluteY + 60, 20);
+            let dimId = "minecraft:overworld";
+            try {
+                dimId = dimension?.id ?? dimId;
+            } catch {
+                /* ignore */
+            }
+            // Sample air columns up to dimension build cap (not minAbsoluteY+60 — that capped sky spawns ~Y150).
+            const airYMax = getDimensionYBounds(dimId).max;
+            const airTiles = generateAirSpawnTiles(dimension, playerPos, settings.minAbsoluteY, airYMax, 24);
             if (Array.isArray(airTiles)) {
             pool.push(...airTiles);
             }

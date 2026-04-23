@@ -51,7 +51,7 @@ export const HUD_MERGE_SLOT_META = [
     { slot: ACTION_BAR_SLOT.INFECTION, title: "Infection", detail: "Timer / cues when infected (journal settings)." },
     { slot: ACTION_BAR_SLOT.SPAWN_TUNING, title: "Preset hint", detail: "Per-player dev toggle; optional broadcast (Spawn Controller → HUD & spatial)." },
     { slot: ACTION_BAR_SLOT.SPAWN_SCAN_PERF, title: "Scan perf", detail: "Per-player; optional broadcast — addon bears, L%=load model, i×/b× scalers, P/C/D/W spatial (journal menu)." },
-    { slot: ACTION_BAR_SLOT.NARRATIVE, title: "Day / ambient", detail: "Day tracker one-liners (peaceful / infection tone)." },
+    { slot: ACTION_BAR_SLOT.NARRATIVE, title: "Day / ambient", detail: "Dawn / join / init one-liner; auto-clears a few ticks after the paired title fades (Journal toggle)." },
     { slot: ACTION_BAR_SLOT.CAMP_DEV, title: "Camp dev", detail: "Tag mb_dev_camp_watch + cheats." },
     { slot: ACTION_BAR_SLOT.TOAST, title: "Toast", detail: "Brief messages (e.g. cure) — drops off after a few seconds." }
 ];
