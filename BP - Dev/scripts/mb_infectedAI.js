@@ -11,6 +11,8 @@ import { getPathfindingPath, getPathfindingWaypoint, steerAlongPath } from "./mb
 import { getCachedPlayers } from "./mb_sharedCache.js";
 import { isDebugEnabled } from "./mb_codex.js";
 import { isScriptEnabled, SCRIPT_IDS, isBetaInfectedAIEnabled } from "./mb_scriptToggles.js";
+import { getBearsOfType } from "./mb_bearSnapshot.js";
+import { getAiIntervalStretch, getAiBatchBoost } from "./mb_performanceProfile.js";
 
 const INFECTED_TYPES = [
     "mb:infected",
@@ -47,6 +49,10 @@ const ANGER_SPREAD_RADIUS = 24;
 const ANGER_CLEANUP_INTERVAL_TICKS = 60; // Run cleanup every 60 ticks (~3s) to limit cost
 
 let infectedAIIntervalId = null;
+// Tracks how many runInterval wake-ups since last time we actually processed work.
+// Combined with getAiIntervalStretch(), lets us stretch the effective interval in
+// multiplayer without adding a second runInterval or rescheduling.
+let infectedAIVisitCounter = 0;
 let lastAngerCleanupTick = -ANGER_CLEANUP_INTERVAL_TICKS;
 
 function getTargetPlayer(entity) {
@@ -292,35 +298,39 @@ function runInfectedAI() {
             pruneAngerTargetMap(tick);
             lastAngerCleanupTick = tick;
         }
+        // Player-count thrift: on 3+/5+ players, only process every Nth wake-up.
+        // The per-pass batch cap is boosted so per-second throughput stays even.
+        const stretch = Math.max(1, Math.round(getAiIntervalStretch()));
+        infectedAIVisitCounter = (infectedAIVisitCounter + 1) % stretch;
+        if (infectedAIVisitCounter !== 0) return;
+        const batchCap = Math.max(
+            MAX_INFECTED_PER_TICK,
+            Math.round(MAX_INFECTED_PER_TICK * getAiBatchBoost())
+        );
         const players = getCachedPlayers();
         const processedIds = new Set();
         let processedCount = 0;
 
         for (const player of players) {
-            if (!player?.location || !player?.dimension || processedCount >= MAX_INFECTED_PER_TICK) break;
-            const dimension = player.dimension;            const center = player.location;
+            if (!player?.location || !player?.dimension || processedCount >= batchCap) break;
+            const dimension = player.dimension;
+            const center = player.location;
 
             for (const typeId of INFECTED_TYPES) {
-                if (processedCount >= MAX_INFECTED_PER_TICK) break;
-                try {
-                    const entities = dimension.getEntities({
-                        location: center,
-                        maxDistance: TARGET_RADIUS,
-                        type: typeId
-                    });
+                if (processedCount >= batchCap) break;
+                // Snapshot lookup (shared with mining/buff/flying/torpedo AIs) + distance filter.
+                const entities = getBearsOfType(dimension, typeId, center, TARGET_RADIUS);
+                if (!entities.length) continue;
 
-                    for (const entity of entities) {
-                        if (processedCount >= MAX_INFECTED_PER_TICK) break;
-                        if (!entity?.isValid || processedIds.has(entity.id)) continue;
-                        const targetInfo = findNearestPlayer(entity);
-                        if (!targetInfo) continue;
+                for (const entity of entities) {
+                    if (processedCount >= batchCap) break;
+                    if (!entity?.isValid || processedIds.has(entity.id)) continue;
+                    const targetInfo = findNearestPlayer(entity);
+                    if (!targetInfo) continue;
 
-                        processedIds.add(entity.id);
-                        processInfectedEntity(entity, targetInfo, tick);
-                        processedCount++;
-                    }
-                } catch {
-                    // Skip this type/dimension
+                    processedIds.add(entity.id);
+                    processInfectedEntity(entity, targetInfo, tick);
+                    processedCount++;
                 }
             }
         }
@@ -355,12 +365,8 @@ export function angerNearbyInfectedAtPlayer(dimension, location, targetPlayer, r
     const currentTick = system.currentTick;
     const expireTick = currentTick + ANGER_DURATION_TICKS;
     for (const typeId of INFECTED_TYPES) {
-        let entities;
-        try {
-            entities = dimension.getEntities({ type: typeId, location, maxDistance: radius });
-        } catch {
-            continue;
-        }
+        // Snapshot-backed lookup; anger events are infrequent but still avoid per-type entity queries.
+        const entities = getBearsOfType(dimension, typeId, location, radius);
         for (const entity of entities) {
             if (entity?.id) {
                 angerTargetMap.set(entity.id, { entity: targetPlayer, expireTick });

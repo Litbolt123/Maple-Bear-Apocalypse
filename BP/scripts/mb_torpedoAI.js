@@ -6,8 +6,10 @@ import { UNBREAKABLE_BLOCKS } from "./mb_miningBlockList.js";
 import { SNOW_REPLACEABLE_BLOCKS, SNOW_TWO_BLOCK_PLANTS } from "./mb_blockLists.js";
 import { isDebugEnabled } from "./mb_codex.js";
 import { isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
-import { getCachedPlayers, getCachedMobs } from "./mb_sharedCache.js";
+import { getCachedPlayers, getCachedMobs, isEntityValid } from "./mb_sharedCache.js";
 import { getAddonDifficultyState, getWorldProperty } from "./mb_dynamicPropertyHandler.js";
+import { getBearSnapshot } from "./mb_bearSnapshot.js";
+import { getAiIntervalStretch } from "./mb_performanceProfile.js";
 
 // Debug helper functions
 function getDebugGeneral() {
@@ -358,7 +360,7 @@ function findTarget(entity, maxDistance) {
     if (cached && (currentTick - cached.tick) < TARGET_CACHE_TICKS) {
         // Verify cached target still exists and is valid
         try {
-            if (cached.target && cached.target.entity && cached.target.entity.isValid()) {
+            if (cached.target && cached.target.entity && isEntityValid(cached.target.entity)) {
                 const origin = entity.location;
                 const targetLoc = cached.target.entity.location;
                 const dx = targetLoc.x - origin.x;
@@ -933,6 +935,8 @@ const targetCache = new Map(); // Map<entityId, {target: targetInfo, tick: numbe
 
 // Initialize torpedo AI with delay to ensure world is ready (similar to mining AI)
 let torpedoAIIntervalId = null;
+// Visit counter for player-count thrift: stretch effective interval without rescheduling.
+let torpedoAIVisitCounter = 0;
 let torpedoInitAttempts = 0;
 const MAX_TORPEDO_INIT_ATTEMPTS = 10;
 const TORPEDO_INIT_DELAY_TICKS = 40; // 2 second delay
@@ -1031,9 +1035,14 @@ function initializeTorpedoAI() {
         const seen = new Set();
         const currentTick = system.currentTick;
         const ticksSinceStart = currentTick - aiLoopStartTick;
+
+        // Player-count thrift tier stretches the effective interval in multiplayer.
+        const torpedoStretch = Math.max(1, Math.round(getAiIntervalStretch()));
+        torpedoAIVisitCounter = (torpedoAIVisitCounter + 1) % torpedoStretch;
+        if (torpedoAIVisitCounter !== 0) return;
         
-        // Note: system.runInterval already handles the interval, so we don't need to check tick % AI_TICK_INTERVAL
-        // The interval callback is only called every AI_TICK_INTERVAL ticks automatically
+        // Note: system.runInterval already handles the base interval;
+        // the thrift-tier stretch above further throttles when many players are online.
         
         // Always log when debug is enabled (frequently to confirm it's working)
         if (getDebugGeneral()) {
@@ -1053,8 +1062,8 @@ function initializeTorpedoAI() {
                 for (const player of allPlayers) {
                     try {
                         const dimId = player.dimension?.id || 'unknown';
-                        const isValid = typeof player.isValid === "function" ? player.isValid() : 'unknown';
-                        console.warn(`[TORPEDO AI]   Player: ${player.name}, dimension: ${dimId}, valid: ${isValid}`);
+                        const ok = isEntityValid(player);
+                        console.warn(`[TORPEDO AI]   Player: ${player.name}, dimension: ${dimId}, valid: ${ok}`);
                     } catch (err) {
                         console.warn(`[TORPEDO AI]   Player: ${player.name}, error getting info:`, err);
                     }
@@ -1065,7 +1074,7 @@ function initializeTorpedoAI() {
         const playerPositions = new Map(); // Map<dimensionId, positions[]>
         for (const player of allPlayers) {
             try {
-                if (typeof player.isValid === "function" && !player.isValid()) {
+                if (!isEntityValid(player)) {
                     if (getDebugGeneral() && (ticksSinceStart <= 20 || currentTick % 50 === 0)) {
                         console.warn(`[TORPEDO AI] Skipping invalid player: ${player.name}`);
                     }
@@ -1134,17 +1143,20 @@ function initializeTorpedoAI() {
             console.warn(`[TORPEDO AI] Processing ${dimId} - ${dimPlayerPositions.length} player(s) in this dimension`);
         }
 
+        // Shared per-dimension snapshot; torpedo variants come from the same refresh
+        // that mining/flying/infected/buff AIs use.
+        let dimSnap;
+        try {
+            dimSnap = getBearSnapshot(dimension);
+        } catch (err) {
+            console.warn(`[TORPEDO AI] ERROR getting bear snapshot for ${dimId}:`, err);
+            continue;
+        }
+
         for (const config of TORPEDO_TYPES) {
-            let entities;
-            try {
-                entities = dimension.getEntities({ type: config.id });
-                // Log entity query results (only when debug enabled)
-                if (getDebugGeneral() && (ticksSinceStart <= 20 || currentTick % 50 === 0)) {
-                    console.warn(`[TORPEDO AI] Entity query for ${config.id} in ${dimId}: ${entities?.length || 0} entities found`);
-                }
-            } catch (err) {
-                console.warn(`[TORPEDO AI] ERROR querying entities for ${config.id} in ${dimId}:`, err);
-                continue;
+            const entities = dimSnap?.byType.get(config.id) || [];
+            if (getDebugGeneral() && (ticksSinceStart <= 20 || currentTick % 50 === 0)) {
+                console.warn(`[TORPEDO AI] Entity query for ${config.id} in ${dimId}: ${entities.length} entities found`);
             }
             if (!entities || entities.length === 0) {
                 // Log when no entities found (only when debug enabled)
@@ -1160,7 +1172,7 @@ function initializeTorpedoAI() {
                 console.warn(`[TORPEDO AI] Dimension: ${dimId}, Tick: ${currentTick}`);
                 if (entities.length > 0) {
                     const firstEntity = entities[0];
-                    if (firstEntity && typeof firstEntity.isValid === "function" && firstEntity.isValid()) {
+                    if (firstEntity && isEntityValid(firstEntity)) {
                         const loc = firstEntity.location;
                         console.warn(`[TORPEDO AI] First entity position: (${loc.x.toFixed(1)}, ${loc.y.toFixed(1)}, ${loc.z.toFixed(1)})`);
                         if (dimPlayerPositions.length > 0) {
@@ -1181,7 +1193,7 @@ function initializeTorpedoAI() {
             // Performance: Distance-based culling - only process entities near players
             const validEntities = [];
             for (const entity of entities) {
-                if (typeof entity?.isValid === "function" && !entity.isValid()) continue;
+                if (!isEntityValid(entity)) continue;
                 
                 // Check if entity is within processing distance of any player
                 const entityLoc = entity.location;
@@ -1209,7 +1221,7 @@ function initializeTorpedoAI() {
                     // Log distances to nearest player for debugging
                     if (dimPlayerPositions.length > 0 && entities.length > 0) {
                         const firstEntity = entities[0];
-                        if (firstEntity && typeof firstEntity.isValid === "function" && firstEntity.isValid()) {
+                        if (firstEntity && isEntityValid(firstEntity)) {
                             const entityLoc = firstEntity.location;
                             let minDist = Infinity;
                             let nearestPlayerPos = null;
@@ -1252,7 +1264,7 @@ function initializeTorpedoAI() {
                     console.warn(`[TORPEDO AI] Players in dimension: ${dimPlayerPositions.length}`);
                     if (validEntities.length > 0) {
                         const firstEntity = validEntities[0];
-                        if (firstEntity && typeof firstEntity.isValid === "function" && firstEntity.isValid()) {
+                        if (firstEntity && isEntityValid(firstEntity)) {
                             const loc = firstEntity.location;
                             console.warn(`[TORPEDO AI] First entity position: (${loc.x.toFixed(1)}, ${loc.y.toFixed(1)}, ${loc.z.toFixed(1)})`);
                         }
@@ -1261,6 +1273,7 @@ function initializeTorpedoAI() {
             }
 
             for (const entity of validEntities) {
+                if (!isEntityValid(entity)) continue;
                 seen.add(entity.id);
                 
                 const state = getState(entity);

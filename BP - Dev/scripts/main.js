@@ -5,7 +5,9 @@ import { getCodex, getDefaultCodex, markCodex, markSubsectionUnlock, markSection
 import { initializeDayTracking, getCurrentDay, setCurrentDay, getInfectionMessage, checkDailyEventsForAllPlayers, getDayDisplayInfo, recordDailyEvent, mbiHandleMilestoneDay, isMilestoneDay } from "./mb_dayTracker.js";
 import { registerDustedDirtBlock, unregisterDustedDirtBlock, countNearbyDustedDirtBlocks, upsertEmulsifierZoneAtBlock, removeEmulsifierZoneAtBlock, getEmulsifierZoneAtBlock, getZoneFuelQueueForUI, isInsideEmulsifierNoSpawnZone } from "./mb_spawnController.js";
 import { initializePropertyHandler, getPlayerProperty, setPlayerProperty, getWorldProperty, setWorldProperty, getAddonDifficultyState } from "./mb_dynamicPropertyHandler.js";
-import { initializeAdaptivePerformanceWatch, getPerfWallStress01, getPerfMobPressureForSpawn01 } from "./mb_performanceProfile.js";
+import { initializeAdaptivePerformanceWatch, getPerfWallStress01, getPerfMobPressureForSpawn01, getPlayerThriftTier } from "./mb_performanceProfile.js";
+import { getBearSnapshotsForDimensions } from "./mb_bearSnapshot.js";
+import { getCachedBlockInfo } from "./mb_blockCache.js";
 import { registerSpawnLoadProbes, initializeSpawnLoadScalerWatch } from "./mb_spawnLoadMetrics.js";
 import { getActiveStormCount } from "./mb_snowStorm.js";
 import { isDustStormsEnabled, isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
@@ -38,7 +40,6 @@ import {
     INFECTED_BEAR_DAY13_ID,
     INFECTED_BEAR_DAY20_ID,
     BUFF_BEAR_ID,
-    BUFF_BEAR_DAY8_ID,
     BUFF_BEAR_DAY13_ID,
     BUFF_BEAR_DAY20_ID,
     FLYING_BEAR_ID,
@@ -54,6 +55,7 @@ import {
 import { handleMobConversion, handleStormMobConversion } from "./mb_mainMobConversion.js";
 import { runWorldPropertyMigrations } from "./mb_propertyMigration.js";
 import { registerBearTelemetryTick } from "./mb_bearTelemetry.js";
+import { initializeBearPopulationCull } from "./mb_bearPopulationCull.js";
 
 // NOTE: Debug and testing features have been commented out for playability
 // To re-enable testing features, uncomment the following sections:
@@ -387,7 +389,7 @@ function getFirstKillAchievementForBearType(bearType) {
     if (bearType === INFECTED_BEAR_ID || bearType === INFECTED_BEAR_DAY8_ID || bearType === INFECTED_BEAR_DAY13_ID || bearType === INFECTED_BEAR_DAY20_ID) {
         return { countKey: "infectedBearKills", achievementKey: "firstKill_infectedBear", label: "Infected Bear" };
     }
-    if (bearType === BUFF_BEAR_ID || bearType === BUFF_BEAR_DAY8_ID || bearType === BUFF_BEAR_DAY13_ID || bearType === BUFF_BEAR_DAY20_ID) {
+    if (bearType === BUFF_BEAR_ID || bearType === BUFF_BEAR_DAY13_ID || bearType === BUFF_BEAR_DAY20_ID) {
         return { countKey: "buffBearKills", achievementKey: "firstKill_buffBear", label: "Buff Maple Bear" };
     }
     if (bearType === FLYING_BEAR_ID || bearType === FLYING_BEAR_DAY15_ID || bearType === FLYING_BEAR_DAY20_ID) {
@@ -470,9 +472,6 @@ function trackBearKill(player, bearType) {
             codex.mobs.buffBearKills = (codex.mobs.buffBearKills || 0) + 1;
             codex.mobs.variantKills.buffBear.original = (codex.mobs.variantKills.buffBear.original || 0) + 1;
             checkAndUnlockMobDiscovery(codex, player, "buffBearKills", "buffBearMobKills", "buffBearHits", "buffBearSeen", 1, "threatening", "buff_bear");
-        } else if (bearType === BUFF_BEAR_DAY8_ID) {
-            codex.mobs.buffBearKills = (codex.mobs.buffBearKills || 0) + 1;
-            codex.mobs.variantKills.buffBear.day8 = (codex.mobs.variantKills.buffBear.day8 || 0) + 1;
         } else if (bearType === BUFF_BEAR_DAY13_ID) {
             codex.mobs.buffBearKills = (codex.mobs.buffBearKills || 0) + 1;
             codex.mobs.variantKills.buffBear.day13 = (codex.mobs.variantKills.buffBear.day13 || 0) + 1;
@@ -703,7 +702,7 @@ function checkVariantUnlock(player, codexParam = null) {
         // Helpers: only show unlock chat message when player has actually killed/experienced a variant
         const v = codex.mobs.variantKills;
         const hasKilledDay4Variant = (v?.tinyBear?.day4 || 0) >= 1 || (v?.infectedPig?.day4 || 0) >= 1 || (v?.infectedCow?.day4 || 0) >= 1;
-        const hasKilledDay8Variant = (v?.tinyBear?.day8 || 0) >= 1 || (v?.infectedBear?.day8 || 0) >= 1 || (v?.infectedPig?.day8 || 0) >= 1 || (v?.infectedCow?.day8 || 0) >= 1 || (v?.buffBear?.day8 || 0) >= 1 || (v?.flyingBear?.day15 || 0) >= 1;
+        const hasKilledDay8Variant = (v?.tinyBear?.day8 || 0) >= 1 || (v?.infectedBear?.day8 || 0) >= 1 || (v?.infectedPig?.day8 || 0) >= 1 || (v?.infectedCow?.day8 || 0) >= 1 || (v?.flyingBear?.day15 || 0) >= 1;
         const hasKilledDay13Variant = (v?.tinyBear?.day13 || 0) >= 1 || (v?.infectedBear?.day13 || 0) >= 1 || (v?.buffBear?.day13 || 0) >= 1 || (v?.infectedPig?.day13 || 0) >= 1 || (v?.infectedCow?.day13 || 0) >= 1 || (v?.miningBear?.original || 0) >= 1 || (v?.flyingBear?.day15 || 0) >= 1;
         const hasKilledDay20Variant = (v?.tinyBear?.day20 || 0) >= 1 || (v?.infectedBear?.day20 || 0) >= 1 || (v?.buffBear?.day20 || 0) >= 1 || (v?.infectedPig?.day20 || 0) >= 1 || (v?.infectedCow?.day20 || 0) >= 1 || (v?.flyingBear?.day20 || 0) >= 1 || (v?.miningBear?.day20 || 0) >= 1 || (v?.torpedoBear?.day20 || 0) >= 1;
 
@@ -1195,39 +1194,43 @@ function isStandingOnInfectedGround(player) {
         const z = Math.floor(loc.z);
         const blockBelowY = Math.floor(loc.y - 1);
         const blockAtFeetY = Math.floor(loc.y);
-        
+        // Same 5t TTL as `isPlayerAirborne` — reuses `mb_blockCache` when multiple
+        // systems read feet/below in the same tick (ground loop + infection audio, etc.).
+        const feetT = 5;
+
         // Check if player is in water or boat - if so, only count if actually walking on the block underwater
-        const blockAtPlayer = dimension.getBlock({ x, y: Math.floor(loc.y), z });
-        const isInWater = blockAtPlayer && (blockAtPlayer.typeId.includes("water") || blockAtPlayer.typeId.includes("flowing_water"));
+        const atPlayer = getCachedBlockInfo(dimension, { x, y: Math.floor(loc.y), z }, feetT);
+        const tidP = atPlayer.typeId;
+        const isInWater = !!tidP && (tidP.includes("water") || tidP.includes("flowing_water"));
         const isInBoat = player.riding && player.riding.typeId && player.riding.typeId.includes("boat");
         
         // If in boat or water in air (not walking on block underwater), don't count
-        if (isInBoat || (isInWater && blockAtPlayer && blockAtPlayer.isAir)) {
+        if (isInBoat || (isInWater && atPlayer.isAir)) {
             if (isDebugEnabled("ground_infection", "groundCheck") || isDebugEnabled("ground_infection", "all")) {
                 console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Not on ground (boat: ${isInBoat}, water: ${isInWater})`);
             }
             return { onGround: false, blockType: null, speedMultiplier: 1 };
         }
         
-        const blockBelow = dimension.getBlock({ x, y: blockBelowY, z });
-        const blockAtFeet = dimension.getBlock({ x, y: blockAtFeetY, z });
+        const belowInfo = getCachedBlockInfo(dimension, { x, y: blockBelowY, z }, feetT);
+        const feetInfo = getCachedBlockInfo(dimension, { x, y: blockAtFeetY, z }, feetT);
         
         // Prioritize block at feet (snow layer) over block below (dusted dirt)
         // This ensures snow layer is detected when on top of dusted dirt
-        if (blockAtFeet && INFECTED_GROUND_BLOCKS.has(blockAtFeet.typeId)) {
-            const isSnowLayer = blockAtFeet.typeId === "mb:snow_layer";
+        if (feetInfo.typeId && INFECTED_GROUND_BLOCKS.has(feetInfo.typeId)) {
+            const isSnowLayer = feetInfo.typeId === "mb:snow_layer";
             if (isDebugEnabled("ground_infection", "groundCheck") || isDebugEnabled("ground_infection", "all")) {
-                console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Standing on ${blockAtFeet.typeId} at feet (speed multiplier: ${isSnowLayer ? 2 : 1})`);
+                console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Standing on ${feetInfo.typeId} at feet (speed multiplier: ${isSnowLayer ? 2 : 1})`);
             }
-            return { onGround: true, blockType: blockAtFeet.typeId, speedMultiplier: isSnowLayer ? 2 : 1 };
+            return { onGround: true, blockType: feetInfo.typeId, speedMultiplier: isSnowLayer ? 2 : 1 };
         }
         // Check block below only if nothing at feet
-        if (blockBelow && INFECTED_GROUND_BLOCKS.has(blockBelow.typeId)) {
-            const isSnowLayer = blockBelow.typeId === "mb:snow_layer";
+        if (belowInfo.typeId && INFECTED_GROUND_BLOCKS.has(belowInfo.typeId)) {
+            const isSnowLayer = belowInfo.typeId === "mb:snow_layer";
             if (isDebugEnabled("ground_infection", "groundCheck") || isDebugEnabled("ground_infection", "all")) {
-                console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Standing on ${blockBelow.typeId} (speed multiplier: ${isSnowLayer ? 2 : 1})`);
+                console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Standing on ${belowInfo.typeId} (speed multiplier: ${isSnowLayer ? 2 : 1})`);
             }
-            return { onGround: true, blockType: blockBelow.typeId, speedMultiplier: isSnowLayer ? 2 : 1 };
+            return { onGround: true, blockType: belowInfo.typeId, speedMultiplier: isSnowLayer ? 2 : 1 };
         }
         
         if (isDebugEnabled("ground_infection", "groundCheck") || isDebugEnabled("ground_infection", "all")) {
@@ -3160,7 +3163,7 @@ function handleInfectedPlayerDeath(player, source) {
     const mapleBearTypes = [
         MAPLE_BEAR_ID, MAPLE_BEAR_DAY4_ID, MAPLE_BEAR_DAY8_ID, MAPLE_BEAR_DAY13_ID, MAPLE_BEAR_DAY20_ID,
         INFECTED_BEAR_ID, INFECTED_BEAR_DAY8_ID, INFECTED_BEAR_DAY13_ID, INFECTED_BEAR_DAY20_ID,
-        BUFF_BEAR_ID, BUFF_BEAR_DAY8_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID,
+        BUFF_BEAR_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID,
         FLYING_BEAR_ID, FLYING_BEAR_DAY15_ID, FLYING_BEAR_DAY20_ID,
         MINING_BEAR_ID, MINING_BEAR_DAY20_ID,
         TORPEDO_BEAR_ID, TORPEDO_BEAR_DAY20_ID,
@@ -3240,26 +3243,6 @@ world.afterEvents.entityDie.subscribe((event) => {
         return; // Exit early for player deaths
     }
     
-    // Handle day 8 buff bear transformation to day 13 buff bear when killed after day 13
-    if (entity.typeId === BUFF_BEAR_DAY8_ID && source && source.damagingEntity) {
-        const currentDay = getCurrentDay();
-        if (currentDay >= 13) {
-            try {
-                const location = entity.location;
-                const dimension = entity.dimension;
-                if (location && dimension) {
-                    // Transform day 8 buff bear into day 13 buff bear (spawn before entity dies)
-                    const newBear = dimension.spawnEntity(BUFF_BEAR_DAY13_ID, location);
-                    if (newBear) {
-                        console.warn(`[TRANSFORMATION] Day 8 buff bear transformed to day 13 buff bear (day ${currentDay})`);
-                    }
-                }
-            } catch (error) {
-                console.warn(`[TRANSFORMATION] Error transforming day 8 buff bear:`, error);
-            }
-        }
-    }
-    
     // Handle mob conversion when killed by Maple Bears
     if (source && source.damagingEntity && !(entity instanceof Player)) {
         handleMobConversion(entity, source.damagingEntity);
@@ -3284,7 +3267,7 @@ world.afterEvents.entityDie.subscribe((event) => {
         const mapleBearTypes = [
             MAPLE_BEAR_ID, MAPLE_BEAR_DAY4_ID, MAPLE_BEAR_DAY8_ID, MAPLE_BEAR_DAY13_ID, MAPLE_BEAR_DAY20_ID,
             INFECTED_BEAR_ID, INFECTED_BEAR_DAY8_ID, INFECTED_BEAR_DAY13_ID, INFECTED_BEAR_DAY20_ID,
-            BUFF_BEAR_ID, BUFF_BEAR_DAY8_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID,
+            BUFF_BEAR_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID,
             FLYING_BEAR_ID, FLYING_BEAR_DAY15_ID, FLYING_BEAR_DAY20_ID,
             MINING_BEAR_ID, MINING_BEAR_DAY20_ID,
             TORPEDO_BEAR_ID, TORPEDO_BEAR_DAY20_ID,
@@ -3671,7 +3654,7 @@ world.afterEvents.entityHurt.subscribe((event) => {
                 const mapleBearTypes = [
                     MAPLE_BEAR_ID, MAPLE_BEAR_DAY4_ID, MAPLE_BEAR_DAY8_ID, MAPLE_BEAR_DAY13_ID, MAPLE_BEAR_DAY20_ID,
                     INFECTED_BEAR_ID, INFECTED_BEAR_DAY8_ID, INFECTED_BEAR_DAY13_ID, INFECTED_BEAR_DAY20_ID,
-                    BUFF_BEAR_ID, BUFF_BEAR_DAY8_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID,
+                    BUFF_BEAR_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID,
                     INFECTED_PIG_ID, INFECTED_COW_ID,
                     FLYING_BEAR_ID, FLYING_BEAR_DAY15_ID, FLYING_BEAR_DAY20_ID,
                     MINING_BEAR_ID, MINING_BEAR_DAY20_ID,
@@ -3745,7 +3728,7 @@ world.afterEvents.entityHurt.subscribe((event) => {
                     snowIncrease = SNOW_INCREASE.TINY_BEAR;
                 } else if (source.damagingEntity.typeId === INFECTED_BEAR_ID || source.damagingEntity.typeId === INFECTED_BEAR_DAY8_ID || source.damagingEntity.typeId === INFECTED_BEAR_DAY13_ID || source.damagingEntity.typeId === INFECTED_BEAR_DAY20_ID || source.damagingEntity.typeId === INFECTED_PIG_ID) {
                     snowIncrease = SNOW_INCREASE.INFECTED;
-                } else if (source.damagingEntity.typeId === BUFF_BEAR_ID || source.damagingEntity.typeId === BUFF_BEAR_DAY8_ID || source.damagingEntity.typeId === BUFF_BEAR_DAY13_ID || source.damagingEntity.typeId === BUFF_BEAR_DAY20_ID) {
+                } else if (source.damagingEntity.typeId === BUFF_BEAR_ID || source.damagingEntity.typeId === BUFF_BEAR_DAY13_ID || source.damagingEntity.typeId === BUFF_BEAR_DAY20_ID) {
                     snowIncrease = SNOW_INCREASE.BUFF_BEAR;
                 } else if (source.damagingEntity.typeId === FLYING_BEAR_ID || source.damagingEntity.typeId === FLYING_BEAR_DAY15_ID || source.damagingEntity.typeId === FLYING_BEAR_DAY20_ID) {
                     snowIncrease = SNOW_INCREASE.FLYING_BEAR;
@@ -4517,8 +4500,20 @@ system.runInterval(() => {
 
     // One-shot inventory scan for item discoveries
     // NOTE: Discovery messages are suppressed during intro sequence to avoid interrupting the spectacle
+    // Phase 3: Round-robin sharding. On 3+/5+ players the 40-tick inventory scan would do
+    // ~36 item checks x many codex flags x each player. Since the inventory scan is purely
+    // "seen/unseen" codex marking (no time-critical state), we shard players across
+    // invocations by tick index. Players still get scanned periodically (every ~40 ticks
+    // x playerCount), which is below any noticeable discovery delay threshold.
     try {
-        for (const p of world.getAllPlayers()) {
+        const _infectionAllPlayers = world.getAllPlayers();
+        const _infectionThriftTier = getPlayerThriftTier();
+        const _invLoopTick = Math.floor(system.currentTick / 40);
+        const _invPlayers = (_infectionThriftTier >= 2 && _infectionAllPlayers.length > 1)
+            ? [_infectionAllPlayers[_invLoopTick % _infectionAllPlayers.length]]
+            : _infectionAllPlayers;
+        for (const p of _invPlayers) {
+            if (!p) continue;
             const inv = p.getComponent("inventory")?.container;
             if (!inv) continue;
             const codex = getCodex(p);
@@ -4662,10 +4657,20 @@ system.runInterval(() => {
     } catch { }
     
     // Biome discovery system - check if player is in infected biome (optimized with cooldown)
+    // Phase 3: Round-robin with inventory scan — same reasoning, biome checks already have
+    // BIOME_CHECK_COOLDOWN so sharding just staggers the expensive `getBiomeIdAt` + getBlock
+    // reads across tick windows. Single-player behavior unchanged.
             try {
         const currentTick = system.currentTick || Date.now();
+        const _biomeAllPlayers = world.getAllPlayers();
+        const _biomeThriftTier = getPlayerThriftTier();
+        const _biomeLoopTick = Math.floor(currentTick / 40);
+        const _biomePlayers = (_biomeThriftTier >= 2 && _biomeAllPlayers.length > 1)
+            ? [_biomeAllPlayers[_biomeLoopTick % _biomeAllPlayers.length]]
+            : _biomeAllPlayers;
 
-        for (const p of world.getAllPlayers()) {
+        for (const p of _biomePlayers) {
+            if (!p) continue;
             try {
                 // Check cooldown to avoid expensive biome checks
                 const lastCheck = biomeCheckCache.get(p.id) || 0;
@@ -4729,30 +4734,24 @@ function isPlayerAirborne(player, wasOnInfectedGround = false) {
         const x = Math.floor(loc.x);
         const z = Math.floor(loc.z);
         const feetY = loc.y; // Player's Y position (feet level)
-        
-        // If player was recently on infected ground, do detailed check (1-3 blocks below)
-        // This handles cases where player is jumping/running and Y position fluctuates
+        // mb_blockCache smooths out repeated reads when 3-5 players cross the same chunk
+        // in the same 5-tick window; TTL is short enough to keep jumping/landing responsive.
+
         if (wasOnInfectedGround) {
             for (let offset = 1; offset <= 3; offset++) {
                 const checkY = Math.floor(feetY - offset);
-                const block = dimension.getBlock({ x, y: checkY, z });
-                
-                // If we find a solid block (not air, not liquid), player is standing on something
-                if (block && block.typeId !== "minecraft:air" && !block.isLiquid) {
-                    return false; // Player is not airborne
+                const info = getCachedBlockInfo(dimension, { x, y: checkY, z }, 5);
+                if (info.typeId && info.typeId !== "minecraft:air" && !info.isLiquid) {
+                    return false;
                 }
             }
         } else {
-            // Simple check: just check 1 block below (faster for players not on infected ground)
             const checkY = Math.floor(feetY - 1);
-            const block = dimension.getBlock({ x, y: checkY, z });
-            
-            if (block && block.typeId !== "minecraft:air" && !block.isLiquid) {
-                return false; // Player is not airborne
+            const info = getCachedBlockInfo(dimension, { x, y: checkY, z }, 5);
+            if (info.typeId && info.typeId !== "minecraft:air" && !info.isLiquid) {
+                return false;
             }
         }
-        
-        // If no solid blocks found below, player is airborne
         return true;
     } catch {
         return false;
@@ -4762,7 +4761,18 @@ function isPlayerAirborne(player, wasOnInfectedGround = false) {
 // --- Ground Exposure Infection Pressure - Adaptive Checking System ---
 // Slow check loop: Detects state changes and tracks which players need frequent checking
 system.runInterval(() => {
-    for (const player of world.getAllPlayers()) {
+    // Phase 3: Round-robin for 3+/5+ players. This loop does 2-3 `getBlock` reads per
+    // player to detect state transitions onto infected ground. Once a player is tracked,
+    // the fast path (20t) picks up timer progression, so staggering the slow path by
+    // thrift tier just delays "start tracking"/"stop tracking" events a single cycle.
+    const _slowPlayers = world.getAllPlayers();
+    const _slowThriftTier = getPlayerThriftTier();
+    const _slowLoopTick = Math.floor(system.currentTick / GROUND_CHECK_INTERVAL_OFF);
+    const _slowLoopPlayers = (_slowThriftTier >= 2 && _slowPlayers.length > 1)
+        ? [_slowPlayers[_slowLoopTick % _slowPlayers.length]]
+        : _slowPlayers;
+    for (const player of _slowLoopPlayers) {
+        if (!player) continue;
         try {
             if (introInProgress.has(player.id)) continue;
             
@@ -5471,34 +5481,27 @@ function tryPlaceSnowLayerUnder(entity) {
 
 // tryDropSnowItem removed - using death drops via loot tables only
 
+const SNOW_TRAIL_DIMENSIONS = ["overworld", "nether", "the_end"];
+// Bear typeIds that leave a snow trail (flying + torpedo bears have their own systems).
+const SNOW_TRAIL_TYPES = new Set([
+    MAPLE_BEAR_ID, MAPLE_BEAR_DAY4_ID, MAPLE_BEAR_DAY8_ID, MAPLE_BEAR_DAY13_ID, MAPLE_BEAR_DAY20_ID,
+    INFECTED_BEAR_ID, INFECTED_BEAR_DAY8_ID, INFECTED_BEAR_DAY13_ID, INFECTED_BEAR_DAY20_ID,
+    BUFF_BEAR_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID,
+    MINING_BEAR_ID, MINING_BEAR_DAY20_ID,
+    INFECTED_PIG_ID, INFECTED_COW_ID
+]);
+
 system.runInterval(() => {
     try {
         const nowTick = system.currentTick;
-        for (const entity of world.getAllEntities()) {
-            if (!entity || !entity.isValid) continue;
-            const t = entity.typeId;
-            
-            // Check if it's any Maple Bear type (excluding flying and torpedo bears - they have their own snow systems)
-            const isMapleBear = t === MAPLE_BEAR_ID || t === MAPLE_BEAR_DAY4_ID || t === MAPLE_BEAR_DAY8_ID || 
-                               t === MAPLE_BEAR_DAY13_ID || t === MAPLE_BEAR_DAY20_ID ||
-                               t === INFECTED_BEAR_ID || t === INFECTED_BEAR_DAY8_ID || 
-                               t === INFECTED_BEAR_DAY13_ID || t === INFECTED_BEAR_DAY20_ID ||
-                               t === BUFF_BEAR_ID || t === BUFF_BEAR_DAY13_ID || t === BUFF_BEAR_DAY20_ID ||
-                               t === MINING_BEAR_ID || t === MINING_BEAR_DAY20_ID ||
-                               t === INFECTED_PIG_ID || t === INFECTED_COW_ID;
-            
-            // Skip flying bears - they have their own snow layer system
-            if (t === FLYING_BEAR_ID || t === FLYING_BEAR_DAY15_ID || t === FLYING_BEAR_DAY20_ID) {
-                // Only handle snow item drops for flying bears if needed, but skip trail system
-                continue;
-            }
-            
-            // Skip torpedo bears - they fly and have explosion snow effects
-            if (t === TORPEDO_BEAR_ID || t === TORPEDO_BEAR_DAY20_ID) {
-                continue;
-            }
-            
-            if (!isMapleBear) continue;
+        // Iterate the shared MB-bear snapshot instead of world.getAllEntities(), which
+        // scales with every loaded entity (items, XP orbs, villagers, etc.).
+        const snaps = getBearSnapshotsForDimensions(SNOW_TRAIL_DIMENSIONS);
+        for (const snap of snaps.values()) {
+            for (const entity of snap.all) {
+                if (!entity || !entity.isValid) continue;
+                const t = entity.typeId;
+                if (!SNOW_TRAIL_TYPES.has(t)) continue;
 
             // Snow trail placement (size-based chances: tiny < infected < buff < special)
             let trailChance = 0.02; // tiny default
@@ -5536,6 +5539,7 @@ system.runInterval(() => {
             }
 
             // Snow item drops removed - using death drops via loot tables only
+            }
         }
     } catch { }
 }, 20); // check every second
@@ -8133,6 +8137,7 @@ registerSpawnLoadProbes({
     wallStress: getPerfWallStress01,
     mobPressure: getPerfMobPressureForSpawn01
 });
+initializeBearPopulationCull();
 
 // --- Initialize Item Registry ---
 // Initialize item registry for modular item handlers

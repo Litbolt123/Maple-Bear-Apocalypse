@@ -4449,34 +4449,62 @@ export function showCodexBook(player, context) {
         return out;
     }
 
-    /** In-game diagnostics: day, spawn load, storms, toggles, dimensions (dynamic import avoids load-order issues). */
+    /** In-game diagnostics: day, spawn load, storms, toggles, dimensions; optional full harness (all bear spawns + dust storm). */
     function openScriptSelfTestDevMenu(backFn) {
         journalPowerToolsBack = typeof backFn === "function" ? backFn : () => openDeveloperToolsSystemsMenu();
         const v = getPlayerSoundVolume(player);
-        import("./mb_devScriptSelfTest.js")
-            .then(async (mod) => {
-                const report = await mod.runInGameScriptSelfTest(player);
-                const plain = typeof mod.stripFormattingForLog === "function" ? mod.stripFormattingForLog(report) : String(report).replace(/§./g, "");
-                console.warn("[SCRIPT SELF-TEST]\n" + plain);
-                const maxBody = 3200;
-                const body =
-                    report.length > maxBody ? report.slice(0, maxBody) + "\n§8... (truncated — full text in Content Log)" : report;
-                const form = new ActionFormData().title("§eScript self-test").body(body).button("§aRun again").button("§8Back");
-                form.show(player).then((res) => {
-                    if (!res || res.canceled || res.selection === 1) {
-                        player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * v });
-                        return journalPowerToolsBack();
-                    }
-                    player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * v });
-                    openScriptSelfTestDevMenu(backFn);
-                });
-            })
-            .catch((e) => {
+        const picker = new ActionFormData()
+            .title("§eScript self-test")
+            .body("§7§oQuick: §7imports, snapshot, world checks (read-only)\n\n§6§oFull: §7spawns one of each bear type, waits, removes, then starts + ends a §ominor dust storm §7(overworld, dust on)\n\n§8Wolf-collar etc. in log are resource warnings, not script.")
+            .button("§aQuick (read-only)")
+            .button("§6Full (spawns + storm + cleanup)")
+            .button("§8Back");
+        picker.show(player).then((pRes) => {
+            if (!pRes || pRes.canceled || pRes.selection === 2) {
                 try {
-                    player.sendMessage(CHAT_DANGER + "Script self-test failed: " + (e?.message || String(e)));
+                    player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * v });
                 } catch { /* ignore */ }
-                journalPowerToolsBack();
-            });
+                return journalPowerToolsBack();
+            }
+            const full = pRes.selection === 1;
+            import("./mb_devScriptSelfTest.js")
+                .then(async (mod) => {
+                    const report = full
+                        ? await mod.runInGameScriptFullSelfTest(player)
+                        : await mod.runInGameScriptSelfTest(player);
+                    const plain =
+                        typeof mod.stripFormattingForLog === "function"
+                            ? mod.stripFormattingForLog(report)
+                            : String(report).replace(/§./g, "");
+                    console.warn(`[SCRIPT SELF-TEST] ${full ? "full" : "quick"}\n` + plain);
+                    const maxBody = 10000;
+                    const body =
+                        report.length > maxBody ? report.slice(0, maxBody) + "\n§8... (truncated — full text in Content Log)" : report;
+                    const form = new ActionFormData()
+                        .title(full ? "§6Full script self-test" : "§eScript self-test")
+                        .body(body)
+                        .button("§aRun again (menu)")
+                        .button("§8Back");
+                    form.show(player).then((res) => {
+                        if (!res || res.canceled || res.selection === 1) {
+                            try {
+                                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * v });
+                            } catch { /* ignore */ }
+                            return journalPowerToolsBack();
+                        }
+                        try {
+                            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * v });
+                        } catch { /* ignore */ }
+                        openScriptSelfTestDevMenu(backFn);
+                    });
+                })
+                .catch((e) => {
+                    try {
+                        player.sendMessage(CHAT_DANGER + "Script self-test failed: " + (e?.message || String(e)));
+                    } catch { /* ignore */ }
+                    journalPowerToolsBack();
+                });
+        });
     }
 
     function findPinnableItemById(id) {

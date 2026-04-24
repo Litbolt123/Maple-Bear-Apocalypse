@@ -4,6 +4,8 @@ import { SNOW_REPLACEABLE_BLOCKS, SNOW_TWO_BLOCK_PLANTS } from "./mb_blockLists.
 import { isDebugEnabled } from "./mb_codex.js";
 import { isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
 import { getCachedPlayers } from "./mb_sharedCache.js";
+import { getBearsOfType } from "./mb_bearSnapshot.js";
+import { getAiIntervalStretch } from "./mb_performanceProfile.js";
 
 // Debug helper functions
 function getDebugGeneral() {
@@ -24,7 +26,6 @@ const BUFF_BEAR_ACTUAL_HEIGHT = BUFF_BEAR_COLLISION_HEIGHT * BUFF_BEAR_SCALE; //
 
 const BUFF_BEAR_TYPES = [
     { id: "mb:buff_mb", breaksPerTick: 2, maxHeight: 3 },
-    { id: "mb:buff_mb_day8", breaksPerTick: 2, maxHeight: 3 },
     { id: "mb:buff_mb_day13", breaksPerTick: 3, maxHeight: 4 },
     { id: "mb:buff_mb_day20", breaksPerTick: 3, maxHeight: 4 }
 ];
@@ -711,8 +712,9 @@ function initializeBuffAI() {
             const seen = new Set();
         const loggedThisTick = new Set(); // Track which entities we've logged countdown for this tick
         
-        // Only process every AI_TICK_INTERVAL ticks
-        if (currentTick % AI_TICK_INTERVAL !== 0) return;
+        // Only process every AI_TICK_INTERVAL ticks (stretched by player-count thrift tier).
+        const effectiveBuffInterval = Math.max(AI_TICK_INTERVAL, Math.round(AI_TICK_INTERVAL * getAiIntervalStretch()));
+        if (currentTick % effectiveBuffInterval !== 0) return;
         
         try {
             // Use cached players when available; fallback to getAllPlayers() so we detect players
@@ -748,17 +750,13 @@ function initializeBuffAI() {
                     
                     if (playersInDim.length === 0) continue;
                     
-                    // Query by type + location (efficient: engine returns only buff bears in range)
+                    // Use the shared bear snapshot; one dimension query is reused across all AIs.
                     const seenEntities = new Set();
                     for (const player of playersInDim) {
                         try {
                             if (!player?.isValid) continue;
                             for (const bearType of BUFF_BEAR_TYPES) {
-                                const entities = dimension.getEntities({
-                                    type: bearType.id,
-                                    location: player.location,
-                                    maxDistance: MAX_PROCESSING_DISTANCE
-                                });
+                                const entities = getBearsOfType(dimension, bearType.id, player.location, MAX_PROCESSING_DISTANCE);
                                 for (const entity of entities) {
                                     if (!entity?.isValid) continue;
                                     const entityId = entity.id;

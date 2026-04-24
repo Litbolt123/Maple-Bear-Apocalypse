@@ -6,6 +6,7 @@
 
 import { system, world } from "@minecraft/server";
 import { getWorldProperty, setWorldProperty } from "./mb_dynamicPropertyHandler.js";
+import { countBearsAcrossDimensions } from "./mb_bearSnapshot.js";
 
 /** 1 = apply auto scaling from world snapshot + probes (default). 0 = bias presets only. */
 export const SPAWN_LOAD_AUTO_PROPERTY = "mb_spawn_load_auto";
@@ -91,28 +92,17 @@ export function setSpawnLoadBiasLevel(level) {
     setWorldProperty(SPAWN_LOAD_BIAS_PROPERTY, n);
 }
 
+// Shared bear-snapshot set for restricting the cross-dimension count to known MB types.
+const ALL_MB_MOB_TYPES_SET = new Set(ALL_MB_MOB_TYPES);
+
 function countBearsAllDimensions(tick) {
     if (tick - lastBearRefreshTick < BEAR_COUNT_REFRESH_INTERVAL_TICKS) return;
     lastBearRefreshTick = tick;
-    let total = 0;
-    for (const dimId of DIMENSION_IDS) {
-        let dim;
-        try {
-            dim = world.getDimension(dimId);
-        } catch {
-            continue;
-        }
-        if (!dim) continue;
-        for (const typeId of ALL_MB_MOB_TYPES) {
-            try {
-                const ents = dim.getEntities({ type: typeId });
-                total += ents?.length || 0;
-            } catch {
-                /* ignore */
-            }
-        }
+    try {
+        cachedBearTotal = countBearsAcrossDimensions(DIMENSION_IDS, ALL_MB_MOB_TYPES_SET);
+    } catch {
+        cachedBearTotal = 0;
     }
-    cachedBearTotal = total;
 }
 
 function countItemsOverworldThrottled(tick) {

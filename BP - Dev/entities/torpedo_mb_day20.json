@@ -116,6 +116,9 @@
 				"target_search_height": 80
 			},
 			"minecraft:collision_box": { "width": 0.7, "height": 2.2 },
+			"minecraft:type_family": {
+				"family": [ "infected", "maple_bear", "torpedo" ]
+			},
 			"minecraft:pushable": {
 				"is_pushable": true,
 				"is_pushable_by_piston": true

@@ -9,9 +9,10 @@ import { getCurrentDay } from "./mb_dayTracker.js";
 import { getAddonDifficultyState, getWorldProperty } from "./mb_dynamicPropertyHandler.js";
 import { isDebugEnabled } from "./mb_codex.js";
 import { isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
-import { getCachedPlayers, getCachedPlayerPositions, getCachedMobs } from "./mb_sharedCache.js";
-import { getMiningWorkMultiplier } from "./mb_performanceProfile.js";
+import { getCachedPlayers, getCachedPlayerPositions, getCachedMobs, isEntityValid } from "./mb_sharedCache.js";
+import { getMiningWorkMultiplier, getAiIntervalStretch } from "./mb_performanceProfile.js";
 import { DIMENSION_IDS, MINING_BEAR_TYPES, PATHFINDING_ENTITY_TYPES, AIR_BLOCKS } from "./mb_miningConstants.js";
+import { getBearSnapshot, getBearSnapshotsForDimensions } from "./mb_bearSnapshot.js";
 
 // Basic debug to verify script is loaded
 // console.warn("[MINING AI] Script loaded successfully");
@@ -6345,7 +6346,7 @@ function breakBlocksUnderTarget(entity, targetInfo, digContext) {
  * @returns {boolean} - True if entity is stuck
  */
 function isEntityStuck(entity, tick) {
-    if (!entity || (typeof entity.isValid === "function" && !entity.isValid())) return false;
+    if (!entity || !isEntityValid(entity)) return false;
     
     const entityId = entity.id;
     const currentPos = entity.location;
@@ -6398,7 +6399,7 @@ function isEntityStuck(entity, tick) {
  * @returns {Object|null} - Best direction {x, y, z} or null if no good direction found
  */
 function findBestDirectionWhenStuck(entity, targetInfo, dimension, tunnelHeight) {
-    if (!entity || (typeof entity.isValid === "function" && !entity.isValid()) || !dimension) return null;
+    if (!entity || !isEntityValid(entity) || !dimension) return null;
     
     const loc = entity.location;
     const baseX = Math.floor(loc.x);
@@ -10290,20 +10291,18 @@ function initializeMiningAI() {
             const ticksSinceStart = tick - aiLoopStartTick;
             const isStartupPhase = ticksSinceStart <= STARTUP_DEBUG_TICKS;
             
-            // Count total bears across all dimensions and get player count for load calculation
+            // Count total mining bears across all dimensions via the shared snapshot
+            // (one entity query per dimension, shared with every other AI + spawn metrics).
             let totalBearsThisTick = 0;
-            for (const dimId of DIMENSION_IDS) {
-                try {
-                    const dimension = world.getDimension(dimId);
-                    if (!dimension) continue;
+            try {
+                const snaps = getBearSnapshotsForDimensions(DIMENSION_IDS);
+                for (const snap of snaps.values()) {
                     for (const config of MINING_BEAR_TYPES) {
-                        try {
-                            const entities = dimension.getEntities({ type: config.id });
-                            totalBearsThisTick += entities?.length || 0;
-                        } catch { }
+                        const bucket = snap.byType.get(config.id);
+                        if (bucket?.length) totalBearsThisTick += bucket.length;
                     }
-                } catch { }
-            }
+                }
+            } catch { }
             const playerCount = (getCachedPlayers() || []).length;
             // Factor in player count: more players = more areas to check, more entities in range
             const effectiveLoad = totalBearsThisTick + Math.max(0, (playerCount - 1) * PLAYER_LOAD_FACTOR);
@@ -10322,7 +10321,9 @@ function initializeMiningAI() {
                     dynamicInterval = AI_TICK_INTERVAL_BASE;
                 }
                 const perfMult = getMiningWorkMultiplier();
-                dynamicInterval = Math.min(5, Math.max(1, Math.ceil(dynamicInterval * perfMult)));
+                // Compound with player-count thrift tier so 3+/5+ players stretch further.
+                const thriftStretch = getAiIntervalStretch();
+                dynamicInterval = Math.min(6, Math.max(1, Math.ceil(dynamicInterval * perfMult * thriftStretch)));
             }
             
             // Log interval changes
@@ -10395,25 +10396,25 @@ function initializeMiningAI() {
                 }
                 if (!dimension) continue;
 
-                // Process each mining bear type
+                // Process each mining bear type (sourced from the shared snapshot; no per-type entity queries here).
                 let totalMiningBears = 0;
                 const variantCounts = new Map();
                 const entityMap = new Map();
-                
-                for (const config of MINING_BEAR_TYPES) {
-                    let entities;
-                    try {
-                        entities = dimension.getEntities({ type: config.id });
-                    } catch (error) {
-                        console.error(`[MINING AI] Error getting entities for ${config.id}:`, error);
-                        continue;
-                    }
-                    
-                    const count = entities?.length || 0;
-                    if (count > 0) {
-                        totalMiningBears += count;
-                        variantCounts.set(config.id, count);
-                        entityMap.set(config.id, entities);
+                let dimSnap = null;
+                try {
+                    dimSnap = getBearSnapshot(dimension);
+                } catch {
+                    dimSnap = null;
+                }
+                if (dimSnap) {
+                    for (const config of MINING_BEAR_TYPES) {
+                        const entities = dimSnap.byType.get(config.id);
+                        const count = entities?.length || 0;
+                        if (count > 0) {
+                            totalMiningBears += count;
+                            variantCounts.set(config.id, count);
+                            entityMap.set(config.id, entities);
+                        }
                     }
                 }
                 
@@ -10462,9 +10463,7 @@ function initializeMiningAI() {
                         const entityId = entity.id;
                         let status = { valid: true, inRange: false, dist: 0 };
                         
-                        // Check if entity is valid
-                        const entityIsValid = typeof entity?.isValid === "function" ? entity.isValid() : Boolean(entity?.isValid);
-                        if (!entityIsValid) {
+                        if (!isEntityValid(entity)) {
                             invalidCount++;
                             status.valid = false;
                             entityStatus.set(entityId, status);
@@ -10949,7 +10948,8 @@ function initializeMiningAI() {
             console.error(`[MINING AI] ERROR in runInterval at tick ${system.currentTick}:`, error);
             console.error(`[MINING AI] Error stack:`, error.stack);
         }
-    }, 1);
+    }, 2); // Phase 6: was 1. Half the wake-ups; dynamicInterval already gates per-bear cadence,
+           // and bears with targets still re-evaluate within the pathfinding pipeline's own cadence.
     
     if (miningAIIntervalId !== null) {
         if (getDebugGeneral()) {

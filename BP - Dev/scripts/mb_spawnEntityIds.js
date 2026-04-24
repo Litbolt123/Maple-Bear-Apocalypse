@@ -12,7 +12,6 @@ export const INFECTED_BEAR_DAY8_ID = "mb:infected_day08";
 export const INFECTED_BEAR_DAY13_ID = "mb:infected_day13";
 export const INFECTED_BEAR_DAY20_ID = "mb:infected_day20";
 export const BUFF_BEAR_ID = "mb:buff_mb";
-export const BUFF_BEAR_DAY8_ID = "mb:buff_mb_day8";
 export const BUFF_BEAR_DAY13_ID = "mb:buff_mb_day13";
 export const BUFF_BEAR_DAY20_ID = "mb:buff_mb_day20";
 export const FLYING_BEAR_ID = "mb:flying_mb";

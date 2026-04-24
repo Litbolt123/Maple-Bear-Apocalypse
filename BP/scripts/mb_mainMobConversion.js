@@ -24,7 +24,6 @@ import {
     INFECTED_BEAR_DAY13_ID,
     INFECTED_BEAR_DAY20_ID,
     BUFF_BEAR_ID,
-    BUFF_BEAR_DAY8_ID,
     BUFF_BEAR_DAY13_ID,
     BUFF_BEAR_DAY20_ID,
     FLYING_BEAR_ID,
@@ -160,7 +159,7 @@ function convertMobToMapleBear(deadMob, killer) {
         let newBearType;
         let bearSize = "normal";
 
-        if (killerType === BUFF_BEAR_ID || killerType === BUFF_BEAR_DAY8_ID || killerType === BUFF_BEAR_DAY13_ID || killerType === BUFF_BEAR_DAY20_ID) {
+        if (killerType === BUFF_BEAR_ID || killerType === BUFF_BEAR_DAY13_ID || killerType === BUFF_BEAR_DAY20_ID) {
             newBearType = MAPLE_BEAR_ID;
             bearSize = "normal";
         } else if (killerType === MAPLE_BEAR_ID || killerType === MAPLE_BEAR_DAY4_ID || killerType === MAPLE_BEAR_DAY8_ID || killerType === MAPLE_BEAR_DAY13_ID || killerType === MAPLE_BEAR_DAY20_ID) {
@@ -240,7 +239,7 @@ function convertMobToMapleBear(deadMob, killer) {
                     newBearType = BUFF_BEAR_DAY13_ID;
                     bearSize = "buff";
                 } else if (currentDay >= 8) {
-                    newBearType = BUFF_BEAR_DAY8_ID;
+                    newBearType = BUFF_BEAR_ID;
                     bearSize = "buff";
                 } else {
                     newBearType = INFECTED_BEAR_ID;
@@ -323,7 +322,7 @@ function countNearbyAddonBears(dimension, location, maxDistance = 64) {
             const typeId = nearby.typeId;
             if (!MB_TYPE_PREFIXES_FOR_CONVERSION.some((prefix) => typeId.startsWith(prefix))) continue;
             total++;
-            if (typeId === BUFF_BEAR_ID || typeId === BUFF_BEAR_DAY8_ID || typeId === BUFF_BEAR_DAY13_ID || typeId === BUFF_BEAR_DAY20_ID) {
+            if (typeId === BUFF_BEAR_ID || typeId === BUFF_BEAR_DAY13_ID || typeId === BUFF_BEAR_DAY20_ID) {
                 buff++;
             }
         }
@@ -355,7 +354,7 @@ function getConversionNearbyPressureMultiplier(nearbyTotal) {
 function wouldSpawnBuffBearFromMobKill(mobType, killerType, currentDay) {
     const mobSize = getMobSize(mobType);
     if (mobSize === "tiny" || mobSize === "pig") return false;
-    const buffKillers = [BUFF_BEAR_ID, BUFF_BEAR_DAY8_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID];
+    const buffKillers = [BUFF_BEAR_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID];
     if (buffKillers.includes(killerType)) return false;
     const tinyKillers = [MAPLE_BEAR_ID, MAPLE_BEAR_DAY4_ID, MAPLE_BEAR_DAY8_ID, MAPLE_BEAR_DAY13_ID, MAPLE_BEAR_DAY20_ID];
     if (tinyKillers.includes(killerType)) {
@@ -385,7 +384,7 @@ function convertMobToMapleBearFromStormAtLocation(location, dimension, mobType) 
         } else if (mobSize === "large") {
             if (currentDay >= 20) newBearType = BUFF_BEAR_DAY20_ID;
             else if (currentDay >= 13) newBearType = BUFF_BEAR_DAY13_ID;
-            else if (currentDay >= 8) newBearType = BUFF_BEAR_DAY8_ID;
+            else if (currentDay >= 8) newBearType = BUFF_BEAR_ID;
             else newBearType = INFECTED_BEAR_ID;
         } else {
             if (currentDay >= 20) newBearType = INFECTED_BEAR_DAY20_ID;
@@ -417,7 +416,7 @@ export function handleStormMobConversion(entity) {
     const allMapleBearTypes = [
         MAPLE_BEAR_ID, MAPLE_BEAR_DAY4_ID, MAPLE_BEAR_DAY8_ID, MAPLE_BEAR_DAY13_ID, MAPLE_BEAR_DAY20_ID,
         INFECTED_BEAR_ID, INFECTED_BEAR_DAY8_ID, INFECTED_BEAR_DAY13_ID, INFECTED_BEAR_DAY20_ID,
-        BUFF_BEAR_ID, BUFF_BEAR_DAY8_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID,
+        BUFF_BEAR_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID,
         FLYING_BEAR_ID, FLYING_BEAR_DAY15_ID, FLYING_BEAR_DAY20_ID,
         MINING_BEAR_ID, MINING_BEAR_DAY20_ID,
         TORPEDO_BEAR_ID, TORPEDO_BEAR_DAY20_ID
@@ -490,7 +489,7 @@ export function handleMobConversion(entity, killer) {
     const mapleBearKillerTypes = [
         MAPLE_BEAR_ID, MAPLE_BEAR_DAY4_ID, MAPLE_BEAR_DAY8_ID, MAPLE_BEAR_DAY13_ID, MAPLE_BEAR_DAY20_ID,
         INFECTED_BEAR_ID, INFECTED_BEAR_DAY8_ID, INFECTED_BEAR_DAY13_ID, INFECTED_BEAR_DAY20_ID,
-        BUFF_BEAR_ID, BUFF_BEAR_DAY8_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID,
+        BUFF_BEAR_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID,
         FLYING_BEAR_ID, FLYING_BEAR_DAY15_ID, FLYING_BEAR_DAY20_ID,
         MINING_BEAR_ID, MINING_BEAR_DAY20_ID,
         TORPEDO_BEAR_ID, TORPEDO_BEAR_DAY20_ID,
@@ -502,7 +501,7 @@ export function handleMobConversion(entity, killer) {
         const allMapleBearTypes = [
             MAPLE_BEAR_ID, MAPLE_BEAR_DAY4_ID, MAPLE_BEAR_DAY8_ID, MAPLE_BEAR_DAY13_ID, MAPLE_BEAR_DAY20_ID,
             INFECTED_BEAR_ID, INFECTED_BEAR_DAY8_ID, INFECTED_BEAR_DAY13_ID, INFECTED_BEAR_DAY20_ID,
-            BUFF_BEAR_ID, BUFF_BEAR_DAY8_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID,
+            BUFF_BEAR_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID,
             FLYING_BEAR_ID, FLYING_BEAR_DAY15_ID, FLYING_BEAR_DAY20_ID,
             MINING_BEAR_ID, MINING_BEAR_DAY20_ID,
             TORPEDO_BEAR_ID, TORPEDO_BEAR_DAY20_ID

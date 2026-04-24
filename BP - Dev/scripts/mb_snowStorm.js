@@ -316,27 +316,78 @@ const SHELTER_RAY_DIRS = [
  * Phase 2: 6-direction raycast — any direction with no block within range = opening = exposed.
  * Only called for entities already in storm radius (performance).
  */
+/**
+ * Per-entity shelter cache: 6 ray-traces per call can be expensive in multiplayer.
+ * Reuse the result for SHELTER_CACHE_TTL_TICKS unless the entity moved further
+ * than SHELTER_CACHE_MOVE_EPS_SQ from where the last probe ran (in which case we
+ * recompute — shelter state is sensitive to exact position for doorway edges).
+ */
+const SHELTER_CACHE_TTL_TICKS = 40;
+const SHELTER_CACHE_MOVE_EPS_SQ = 4; // 2 blocks — tight enough that walking out of cover busts the cache.
+/** @type {Map<string, { tick: number, sheltered: boolean, x: number, y: number, z: number }>} */
+const shelterCache = new Map();
+const SHELTER_CACHE_MAX = 256;
+
+function shelterCacheKey(entity) {
+    try {
+        return entity?.id || null;
+    } catch {
+        return null;
+    }
+}
+
+function trimShelterCache() {
+    if (shelterCache.size <= SHELTER_CACHE_MAX) return;
+    const drop = shelterCache.size - SHELTER_CACHE_MAX;
+    let i = 0;
+    for (const key of shelterCache.keys()) {
+        if (i++ >= drop) break;
+        shelterCache.delete(key);
+    }
+}
+
 function isEntityShelteredFromStorm(entity) {
     if (!entity?.isValid) return false;
     const dim = entity.dimension;
     if (!dim) return false;
     const loc = entity.location;
     if (!loc || typeof loc.x !== "number" || typeof loc.y !== "number" || typeof loc.z !== "number") return false;
-    
+
+    const tick = system.currentTick;
+    const cacheKey = shelterCacheKey(entity);
+    if (cacheKey) {
+        const cached = shelterCache.get(cacheKey);
+        if (cached && (tick - cached.tick) < SHELTER_CACHE_TTL_TICKS) {
+            const dx = loc.x - cached.x;
+            const dy = loc.y - cached.y;
+            const dz = loc.z - cached.z;
+            if (dx * dx + dy * dy + dz * dz <= SHELTER_CACHE_MOVE_EPS_SQ) {
+                return cached.sheltered;
+            }
+        }
+    }
+
     const headPos = { x: loc.x, y: Math.floor(loc.y) + 1.5, z: loc.z };
     const rayOpts = { includeLiquidBlocks: true, includePassableBlocks: false };
-    
+
+    let sheltered = false;
     try {
+        sheltered = true;
         for (let i = 0; i < SHELTER_RAY_DIRS.length; i++) {
             const dir = SHELTER_RAY_DIRS[i];
             const maxDist = dir.y !== 0 ? SHELTER_RAY_UP_MAX : SHELTER_RAY_HORIZ_MAX;
             const hit = dim.getBlockFromRay(headPos, dir, { ...rayOpts, maxDistance: maxDist });
-            if (!hit) return false; // Ray escaped — opening in this direction — exposed
+            if (!hit) { sheltered = false; break; }
         }
-        return true; // All 6 directions hit solid — enclosed — sheltered
     } catch {
-        return false;
+        sheltered = false;
     }
+
+    if (cacheKey) {
+        shelterCache.set(cacheKey, { tick, sheltered, x: loc.x, y: loc.y, z: loc.z });
+        trimShelterCache();
+    }
+    return sheltered;
 }
 
 // ============================================================================

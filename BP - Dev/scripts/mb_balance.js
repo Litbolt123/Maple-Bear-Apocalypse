@@ -37,6 +37,25 @@ export const MB_CONVERSION_WORLD_MULT_MIN = 0.025;
 /** Block boss→buff conversions when this many buff bears already within 64m. */
 export const MB_CONVERSION_BUFF_NEAR_CAP = 5;
 
+// --- Global bear population cull (mb_bearPopulationCull.js): trim distant mobs when world totals run away ---
+/** Total MB addon bears (overworld+nether+end) at or above this → cull a few per interval. */
+export const MB_BEAR_CULL_WHEN_GLOBAL_ABOVE = 200;
+/** Soft floor to work toward; each pass removes up to MAX at most (total - TARGET) combined. */
+export const MB_BEAR_CULL_TARGET_GLOBAL = 180;
+export const MB_BEAR_CULL_MAX_REMOVED_PER_PASS = 4;
+/**
+ * Only mobs with nearest player (same dimension) farther than this (blocks) are eligible — vanilla-like
+ * (things nobody is "loaded next to" go first). Lower = more aggressive; tune with urgent block below.
+ */
+export const MB_BEAR_CULL_MIN_NEAREST_PLAYER_BLOCKS = 56;
+/**
+ * When count explodes, relax distance so culling can still work if everyone is bunched in one region.
+ * Still culls farthest-from-player first.
+ */
+export const MB_BEAR_CULL_URGENT_WHEN_GLOBAL_ABOVE = 360;
+export const MB_BEAR_CULL_URGENT_MIN_NEAREST_PLAYER_BLOCKS = 28;
+export const MB_BEAR_CULL_INTERVAL_TICKS = 40;
+
 // --- Progressive conversion rate by day (mob kills / storm) ---
 export const INFECTION_RATE_STEPS = [
     { day: 2, rate: 0.20 },

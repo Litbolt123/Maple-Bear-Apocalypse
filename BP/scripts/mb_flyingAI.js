@@ -1,8 +1,10 @@
 import { system, world } from "@minecraft/server";
-import { getCachedPlayers, getCachedPlayerPositions, getCachedMobs } from "./mb_sharedCache.js";
+import { getCachedPlayers, getCachedPlayerPositions, getCachedMobs, isEntityValid } from "./mb_sharedCache.js";
 import { isDebugEnabled } from "./mb_codex.js";
 import { isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
 import { getWorldProperty } from "./mb_dynamicPropertyHandler.js";
+import { getBearSnapshot, getBearsOfType } from "./mb_bearSnapshot.js";
+import { getAiIntervalStretch } from "./mb_performanceProfile.js";
 
 // Debug helper functions
 function getDebugGeneral() {
@@ -344,15 +346,22 @@ const targetCache = new Map(); // Map<entityId, {target: targetInfo, tick: numbe
 
 // Track AI loop start tick for debug logging
 let aiLoopStartTick = system.currentTick;
+// Visit counter for player-count thrift: stretch effective interval without rescheduling.
+let flyingAIVisitCounter = 0;
 
 system.runInterval(() => {
     if (!isScriptEnabled(SCRIPT_IDS.flying)) return;
     const tick = system.currentTick;
     const ticksSinceStart = tick - aiLoopStartTick;
     const seenIds = new Set();
+
+    // Player-count thrift tier stretches the effective interval in multiplayer.
+    const flyingStretch = Math.max(1, Math.round(getAiIntervalStretch()));
+    flyingAIVisitCounter = (flyingAIVisitCounter + 1) % flyingStretch;
+    if (flyingAIVisitCounter !== 0) return;
     
-    // Note: system.runInterval already handles the interval, so we don't need to check tick % AI_TICK_INTERVAL
-    // The interval callback is only called every AI_TICK_INTERVAL ticks automatically
+    // Note: system.runInterval already handles the base interval (AI_TICK_INTERVAL);
+    // the thrift-tier stretch above further throttles when many players are online.
     
     // Always log when debug is enabled (frequently to confirm it's working)
     if (getDebugGeneral()) {
@@ -394,20 +403,9 @@ system.runInterval(() => {
         }
     }
     
-    // Build player positions map from cached data (if needed for compatibility)
-    // Note: getCachedPlayerPositions() already returns Map<dimensionId, positions[]>
-    // But we may need to iterate for other purposes, so keep the loop structure
-    for (const player of allPlayers) {
-        try {
-            const dimId = player.dimension.id;
-            if (!playerPositions.has(dimId)) {
-                playerPositions.set(dimId, []);
-            }
-            playerPositions.get(dimId).push(player.location);
-        } catch {
-            // Skip invalid players
-        }
-    }
+    // getCachedPlayerPositions() already returns Map<dimensionId, positions[]> (mb_sharedCache).
+    // Phase 6 cleanup: don't re-push positions here, that double-counted each player and
+    // stretched the MAX_PROCESSING_DISTANCE culling below.
 
     for (const dimId of DIMENSION_IDS) {
         let dimension;
@@ -422,13 +420,17 @@ system.runInterval(() => {
         const dimPlayerPositions = playerPositions.get(dimId) || [];
         if (dimPlayerPositions.length === 0) continue; // No players in this dimension, skip
 
+        // One snapshot per dimension is shared across all AIs.
+        let dimSnap;
+        try {
+            dimSnap = getBearSnapshot(dimension);
+        } catch {
+            dimSnap = null;
+        }
+        if (!dimSnap) continue;
+
         for (const config of FLYING_TYPES) {
-            let entities;
-            try {
-                entities = dimension.getEntities({ type: config.id });
-            } catch {
-                continue;
-            }
+            const entities = dimSnap.byType.get(config.id);
             if (!entities || entities.length === 0) continue;
             
             // Debug logging for entity count
@@ -439,7 +441,7 @@ system.runInterval(() => {
             // Performance: Distance-based culling - only process entities near players
             const validEntities = [];
             for (const entity of entities) {
-                if (typeof entity?.isValid === "function" && !entity.isValid()) continue;
+                if (!isEntityValid(entity)) continue;
                 
                 // Check if entity is within processing distance of any player
                 const entityLoc = entity.location;
@@ -462,6 +464,7 @@ system.runInterval(() => {
             if (validEntities.length === 0) continue;
 
             for (const entity of validEntities) {
+                if (!isEntityValid(entity)) continue;
                 seenIds.add(entity.id);
                 const profile = getFlightProfile(entity, config);
                 const groundY = probeGroundHeight(entity);
@@ -557,7 +560,7 @@ system.runInterval(() => {
             if (tick % 100 === 0) {
                 // Every 5 seconds, clean up stale cache entries
                 const entity = world.getEntity(entityId);
-                if (!entity || !entity.isValid()) {
+                if (!entity || !isEntityValid(entity)) {
                     targetCache.delete(entityId);
                     angerTargetMap.delete(entityId);
                 }
@@ -584,7 +587,7 @@ export function angerNearbyFlyingBearsAtPlayer(dimension, location, targetPlayer
     for (const config of FLYING_TYPES) {
         let entities;
         try {
-            entities = dimension.getEntities({ type: config.id, location, maxDistance: radius });
+            entities = getBearsOfType(dimension, config.id, location, radius);
         } catch {
             continue;
         }

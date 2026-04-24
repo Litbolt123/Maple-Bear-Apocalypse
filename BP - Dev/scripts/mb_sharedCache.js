@@ -5,6 +5,25 @@
 
 import { world, system } from "@minecraft/server";
 
+/**
+ * @minecraft/server `Entity.isValid` is a **boolean**; treat both boolean and
+ * (legacy/defensive) function forms so we never read `.location` on a removed
+ * entity — e.g. cached bear snapshots can briefly hold dead references.
+ * @param {import("@minecraft/server").Entity | null | undefined} entity
+ * @returns {boolean}
+ */
+export function isEntityValid(entity) {
+    if (entity == null) return false;
+    try {
+        const v = entity.isValid;
+        if (typeof v === "function") return !!v.call(entity);
+        if (typeof v === "boolean") return v;
+    } catch {
+        return false;
+    }
+    return false;
+}
+
 // Player cache - shared across all AI scripts
 const PLAYER_CACHE_TICKS = 2; // Cache players for 2 ticks (same as AI_TICK_INTERVAL)
 let cachedPlayers = null;

@@ -16,7 +16,8 @@ import { hasInfectionExposureLineOfSight } from "./mb_infectionExposureLos.js";
 import {
     isSpatialSpawnTuningEnabled,
     getStormWorkManualOrZero,
-    getMiningWorkManualOrZero
+    getMiningWorkManualOrZero,
+    getPlayerThriftTier
 } from "./mb_performanceProfile.js";
 import {
     getSpawnBlockBudgetScale,
@@ -57,7 +58,6 @@ import {
     INFECTED_BEAR_DAY13_ID,
     INFECTED_BEAR_DAY20_ID,
     BUFF_BEAR_ID,
-    BUFF_BEAR_DAY8_ID,
     BUFF_BEAR_DAY13_ID,
     BUFF_BEAR_DAY20_ID,
     FLYING_BEAR_ID,
@@ -2596,13 +2596,26 @@ const MIN_SPAWN_DISTANCE = 15; // Minimum distance from player (15 blocks)
 const MAX_SPAWN_DISTANCE = 45; // Maximum distance from player (45 blocks)
 const BASE_MIN_TILE_SPACING = 2.5; // blocks between spawn tiles (reduced from 3 for better coverage on day 20+)
 const SCAN_INTERVAL = 60; // ticks (~3 seconds) - reduced for more frequent smaller scans
-// Dynamic scan cooldown based on player count (longer for multiplayer to spread load)
+// Dynamic scan cooldown based on player count (longer for multiplayer to spread load).
+// Thrift tier adds an additional multiplier so heavy server load compounds with headcount
+// (tier 0 = 1x, tier 3 = 1.3x). Spawn throughput is compensated via SPAWN_INTENSITY_PRESETS
+// and `spawnsPerSuccess` nudging elsewhere in this module.
+function getBlockScanCooldownThriftMult() {
+    switch (getPlayerThriftTier()) {
+        case 0: return 1;
+        case 1: return 1.05;
+        case 2: return 1.18;
+        case 3: return 1.3;
+        default: return 1;
+    }
+}
 function getBlockScanCooldown(totalPlayerCount) {
     const cd = getSpawnScanCooldownMultiplier();
-    if (totalPlayerCount === 1) return Math.round(SCAN_INTERVAL * 2 * cd);
-    if (totalPlayerCount === 2) return Math.round(SCAN_INTERVAL * 3 * cd);
-    if (totalPlayerCount === 3) return Math.round(SCAN_INTERVAL * 4 * cd);
-    return Math.round(SCAN_INTERVAL * 6 * cd);
+    const thrift = getBlockScanCooldownThriftMult();
+    if (totalPlayerCount === 1) return Math.round(SCAN_INTERVAL * 2 * cd * thrift);
+    if (totalPlayerCount === 2) return Math.round(SCAN_INTERVAL * 3 * cd * thrift);
+    if (totalPlayerCount === 3) return Math.round(SCAN_INTERVAL * 4 * cd * thrift);
+    return Math.round(SCAN_INTERVAL * 6 * cd * thrift);
 }
 const BLOCK_SCAN_COOLDOWN = SCAN_INTERVAL * 2; // Default (single player) - use getBlockScanCooldown() for multiplayer
 const MAX_BLOCK_QUERIES_PER_SCAN = 6000; // Limit block queries per scan (smaller batches, more frequent)
@@ -2629,7 +2642,11 @@ function getBlockQueryLimit(isSinglePlayer, totalPlayerCount, scanLoadCount = nu
     // Dev tools override: block query budget multiplier
     const overrideMult = getBlockQueryMultiplier();
     const loadScale = getSpawnBlockBudgetScale();
-    return Math.max(400, Math.floor(baseLimit * overrideMult * loadScale));
+    // Player-count thrift tier: shrink block-query budget when 3+/5+ players share the server.
+    // `getScanYieldBalanceMultiplier` above will automatically bump per-scan work to compensate.
+    const thriftTier = getPlayerThriftTier();
+    const thriftMult = thriftTier === 0 ? 1 : thriftTier === 1 ? 0.95 : thriftTier === 2 ? 0.85 : 0.75;
+    return Math.max(400, Math.floor(baseLimit * overrideMult * loadScale * thriftMult));
 }
 
 /** Max multiplier when compensating for a low block-query budget (fewer scans → more work per tick / more spawns). */
@@ -6912,15 +6929,14 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
     // Note: Type-based caps are the primary control mechanism (see ENTITY_TYPE_CAPS).
     
     // Check buff bear limit - dynamic cap based on nearby player count
-    if (config.id === BUFF_BEAR_ID || config.id === BUFF_BEAR_DAY8_ID || config.id === BUFF_BEAR_DAY13_ID || config.id === BUFF_BEAR_DAY20_ID) {
+    if (config.id === BUFF_BEAR_ID || config.id === BUFF_BEAR_DAY13_ID || config.id === BUFF_BEAR_DAY20_ID) {
         // Natural spawns only (not conversions): at most one buff from the spawn system every 2 minutes world-wide.
         if (lastNaturalBuffSpawnTick >= 0 && system.currentTick - lastNaturalBuffSpawnTick < NATURAL_BUFF_SPAWN_COOLDOWN_TICKS) {
             return false;
         }
 
-        const buffBearCount = (entityCounts[BUFF_BEAR_ID] || 0) + 
-                             (entityCounts[BUFF_BEAR_DAY8_ID] || 0) + 
-                             (entityCounts[BUFF_BEAR_DAY13_ID] || 0) + 
+        const buffBearCount = (entityCounts[BUFF_BEAR_ID] || 0) +
+                             (entityCounts[BUFF_BEAR_DAY13_ID] || 0) +
                              (entityCounts[BUFF_BEAR_DAY20_ID] || 0);
         
         // Dynamic cap based on player count (passed as parameter):
@@ -7277,8 +7293,7 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
                     tiles.splice(originalIndex, 1);
                 }
 
-                if (entityIdToSpawn === BUFF_BEAR_ID || entityIdToSpawn === BUFF_BEAR_DAY8_ID ||
-                    entityIdToSpawn === BUFF_BEAR_DAY13_ID || entityIdToSpawn === BUFF_BEAR_DAY20_ID) {
+                if (entityIdToSpawn === BUFF_BEAR_ID || entityIdToSpawn === BUFF_BEAR_DAY13_ID || entityIdToSpawn === BUFF_BEAR_DAY20_ID) {
                     lastNaturalBuffSpawnTick = system.currentTick;
                 }
                 
@@ -7362,7 +7377,7 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
 // Calculate per-type spawn limit per tick based on day and bear type
 function getPerTypeSpawnLimit(day, config) {
     // Per-type spawn limits to prevent one type from dominating
-    if (config.id === BUFF_BEAR_ID || config.id === BUFF_BEAR_DAY8_ID || config.id === BUFF_BEAR_DAY13_ID || config.id === BUFF_BEAR_DAY20_ID) {
+    if (config.id === BUFF_BEAR_ID || config.id === BUFF_BEAR_DAY13_ID || config.id === BUFF_BEAR_DAY20_ID) {
         return 1; // Buff bears always limited to 1 per tick
     }
     
@@ -7993,9 +8008,8 @@ system.runInterval(() => {
         const miningCount = getTypeCount(entityCounts, MINING_TYPE);
         const flyingCount = getTypeCount(entityCounts, FLYING_TYPE);
         const torpedoCount = getTypeCount(entityCounts, TORPEDO_TYPE);
-        const buffCount = (entityCounts[BUFF_BEAR_ID] || 0) + 
-                         (entityCounts[BUFF_BEAR_DAY8_ID] || 0) + 
-                         (entityCounts[BUFF_BEAR_DAY13_ID] || 0) + 
+        const buffCount = (entityCounts[BUFF_BEAR_ID] || 0) +
+                         (entityCounts[BUFF_BEAR_DAY13_ID] || 0) +
                          (entityCounts[BUFF_BEAR_DAY20_ID] || 0);
         
         debugLog('spawn', `${player.name}: ${totalNearbyBears} total bears nearby (Tiny: ${tinyCount}/${ENTITY_TYPE_CAPS[TINY_TYPE]}, Infected: ${infectedCount}/${ENTITY_TYPE_CAPS[INFECTED_TYPE]}, Mining: ${miningCount}/3, Flying: ${flyingCount}/30, Torpedo: ${torpedoCount}/10, Buff: ${buffCount}/dynamic), ${spacedTiles.length} spawn tiles available`);
@@ -8013,7 +8027,7 @@ system.runInterval(() => {
                 const currentAmbience = activeBuffAmbience.get(playerId);
                 
                 if (buffCount > 0) {
-                    const buffBearTypes = [BUFF_BEAR_ID, BUFF_BEAR_DAY8_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID];
+                    const buffBearTypes = [BUFF_BEAR_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID];
                     let nearestBuffBear = null;
                     let nearestDistanceSq = BUFF_AMBIENCE_RANGE * BUFF_AMBIENCE_RANGE;
                     
@@ -8254,7 +8268,7 @@ system.runInterval(() => {
             try {
                 // Ensure modifiers is an object before spreading (fixes "cannot convert to object" error)
                 const configModifiers = modifiers && typeof modifiers === 'object' ? { ...modifiers } : {};
-                if (config.id === BUFF_BEAR_ID || config.id === BUFF_BEAR_DAY8_ID || config.id === BUFF_BEAR_DAY13_ID || config.id === BUFF_BEAR_DAY20_ID) {
+                if (config.id === BUFF_BEAR_ID || config.id === BUFF_BEAR_DAY13_ID || config.id === BUFF_BEAR_DAY20_ID) {
                     // Reduced multiplayer bonus for buff bears (was 0.5x, now less reduction)
                     // But still reduce chance when multiple players nearby
                     const playerCount = dimensionPlayers ? dimensionPlayers.length : 1;
@@ -8374,7 +8388,7 @@ system.runInterval(() => {
                 const currentAmbience = activeBuffAmbience.get(playerId);
                 
                 // Query for buff bears within range
-                const buffBearTypes = [BUFF_BEAR_ID, BUFF_BEAR_DAY8_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID];
+                const buffBearTypes = [BUFF_BEAR_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID];
                 let nearestBuffBear = null;
                 let nearestDistanceSq = BUFF_AMBIENCE_RANGE * BUFF_AMBIENCE_RANGE;
                 

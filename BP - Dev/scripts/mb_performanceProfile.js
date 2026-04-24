@@ -11,6 +11,7 @@
 
 import { system, world } from "@minecraft/server";
 import { getWorldProperty, setWorldProperty } from "./mb_dynamicPropertyHandler.js";
+import { getBearSnapshotsForDimensions } from "./mb_bearSnapshot.js";
 
 /** 0 = default / auto-balanced (no journal bundle), 1 = a little, 2 = mid, 3 = laggy */
 export const LAG_COMFORT_PROPERTY = "mb_lag_comfort";
@@ -111,7 +112,17 @@ function getAdaptiveWorkMultiplierAddon() {
         tickBoost = 1 + Math.min(0.3, stress * 0.26) * scale;
     }
 
-    return Math.min(1.52, mobBoost * tickBoost);
+    // Phase 6 cleanup: compound a small boost when 3+ players are online so the
+    // adaptive storm/mining auto multipliers nudge harder without requiring the
+    // user to pick a LAG_COMFORT_LEVEL manually.
+    let thriftBoost = 1;
+    if (comfort <= 2) {
+        const tier = getPlayerThriftTier();
+        if (tier >= 3) thriftBoost = 1.12;
+        else if (tier >= 2) thriftBoost = 1.06;
+    }
+
+    return Math.min(1.6, mobBoost * tickBoost * thriftBoost);
 }
 
 function recordWallClockSample() {
@@ -134,22 +145,16 @@ function recordWallClockSample() {
 
 function refreshExpensiveMobLoadCache() {
     let score = 0;
-    for (const dimId of DIMENSION_IDS) {
-        let dim;
-        try {
-            dim = world.getDimension(dimId);
-        } catch {
-            continue;
-        }
-        if (!dim) continue;
-        for (const [typeId, w] of EXPENSIVE_MB_TYPES) {
-            try {
-                const ents = dim.getEntities({ type: typeId });
-                score += (ents?.length || 0) * w;
-            } catch {
-                /* ignore */
+    try {
+        const snaps = getBearSnapshotsForDimensions(DIMENSION_IDS);
+        for (const snap of snaps.values()) {
+            for (const [typeId, w] of EXPENSIVE_MB_TYPES) {
+                const bucket = snap.byType.get(typeId);
+                if (bucket?.length) score += bucket.length * w;
             }
         }
+    } catch {
+        /* ignore */
     }
     cachedWeightedMobScore = score;
 }
@@ -293,4 +298,57 @@ export function getMiningWorkManualOrZero() {
     const manual = Number(getWorldProperty(MINING_WORK_MULT_PROPERTY));
     if (Number.isFinite(manual) && manual >= 1 && manual <= 3) return manual;
     return 0;
+}
+
+/**
+ * Player-count-based thrift tier used to compound scaling for AI + spawn work that
+ * multiplies with player count. Solo is tier 0 (original behavior), 3+ moves us into
+ * interval-stretching territory where AIs run less often but process more bears per
+ * pass so per-second throughput stays roughly constant.
+ *
+ * Tier 0: solo (1 player) - no throttling.
+ * Tier 1: 2 players        - mild throttling (~1.15x stretch).
+ * Tier 2: 3-4 players      - moderate throttling (~1.5x stretch, +50% batch).
+ * Tier 3: 5+ players       - heavy throttling (~2x stretch, +100% batch).
+ *
+ * @returns {0 | 1 | 2 | 3}
+ */
+export function getPlayerThriftTier() {
+    const pc = getPlayerCountSafe();
+    if (pc <= 1) return 0;
+    if (pc <= 2) return 1;
+    if (pc <= 4) return 2;
+    return 3;
+}
+
+/**
+ * Multiplier to apply to AI `runInterval` tick counts. Call sites should use
+ * `Math.round(baseInterval * getAiIntervalStretch())`. Pair with `getAiBatchBoost`
+ * on the per-pass work cap so throughput stays even (same bears per second).
+ * @returns {number} 1 / 1.15 / 1.5 / 2.0 depending on tier
+ */
+export function getAiIntervalStretch() {
+    switch (getPlayerThriftTier()) {
+        case 0: return 1;
+        case 1: return 1.15;
+        case 2: return 1.5;
+        case 3: return 2.0;
+        default: return 1;
+    }
+}
+
+/**
+ * Multiplier to apply to per-pass batch caps that feed entity processing. Pairs with
+ * `getAiIntervalStretch`: if the interval doubles, the batch cap doubles so the same
+ * amount of work completes per second, just more clumped.
+ * @returns {number} 1 / 1.15 / 1.5 / 2.0 depending on tier
+ */
+export function getAiBatchBoost() {
+    switch (getPlayerThriftTier()) {
+        case 0: return 1;
+        case 1: return 1.15;
+        case 2: return 1.5;
+        case 3: return 2.0;
+        default: return 1;
+    }
 }

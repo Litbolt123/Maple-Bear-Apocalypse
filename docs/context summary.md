@@ -6,11 +6,128 @@ Running log of **what changed and why** (gameplay, scripts, assets, docs). Used 
 
 ---
 
+**Date:** 2026-04-25 (in-game check)
+
+- **Script self-test:** After syncing the pack, Content Log shows **41** `BP` dynamic-import files (includes `mb_bearPopulationCull.js`) and **All 41 modules import OK**; **Full** harness still **21/21** spawns, **0** fails.
+
+**Date:** 2026-04-25 (follow-up — bear cull testing, next session)
+
+- **Remember:** `mb_bearPopulationCull` was not validated in survival-like conditions yet. **Test ideas (pick later):** (1) Temporarily lower `MB_BEAR_CULL_WHEN_GLOBAL_ABOVE` / `TARGET` in a copy of the world or dev balance for a forced run. (2) Admin or command spawns to push global MB count above 200 across dimensions, then stand in one place so many spawns are more than 56m away; expect removals only far from the player. (3) Set world `mb_bear_cull_log` = `1` and watch for throttled `[BEAR CULL]` lines. (4) Urgent path: over 360 mobs, verify 28m floor. (5) Confirm a thrall (`infected_by`) is never removed. (6) After a full sync, script self-test should list **41** dynamic-import files (not 40); if logs still show 40, the Bridge or deploy pack is behind repo `BP/`.
+
+---
+
+**Date:** 2026-04-25 (edit 3)
+
+- **Bear population cull (soft, "despawn-style"):** new `mb_bearPopulationCull.js` — when total addon MB mobs (overworld + nether + end) is at or above 200 (`MB_BEAR_CULL_WHEN_GLOBAL_ABOVE` in `mb_balance.js`), up to 4 mobs per 40t that are **farthest** from the **nearest player in their dimension** and beyond **56m** (normal) are `remove()`'d, working toward 180. **Urgent** mode if total is over 360: min distance **28m** so culling can still work when everything is bunched. Skips `infected_by` thrall bodies. World: `mb_bear_cull` = `0` to disable; `mb_bear_cull_log` = `1` for throttled `[BEAR CULL]` line. `initializeBearPopulationCull()` in `main.js`. Self-test module list +1. Mirrored `BP` / `BP - Dev`.
+
+**Date:** 2026-04-25 (edit 2)
+
+- **Removed defunct entity `mb:buff_mb_day8`** from scripts: dropped `BUFF_BEAR_DAY8_ID` in `mb_spawnEntityIds.js`; **Full self-test** and `ALL_MB_BEAR_TYPES` no longer request it. **Mob / storm conversions** that used day-8 large buff now spawn **`mb:buff_mb`** (base buff) for day 8–12. **Buff AI**, spawn controller buff counts/ambience, and `main.js` (thrall list, dust, codex day-8 unlock helper) updated. Removed the old “day 8 buff bear dies → day 13 buff” block. Mirrored **`BP - Dev/scripts/*` → `BP/scripts/*`**.
+
+**Date:** 2026-04-25 (edit)
+
+- **fix:** `mb_devScriptSelfTest.js` had **two** `import` lines from `./mb_snowStorm.js`, duplicating `getActiveStormCount` and causing in-game **Duplicate import binding** — merged into a single import.
+
+**Date:** 2026-04-25
+
+## Dev: “Full” script self-test (spawns + dust storm) (`mb_devScriptSelfTest.js`, `mb_codex.js`)
+
+Developer Tools → **Script self-test** now opens a **menu**: **Quick** (read-only) vs **Full**. Full runs: every type in `ALL_MB_BEAR_TYPES` via `spawnEntity` (1 game tick between spawns, then cleanup `remove()`), then **minor** `summonStorm` and `endStorm(true)` when dust storms are on, snow script on, and the player is in the **overworld** (other dims skip the storm with a message). Long result bodies allow up to **~10k** characters before form truncation. Mirrored to `BP/scripts/`.
+
+---
+
+**Date:** 2026-04-24
+
+## Fix: bear snapshot must include every type (`mb_bearSnapshot.js`); torpedo `type_family` (`torpedo_mb.json`, `torpedo_mb_day20.json`)
+
+`getEntities({ families: ["infected"] })` **never** returned **torpedo** mobs because those entity files had **no** `minecraft:type_family` — and `[]` is truthy, so the old `if (!all) { per-type }` path did not run, leaving torpedo (and sometimes the whole snapshot) **empty** — **torpedo + mining** AIs had nothing to run. **Change:** `refreshDimension` now **only** uses the per-type list (still one shared pass for all scripts). **JSON:** add `infected` / `maple_bear` / `torpedo` `type_family` to both torpedo entity files. **Mining:** `isEntityStuck` / `findBestDirectionWhenStuck` now use `isEntityValid()`. **Self-test** (`mb_devScriptSelfTest.js`): import `mb_bearSnapshot` + `mb_blockCache`; add a live torpedo/mining/total count; reword the “all good” style lines. Mirrored to `BP/`.
+
+---
+
+**Date:** 2026-04-23
+
+## Hotfix: `Entity.isValid` is a boolean (flying + torpedo + bear snapshot) (`mb_sharedCache.js`, `mb_bearSnapshot.js`, `mb_flyingAI.js`, `mb_torpedoAI.js`)
+
+Bedrock’s `Entity.isValid` is a **boolean**, not a function. A bad guard (`typeof isValid === "function" && !isValid()`) never skipped **invalid** dead entities, so the snapshot/AI distance loops threw `InvalidEntityError` on `entity.location` and could abort the whole **flying** / **torpedo** `runInterval` tick. Torpedo (and flying) then looked “stuck” levitating with no script logic. Fix: add **`isEntityValid(entity)`** in `mb_sharedCache.js` (handles boolean or function), use it when building/processing the bear snapshot, and in torpedo/flying culling and inner loops. Mirrored to `BP/scripts/`.
+
+---
+
+**Date:** 2026-04-22
+
+## Multiplayer script optimization pass (`BP - Dev/scripts/*`, mirrored to `BP/scripts/*`)
+
+Goal: cut the per-player multiplier on repeated entity / block queries so 3-5 player worlds stop stacking lag the way solo worlds don't. Every change pairs a **reduction** with a **compensation** (larger batch, cached read, or an auto storm/mining nudge) so gameplay is unchanged at the solo baseline.
+
+### New modules
+
+- **`mb_bearSnapshot.js`** — per-dimension cache of all Maple Bear entities with a **4-tick TTL**, built with **one `getEntities({ type })` per type** in `ALL_MB_BEAR_TYPES` (see 2026-04-24: a single `families` pass could omit torpedo, and `[]` was truthy so the old “fallback” never ran). Exposes `getBearSnapshot`, `getBearsOfType`, `getAllBears`, `getBearSnapshotsForDimensions`, `countBearsAcrossDimensions`, `invalidateBearSnapshots`, `getBearSnapshotDebug`. **Consumers** share the snapshot instead of each doing independent sweeps.
+- **`mb_blockCache.js`** — short-TTL block read cache (`getCachedBlockInfo(dim, loc, ttlTicks=5)`). Hot paths (ground-infection, airborne check, LOS ray) now hit this cache; defaults to 5 ticks, LOS uses 10.
+
+### Player-count thrift tier
+
+`mb_performanceProfile.js` adds:
+
+- **`getPlayerThriftTier()`** → `0` (solo), `1` (2p), `2` (3-4p), `3` (5+p).
+- **`getAiIntervalStretch()`** → `1 / 1.15 / 1.5 / 2.0` (same-shape multiplier on AI interval cadences).
+- **`getAiBatchBoost()`** → `1 / 1.15 / 1.5 / 2.0` (same-shape multiplier on per-pass batch caps so throughput stays even when intervals stretch).
+
+Wired into:
+
+- **Infected AI:** runs every 6 ticks; thrift tier stretches the effective interval via a visit counter, and `MAX_INFECTED_PER_TICK` is boosted by `getAiBatchBoost()` so the total infected processed per second is unchanged.
+- **Buff / flying / torpedo AI:** interval stretch only (work cap already distance-bound). Flying + torpedo use a visit counter gate.
+- **Mining AI:** `dynamicInterval = ceil(dynamicInterval * miningWorkMult * getAiIntervalStretch())` (capped at 6). Pathfinding bears with active targets still re-evaluate through the existing per-bear cadence.
+- **`mb_spawnController.js`:** `getBlockScanCooldown` gains a thrift multiplier (1 / 1.05 / 1.18 / 1.3), and `getBlockQueryLimit` shrinks the block-query budget by the same tier (1 / 0.95 / 0.85 / 0.75). The existing `getScanYieldBalanceMultiplier` auto-bumps per-scan work + spawn caps, so spawn population stays flat.
+
+### main.js round-robin sharding
+
+Only kicks in when **thrift tier ≥ 2** and there are 2+ players — solo + 2p behavior is unchanged. Shards by `floor(currentTick / loopInterval) mod playerCount`:
+
+- **40-tick unified infection loop** — inventory scan + biome discovery shard across players. Codex item discovery runs once every ~`40 * playerCount` ticks per player; infection timers / effects / audio still run per player per tick via the outer loop.
+- **60-tick ground-exposure slow loop** — state-transition detection shards. Fast loop (20t) still processes every tracked player; once a player is on infected ground they're in `playersOnInfectedGround` and keep ticking.
+
+### LOS + block cache
+
+- **`mb_infectionExposureLos.js`:** cap samples from `min(56, ceil(len*3))` → `min(18, ceil(len*1.3))`. Added a **mandatory midpoint sample** so chest-high walls still break LOS. All samples go through `getCachedBlockInfo` (10t TTL).
+- **`main.js isPlayerAirborne`:** now reads via `getCachedBlockInfo` (5t TTL); both the 1-block simple path and 3-block "recently on infected ground" path.
+- **`main.js isStandingOnInfectedGround`:** same 5t `getCachedBlockInfo` for feet / below / player cell (complements `isPlayerAirborne` and avoids duplicate `getBlock` when ground + audio run in the same few ticks). Does **not** replace `mb_sharedCache` (players/mobs) — that module stays the single place for `getWorldProperty`-style data via `mb_dynamicPropertyHandler` where scripts already use it; bear snapshot is the parallel win for **entity** lists, block cache for **static block reads**.
+
+### Relationship to existing helpers
+
+- **`mb_sharedCache.js`:** still used by mining / buff / flying / torpedo / infected AIs for **`getCachedPlayers`**, **`getCachedPlayerPositions`**, **`getCachedMobs`**; flying duplicate position push was removed to avoid double-counting.
+- **`mb_dynamicPropertyHandler`:** unchanged; world/player properties for toggles, codex, spawn, etc. remain the single source of truth — optimizations avoid extra property reads, not a second property layer.
+- **`mb_bearSnapshot.js` + `mb_blockCache.js`:** additive; they do what shared cache was not doing before (all addon-mob **entity** enumeration in one pass; **per-coordinate block** dedup). Could later re-export from `mb_sharedCache` for a single import surface if desired, without behavior change.
+
+### Snow storm shelter cache
+
+- **`mb_snowStorm.js isEntityShelteredFromStorm`** caches result per entity for **40 ticks**, invalidated when the entity moves > 2 blocks from the probe position. Each call previously did 6 `getBlockFromRay` rays. Storm mob damage loop still uses a generic `getEntities` (it already skips MB-prefix bears so swapping to the bear snapshot wouldn't help).
+
+### Minor wins
+
+- **`mb_miningAI.js`** main `runInterval(..., 1)` → `runInterval(..., 2)`. `dynamicInterval` already gated per-bear cadence, so this halves wake-up overhead without changing per-bear action frequency.
+- **`mb_flyingAI.js`** no longer re-pushes player positions after `getCachedPlayerPositions()` (which already returns them per-dim), so `MAX_PROCESSING_DISTANCE` culling behaves correctly.
+- **`mb_performanceProfile.js getAdaptiveWorkMultiplierAddon`** adds a small thrift-tier nudge (~1.06 at 3-4p, ~1.12 at 5+p) capped at 1.6, compounding with existing mob-pressure + wall-stress boosts so storm/mining auto tiers self-tighten for large parties.
+
+### Tuneable knobs
+
+- World property `mb_perf_disable_adaptive` = 1 still disables the adaptive probes (unchanged).
+- `SHELTER_CACHE_TTL_TICKS = 40`, `SHELTER_CACHE_MOVE_EPS_SQ = 4` (mb_snowStorm.js) — tune if doorway-edge shelter detection feels laggy.
+- `SNAPSHOT_TTL_TICKS = 4` (mb_bearSnapshot.js) — raise if entity queries still dominate, lower if AI reactivity suffers.
+- Thrift tier thresholds live in `getPlayerThriftTier()` (mb_performanceProfile.js).
+
+### Mirrored
+
+All dev-side changes copied to `BP/scripts/` per the `AGENTS.md` release checklist. `BP/scripts/mb_buildConfig.js` left untouched (`INCLUDE_FULL_DEVELOPER_TOOLS === false`).
+
+---
+
 **Date:** 2026-03-28
 
-## Day narrative action bar on join / world init restored (`mb_dayTracker.js`, `mb_actionBarHud.js`)
+## Day narrative + titles: shorter linger, HUD clears with title (`mb_dayTracker.js`, `mb_actionBarHud.js`)
 
-- **`initializeDayTracking`** and **join welcome** (first-time after intro + returning) again set the **NARRATIVE** slot via **`showPlayerActionbar`** using **`getReturningPlayerWelcome(day, player).actionbar`**, gated by **`showDayNarrativeActionBar !== false`** (same as sunrise). Auto-clear after **280** ticks unchanged.
+- **Narrative slot** clear delay is **`narrativeClearTicksForTitle(same options as setTitle)`** (+6 tick pad), not a fixed **280** ticks — action bar drops with the big title.
+- **Join / world init / returning** titles use **`TITLE_TIMING_JOIN`** (shorter stay than old 10+60+20). **Sunrise** uses **`TITLE_TIMING_SUNRISE`**. **First-time** follow-up “Day N” pulse uses **`TITLE_TIMING_DAY_PULSE`**.
+- **Bugfix:** delayed follow-up after intro used **`3000`** ticks (~150s); comment said 3s — now **`60`** ticks. **BP - Dev** synced.
+- Join/init narrative lines still use **`getReturningPlayerWelcome`** when the Journal toggle allows.
 
 ## Infected & mining Maple Bear: smaller mob inventory + faster despawn (`BP/entities/`, `BP - Dev/entities/`)
 
@@ -32,7 +149,7 @@ Running log of **what changed and why** (gameplay, scripts, assets, docs). Used 
 ## Action bar: day narrative auto-clear, join/init + sunrise, settings + dev clear (`mb_dayTracker.js`, `mb_codex.js`, `mb_actionBarHud.js`)
 
 - **Cause:** Day tracker set merged **NARRATIVE** action bar on **world init** and **player join** and at **sunrise** but never cleared — text stayed until overwritten.
-- **Fix:** `showPlayerActionbar` schedules **`clearHudActionBarSegment(NARRATIVE)`** after **280 ticks** (~14s); reschedules on each new line; clears pending timeout on **player leave**. **World first init** (`initializeDayTracking`) and **join welcome** paths (first-time after intro + returning player) again call **`showPlayerActionbar`** with **`getReturningPlayerWelcome(...).actionbar`** when **`showDayNarrativeActionBar !== false`**. **Sunrise** unchanged. **`cancelAndClearDayNarrativeHud`** for **Developer → HUD → Clear day / ambient**. **`mb_actionBarHud.js`** slot blurb updated. **BP - Dev** synced.
+- **Fix:** `showPlayerActionbar` schedules **`clearHudActionBarSegment(NARRATIVE)`** after a **title-aligned** tick count (optional third arg; default = default title length + pad). Reschedules on each new line; clears pending timeout on **player leave**. **World first init** + **join welcome** + **sunrise** pass explicit clears. **`cancelAndClearDayNarrativeHud`** for **Developer → HUD → Clear day / ambient**. **`mb_actionBarHud.js`** slot blurb updated. **BP - Dev** synced.
 
 ## Block definitions: `format_version` `1.21.130` → `1.26.10` (`BP/blocks/`, `BP - Dev/blocks/`)
 
