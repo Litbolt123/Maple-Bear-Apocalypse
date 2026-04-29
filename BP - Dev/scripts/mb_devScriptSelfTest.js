@@ -17,7 +17,7 @@ import { isEntityValid } from "./mb_sharedCache.js";
 
 /**
  * Every `mb_*.js` under `BP/scripts/` (same order as `npm run test:scripts` / filesystem).
- * `main.js` is the pack entry — do not dynamic-import it (avoid redundant circular load).
+ * `main.js` is the pack entry ��� do not dynamic-import it (avoid redundant circular load).
  * When you add a new script file, append it here (keep sorted).
  */
 const SELF_TEST_MODULE_IMPORTS = [
@@ -53,6 +53,7 @@ const SELF_TEST_MODULE_IMPORTS = [
     "./mb_playerChangelog.js",
     "./mb_propertyMigration.js",
     "./mb_scriptToggles.js",
+    "./mb_simPlayers.js",
     "./mb_sharedCache.js",
     "./mb_snowStorm.js",
     "./mb_spawnConfigs.js",
@@ -96,7 +97,7 @@ export async function runInGameScriptSelfTest(player) {
 
     try {
         push(`§7§oMaple Bear in-game script self-test §r§8(tick §7${system.currentTick}§8)`);
-        push(`§7Day §f${getCurrentDay()} §7→ infection rate §f${getInfectionRate(getCurrentDay()).toFixed(4)}`);
+        push(`§7Day §f${getCurrentDay()} §7��� infection rate §f${getInfectionRate(getCurrentDay()).toFixed(4)}`);
 
         try {
             const diff = getAddonDifficultyState();
@@ -109,7 +110,7 @@ export async function runInGameScriptSelfTest(player) {
             refreshSpawnLoadMetrics(system.currentTick);
             const snap = getSpawnLoadDebugSnapshot();
             push(
-                `§7Spawn load §fbears=${snap.bears} §7itemsOW=§f${snap.itemsOw} §7storms=§f${snap.storms} §7load§f${snap.load01.toFixed(3)} §7int×§f${snap.intervalMult.toFixed(2)} §7blk×§f${snap.blockScale.toFixed(2)}`
+                `§7Spawn load §fbears=${snap.bears} §7itemsOW=§f${snap.itemsOw} §7storms=§f${snap.storms} §7load§f${snap.load01.toFixed(3)} §7int��§f${snap.intervalMult.toFixed(2)} §7blk��§f${snap.blockScale.toFixed(2)}`
             );
         } catch (e) {
             push(`§cSpawn load snapshot: §f${e?.message || e}`);
@@ -247,7 +248,7 @@ async function runSpawnAndStormHarness(player) {
         const ploc = player.location;
         const baseX = ploc.x;
         const baseZ = ploc.z;
-        const baseY = Math.floor(ploc.y) + 1; // at head level — large bears need 3+ blocks; dev assumes open build
+        const baseY = Math.floor(ploc.y) + 1; // at head level ��� large bears need 3+ blocks; dev assumes open build
 
         const perRow = 5;
         const step = 2.5;
@@ -268,10 +269,10 @@ async function runSpawnAndStormHarness(player) {
                     spawned.push(ent);
                     ok++;
                 } else {
-                    push(`§6${typeId} §7→ no entity returned`);
+                    push(`§6${typeId} §7��� no entity returned`);
                 }
             } catch (e) {
-                push(`§c${typeId} §7→ §c${e?.message != null ? String(e.message) : String(e)}`);
+                push(`§c${typeId} §7��� §c${e?.message != null ? String(e.message) : String(e)}`);
             }
             // Let each AI tick the next tick; catches immediate script errors in loops.
             await waitTicks(1);
@@ -304,7 +305,7 @@ async function runSpawnAndStormHarness(player) {
             const inOw =
                 String(player?.dimension?.id || "").includes("overworld") || player?.dimension?.id === "minecraft:overworld";
             if (!inOw) {
-                push("§6Dust storm: skipped §8(stand in §7Overworld §8— storms only run there in this test)");
+                push("§6Dust storm: skipped §8(stand in §7Overworld §8��� storms only run there in this test)");
             } else {
                 const n0 = getActiveStormCount();
                 const summoned = summonStorm("minor", player, 50);
@@ -314,7 +315,7 @@ async function runSpawnAndStormHarness(player) {
                 await waitTicks(1);
                 const n2 = getActiveStormCount();
                 push(
-                    `§7Dust storm: summon §8(${summoned ? "ok" : "false"})§7 · before §f${n0} §7→ after §f${n1} §7· after end §f${n2} §7(expected end 0)`
+                    `§7Dust storm: summon §8(${summoned ? "ok" : "false"})§7 · before §f${n0} §7��� after §f${n1} §7· after end §f${n2} §7(expected end 0)`
                 );
             }
         }

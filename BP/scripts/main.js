@@ -14,7 +14,7 @@ import { isDustStormsEnabled, isScriptEnabled, SCRIPT_IDS } from "./mb_scriptTog
 import { ACTION_BAR_SLOT, setHudActionBarSegment, clearHudActionBarSegment, pushHudActionBarToast } from "./mb_actionBarHud.js";
 import { findItem, hasItem } from "./mb_itemFinder.js";
 import { initializeItemRegistry, registerItemHandler } from "./mb_itemRegistry.js";
-import "./mb_spawnController.js";
+import { getSimPlayers, isSimFullBehaviorEnabled } from "./mb_simPlayers.js";
 import "./mb_miningAI.js";
 import { collectedBlocks } from "./mb_miningAI.js";
 import { setInfectedAngerTarget, angerNearbyInfectedAtPlayer } from "./mb_infectedAI.js";
@@ -4193,13 +4193,85 @@ function tryRefreshInfectionHudActionBar(player, id, state) {
     } catch { /* ignore */ }
 }
 
+/**
+ * Dev sim "players" (ids `sim:N`) — register minor infection + timer decay only (no effects/audio/codex).
+ * When `mb_sim_players_full` is off, entries are removed.
+ */
+function syncSimPlayerInfectionEntries() {
+    try {
+        if (!isSimFullBehaviorEnabled()) {
+            for (const pid of [...playerInfection.keys()]) {
+                if (String(pid).startsWith("sim:")) playerInfection.delete(pid);
+            }
+            return;
+        }
+        const sims = getSimPlayers();
+        const seen = new Set();
+        for (const sim of sims) {
+            if (!sim?.id) continue;
+            seen.add(sim.id);
+            if (!playerInfection.has(sim.id)) {
+                const currentDay = getCurrentDay ? getCurrentDay() : 0;
+                const scaledTicks = getScaledMinorInfectionTicks(currentDay);
+                playerInfection.set(sim.id, {
+                    ticksLeft: scaledTicks,
+                    snowCount: 0,
+                    hitCount: 0,
+                    cured: false,
+                    source: "sim_stress",
+                    infectionType: MINOR_INFECTION_TYPE,
+                    minorInfectionCured: false,
+                    maxSeverity: 0,
+                    lastTierMessage: 0,
+                    lastDecayTick: system.currentTick,
+                    warningSent: false,
+                    lastActiveTick: system.currentTick
+                });
+            }
+        }
+        for (const pid of [...playerInfection.keys()]) {
+            if (String(pid).startsWith("sim:") && !seen.has(pid)) playerInfection.delete(pid);
+        }
+    } catch { /* ignore */ }
+}
+
+function tickSimulatedPlayerInfection(id, state) {
+    try {
+        if (!state || state.cured) return;
+        const infectionType = state.infectionType || MAJOR_INFECTION_TYPE;
+        const maxTicks = infectionType === MINOR_INFECTION_TYPE ? MINOR_INFECTION_TICKS : INFECTION_TICKS;
+        const decayMultiplier = getAddonDifficultyState().infectionDecayMultiplier;
+        state.lastActiveTick = system.currentTick;
+        state.ticksLeft -= Math.round(40 * decayMultiplier);
+        if (state.ticksLeft > maxTicks) state.ticksLeft = maxTicks;
+
+        if (infectionType === MINOR_INFECTION_TYPE) {
+            if (state.ticksLeft <= 0) {
+                const currentDay = getCurrentDay ? getCurrentDay() : 0;
+                state.ticksLeft = getScaledMinorInfectionTicks(currentDay);
+                state.warningSent = false;
+            }
+            playerInfection.set(id, state);
+            return;
+        }
+        playerInfection.delete(id);
+    } catch { /* ignore */ }
+}
+
 // --- Infection Timers and Effects ---
 system.runInterval(() => {
     // Unified infection system
+    syncSimPlayerInfectionEntries();
     const infectionAudioEnabled = isScriptEnabled(SCRIPT_IDS.infectionAudio);
     for (const [id, state] of playerInfection.entries()) {
+        if (state.cured) continue;
+        if (String(id).startsWith("sim:")) {
+            if (!isSimFullBehaviorEnabled()) continue;
+            tickSimulatedPlayerInfection(id, state);
+            continue;
+        }
         const player = world.getAllPlayers().find(p => p.id === id);
-        if (!player || state.cured) continue;
+        if (!player) continue;
 
         const infectionType = state.infectionType || MAJOR_INFECTION_TYPE;
         const maxTicks = infectionType === MINOR_INFECTION_TYPE ? MINOR_INFECTION_TICKS : INFECTION_TICKS;

@@ -1,6 +1,17 @@
 import { system, world, ItemStack } from "@minecraft/server";
 import { ActionFormData, ModalFormData, FormCancelationReason } from "@minecraft/server-ui";
 import { getPlayerProperty, setPlayerProperty, getWorldProperty, setWorldProperty, getPlayerPropertyChunked, setPlayerPropertyChunked, getWorldPropertyChunked, setWorldPropertyChunked, saveAllProperties, ADDON_DIFFICULTY_PROPERTY, getAddonDifficultyState } from "./mb_dynamicPropertyHandler.js";
+import {
+    areSimPlayersEnabled,
+    areSimPlayerMarkersEnabled,
+    areSimStressChestMinecartsEnabled,
+    areSimStressArmorStandsEnabled,
+    areSimPlayersDebugEnabled,
+    MB_SIM_PLAYERS_DEBUG,
+    isSimFullBehaviorEnabled,
+    isSimPlayersHudPersonalEnabled,
+    setSimPlayersHudPersonalEnabled
+} from "./mb_simPlayers.js";
 import { getAllScriptToggles, setScriptEnabled, SCRIPT_IDS, isScriptEnabled, isBetaInfectedAIEnabled, setBetaInfectedAIEnabled, isDustStormsEnabled, setDustStormsEnabled, isBetaVisibleToAll, setBetaVisibleToAll, getBetaOwnerId, setBetaOwnerId } from "./mb_scriptToggles.js";
 import { recordDailyEvent, getCurrentDay, getDayDisplayInfo, cancelAndClearDayNarrativeHud } from "./mb_dayTracker.js";
 import { playerInfection, curedPlayers, formatTicksDuration, formatMillisDuration, formatInfectionHudTimeRemaining, HITS_TO_INFECT, bearHitCount, maxSnowLevels, MINOR_INFECTION_TYPE, MAJOR_INFECTION_TYPE, MINOR_HITS_TO_INFECT, IMMUNE_HITS_TO_INFECT, PERMANENT_IMMUNITY_PROPERTY, MINOR_CURE_GOLDEN_APPLE_PROPERTY, MINOR_CURE_GOLDEN_CARROT_PROPERTY } from "./main.js";
@@ -4527,6 +4538,7 @@ export function showCodexBook(player, context) {
         { id: "kill_bears", label: "Kill Bears %", action: () => openKillBearsMenu() },
         { id: "clear_bears", label: "Clear Bears", action: () => openClearBearsMenu() },
         { id: "ai_throttle", label: "AI Throttle & Speed", action: () => openAIThrottleMenu() },
+        { id: "sim_players", label: "Simulated players (dev)", action: () => openSimulatedPlayersMenu() },
         { id: "debug_menu", label: "Debug Menu", action: () => openDebugMenu() },
         { id: "fully_unlock", label: "Fully Unlock Codex", action: () => { fullyUnlockCodex(player); player.sendMessage(CHAT_SUCCESS + "Codex fully unlocked."); journalPowerToolsBack(); } },
         { id: "reset_codex", label: "Reset My Codex", action: () => openTargetPlayerMenu("Reset Codex", (name) => { triggerDebugCommand("reset_codex", name ? [name] : []); journalPowerToolsBack(); }) },
@@ -4541,6 +4553,58 @@ export function showCodexBook(player, context) {
         { id: "sound_catalog", label: "Play sound (catalog)", action: () => openSoundPreviewDevMenu() },
         { id: "script_self_test", label: "Script self-test (in-game)", action: () => openScriptSelfTestDevMenu(() => openMain()) }
     ];
+
+    function openSimulatedPlayersMenu() {
+        const v = getPlayerSoundVolume(player);
+        const enabled = areSimPlayersEnabled();
+        const count = Math.max(0, Math.min(32, Math.floor(Number(getWorldProperty("mb_sim_players_count")) || 0)));
+        const dims = String(getWorldProperty("mb_sim_players_dims") || "overworld");
+        const pattern = String(getWorldProperty("mb_sim_players_pattern") || "orbit");
+        const radius = Number(getWorldProperty("mb_sim_players_radius")) || 48;
+        const speed = Number(getWorldProperty("mb_sim_players_speed")) || 1.0;
+        const speed10 = Math.max(1, Math.min(100, Math.floor((Number.isFinite(speed) ? speed : 1.0) * 10)));
+        const markersOn = areSimPlayerMarkersEnabled();
+        const stressMc = areSimStressChestMinecartsEnabled();
+        const stressArm = areSimStressArmorStandsEnabled();
+        const fullBeh = isSimFullBehaviorEnabled();
+        const debugLog = areSimPlayersDebugEnabled();
+
+        const form = new ModalFormData()
+            .title("§bSimulated players (dev)")
+            .toggle("§fEnable simulated players", { defaultValue: enabled })
+            .slider("§fSim player count", 0, 32, { valueStep: 1, defaultValue: count })
+            .dropdown("§fDimensions", ["overworld (anchor dim)", "all (OW+Nether+End)"], { defaultValueIndex: dims.toLowerCase() === "all" ? 1 : 0 })
+            .dropdown("§fMovement pattern", ["orbit", "jitter"], { defaultValueIndex: pattern.toLowerCase() === "jitter" ? 1 : 0 })
+            .slider("§fRadius (blocks)", 6, 256, { valueStep: 1, defaultValue: Math.max(6, Math.min(256, Math.floor(radius))) })
+            .slider("§fSpeed (×10)  §8(10 = 1.0)", 1, 100, { valueStep: 1, defaultValue: speed10 })
+            .toggle("§fFull stress §8(infection+spawn count)", { defaultValue: fullBeh })
+            .toggle("§fParticle markers §8(world)", { defaultValue: markersOn })
+            .toggle("§fStress: chest minecart §8(per sim)", { defaultValue: stressMc })
+            .toggle("§fStress: armor stand §8(per sim)", { defaultValue: stressArm })
+            .toggle("§fContent log debug §8(throttled)", { defaultValue: debugLog });
+
+        form.show(player).then((res) => {
+            if (!res || res.canceled) return journalPowerToolsBack();
+            try {
+                const [en, c, dimSel, patSel, rad, spd10Sel, fullBehSel, mk, stressMcSel, stressArmSel, dbgSel] = res.formValues;
+                const spd = Math.max(0.1, Math.min(10.0, (Number(spd10Sel) || 10) / 10));
+                setWorldProperty("mb_sim_players", en ? 1 : 0);
+                setWorldProperty("mb_sim_players_count", Math.floor(Number(c) || 0));
+                setWorldProperty("mb_sim_players_dims", dimSel === 1 ? "all" : "overworld");
+                setWorldProperty("mb_sim_players_pattern", patSel === 1 ? "jitter" : "orbit");
+                setWorldProperty("mb_sim_players_radius", Math.floor(Number(rad) || 48));
+                setWorldProperty("mb_sim_players_speed", spd);
+                setWorldProperty("mb_sim_players_full", fullBehSel ? 1 : 0);
+                setWorldProperty("mb_sim_players_markers", mk ? 1 : 0);
+                setWorldProperty("mb_sim_stress_chest_minecarts", stressMcSel ? 1 : 0);
+                setWorldProperty("mb_sim_stress_armor_stands", stressArmSel ? 1 : 0);
+                setWorldProperty("mb_sim_players_debug", dbgSel ? 1 : 0);
+                player.sendMessage(CHAT_INFO + `Sim players: ${en ? "ON" : "OFF"} · count=${Math.floor(Number(c) || 0)}`);
+            } catch { /* ignore */ }
+            try { player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * v }); } catch { /* ignore */ }
+            journalPowerToolsBack();
+        }).catch(() => journalPowerToolsBack());
+    }
 
     function getPinEligibleDevItems() {
         const dev = INCLUDE_FULL_DEVELOPER_TOOLS || INCLUDE_ADMIN_TOOLS
@@ -5005,10 +5069,11 @@ export function showCodexBook(player, context) {
         form.button("§fScript toggles §8(AI, storms, infection audio…)");
         form.button("§fSpawn controller");
         form.button("§eScript self-test §8(in-game)");
+        form.button("§bSimulated players §8(dev)");
         form.button("§8Back");
         form.show(player).then((res) => {
             const v = getPlayerSoundVolume(player);
-            if (!res || res.canceled || res.selection === 3) {
+            if (!res || res.canceled || res.selection === 4) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * v });
                 return openDeveloperTools();
             }
@@ -5016,7 +5081,8 @@ export function showCodexBook(player, context) {
             journalPowerToolsBack = () => openDeveloperToolsSystemsMenu();
             if (res.selection === 0) openScriptTogglesMenu();
             else if (res.selection === 1) openSpawnControllerMenu();
-            else openScriptSelfTestDevMenu(() => openDeveloperToolsSystemsMenu());
+            else if (res.selection === 2) openScriptSelfTestDevMenu(() => openDeveloperToolsSystemsMenu());
+            else system.run(() => openSimulatedPlayersMenu());
         }).catch(() => openDeveloperTools());
     }
 
@@ -5167,7 +5233,7 @@ export function showCodexBook(player, context) {
     }
 
     /**
-     * Merged action-bar segments (infection, spawn HUDs, day line, camp dev, toasts).
+     * Merged action-bar segments (infection, spawn HUDs, sim players, day line, camp dev, toasts).
      * @param {() => void} [onBack] From journal pin: pass () => openMain()
      */
     function openDeveloperToolsHudMenu(onBack) {
@@ -5178,6 +5244,7 @@ export function showCodexBook(player, context) {
         if (preview.length > 220) preview = preview.slice(0, 220) + "§8…";
         const scanPersonal = isSpawnScanPerfHudPersonalEnabled(player);
         const presetPersonal = isSpawnPresetHudPersonalEnabled(player);
+        const simHudPersonal = isSimPlayersHudPersonalEnabled(player);
         const broadcastHud = isSpawnHudBroadcastEnabled();
         const scanSee = isSpawnScanPerfOverlayEnabledForPlayer(player);
         const presetSee = isSpawnPresetHudEnabledForPlayer(player);
@@ -5187,7 +5254,7 @@ export function showCodexBook(player, context) {
             .body(
                 `§7Bedrock allows §fone §7action-bar line. Spawn scan/preset HUDs are §fper player§7; optional §ebroadcast§7 shows them to everyone if any dev has theirs on.\n` +
                     `${formatHudMergeOrderForMenu()}\n\n` +
-                    `§8Your toggles §7scan ${scanPersonal ? "§aON" : "§7OFF"} §8preset ${presetPersonal ? "§aON" : "§7OFF"} §8| §8Broadcast §7(world) ${broadcastHud ? "§aON" : "§7OFF"}\n` +
+                    `§8Your toggles §7scan ${scanPersonal ? "§aON" : "§7OFF"} §8preset ${presetPersonal ? "§aON" : "§7OFF"} §8sim ${simHudPersonal ? "§aON" : "§7OFF"} §8| §8Broadcast §7(world) ${broadcastHud ? "§aON" : "§7OFF"}\n` +
                     `§8You see §7scan ${scanSee ? "§aON" : "§7OFF"} §8preset ${presetSee ? "§aON" : "§7OFF"} §8§o(includes legacy world scan if ever ON)` +
                     (legacyScanWorld ? "\n§8Legacy world scan HUD §7was ON §8— toggle scan to migrate to per-player." : "") +
                     `\n\n§8Live §7(${dbg.count} seg): §r${preview}`
@@ -5195,6 +5262,7 @@ export function showCodexBook(player, context) {
         const campWatch = player.hasTag("mb_dev_camp_watch");
         form.button(scanPersonal ? "§cTurn off §e§lmy§r §7scan perf HUD" : "§aTurn on §e§lmy§r §7scan perf HUD");
         form.button(presetPersonal ? "§cTurn off §6§lmy§r §7preset hint HUD" : "§aTurn on §6§lmy§r §7preset hint HUD");
+        form.button(simHudPersonal ? "§cTurn off §b§lmy§r §7sim players HUD" : "§aTurn on §b§lmy§r §7sim players HUD");
         form.button(broadcastHud ? "§cBroadcast spawn HUDs §8→ OFF §7(all players)" : "§aBroadcast spawn HUDs §8→ ON §7(all players)");
         form.button(campWatch ? "§cRemove §bcamp watch §7tag" : "§aAdd §bcamp watch §7tag");
         form.button("§eClear all merged segments §8(your line)");
@@ -5205,7 +5273,7 @@ export function showCodexBook(player, context) {
         form.button("§8Back");
         form.show(player).then((res) => {
             const v = getPlayerSoundVolume(player);
-            if (!res || res.canceled || res.selection === 9) {
+            if (!res || res.canceled || res.selection === 10) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * v });
                 return goBack();
             }
@@ -5223,12 +5291,18 @@ export function showCodexBook(player, context) {
                 return openDeveloperToolsHudMenu(onBack);
             }
             if (res.selection === 2) {
+                setSimPlayersHudPersonalEnabled(player, !simHudPersonal);
+                try { saveAllProperties(); } catch { /* ignore */ }
+                player.sendMessage(CHAT_INFO + (simHudPersonal ? "Your sim players HUD off." : "Your sim players HUD on."));
+                return openDeveloperToolsHudMenu(onBack);
+            }
+            if (res.selection === 3) {
                 setSpawnHudBroadcastEnabled(!broadcastHud);
                 try { saveAllProperties(); } catch { /* ignore */ }
                 player.sendMessage(CHAT_INFO + "Spawn HUD broadcast to all players: " + (!broadcastHud ? "ON." : "OFF."));
                 return openDeveloperToolsHudMenu(onBack);
             }
-            if (res.selection === 3) {
+            if (res.selection === 4) {
                 try {
                     if (campWatch) player.removeTag("mb_dev_camp_watch");
                     else player.addTag("mb_dev_camp_watch");
@@ -5236,25 +5310,25 @@ export function showCodexBook(player, context) {
                 player.sendMessage(CHAT_INFO + (campWatch ? "Removed mb_dev_camp_watch." : "Added mb_dev_camp_watch (camp HUD needs cheats / allowlist)."));
                 return openDeveloperToolsHudMenu(onBack);
             }
-            if (res.selection === 4) {
+            if (res.selection === 5) {
                 clearAllHudSegments(player);
                 player.sendMessage(CHAT_SUCCESS + "Cleared all merged HUD segments for you.");
                 return openDeveloperToolsHudMenu(onBack);
             }
-            if (res.selection === 5) {
+            if (res.selection === 6) {
                 cancelAndClearDayNarrativeHud(player);
                 player.sendMessage(CHAT_INFO + "Cleared day / ambient action bar (narrative) and its auto-hide timer.");
                 return openDeveloperToolsHudMenu(onBack);
             }
-            if (res.selection === 6) {
+            if (res.selection === 7) {
                 pushHudActionBarToast(player, "§7HUD test toast §8(merged)", 60);
                 return openDeveloperToolsHudMenu(onBack);
             }
-            if (res.selection === 7) {
+            if (res.selection === 8) {
                 journalPowerToolsBack = () => openDeveloperToolsHudMenu(onBack);
                 return openSpawnAutoModesMenu(() => openDeveloperToolsHudMenu(onBack));
             }
-            if (res.selection === 8) {
+            if (res.selection === 9) {
                 journalPowerToolsBack = () => openDeveloperToolsHudMenu(onBack);
                 return openSpawnPerformanceHub();
             }
@@ -7351,6 +7425,7 @@ export function showCodexBook(player, context) {
         form.button("§fGround Infection Timer");
         form.button("§fSnow Storm");
         form.button("§fEmulsifier");
+        form.button("§fSimulated players");
         form.button("§8Back");
 
         form.show(player).then((res) => {
@@ -7360,7 +7435,7 @@ export function showCodexBook(player, context) {
                 return onBack();
             }
 
-            if (res.selection === 13) {
+            if (res.selection === 14) {
                 const volumeMultiplier = getPlayerSoundVolume(player);
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
                 return onBack();
@@ -7382,9 +7457,43 @@ export function showCodexBook(player, context) {
                 case 10: return openGroundInfectionDebugMenu(settings, fromDevTools);
                 case 11: return openSnowStormDebugMenu(settings, false, fromDevTools);
                 case 12: return openEmulsifierDebugMenu(settings, fromDevTools);
+                case 13: return openSimPlayersDebugMenu(settings, fromDevTools);
                 default: return openDebugMenu(fromDevTools);
             }
         }).catch(() => onBack());
+    }
+
+    function openSimPlayersDebugMenu(settings, fromDevTools = false) {
+        const dbgOn = areSimPlayersDebugEnabled();
+        const simOn = areSimPlayersEnabled();
+        const fullStress = isSimFullBehaviorEnabled();
+        const form = new ActionFormData().title("§bSimulated players debug");
+        form.body(
+            `§7Ghost sim clients for stress testing (Developer Tools).\n\n§8Current:\n§7• Sims system: ${simOn ? "§aON" : "§cOFF"}\n§7• Full stress: ${fullStress ? "§aON" : "§cOFF"}\n§7• Content log §8([SIM PLAYERS])§7: ${dbgOn ? "§aON" : "§cOFF"} §8(~100t)\n\n§8Toggle mirrors Journal → Simulated players → Content log debug.`
+        );
+        form.button(`§${dbgOn ? "a" : "c"}Toggle Content log debug`);
+        form.button("§8Back");
+
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === 1) {
+                const volumeMultiplier = getPlayerSoundVolume(player);
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
+                return openDebugMenu(fromDevTools);
+            }
+            if (res.selection === 0) {
+                try {
+                    const next = areSimPlayersDebugEnabled() ? 0 : 1;
+                    setWorldProperty(MB_SIM_PLAYERS_DEBUG, next);
+                    const volumeMultiplier = getPlayerSoundVolume(player);
+                    player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * volumeMultiplier });
+                    const stateText = next ? "§aON" : "§cOFF";
+                    player.sendMessage(CHAT_DEV + "[DEBUG] " + CHAT_INFO + `Sim players Content log debug: ${stateText}`);
+                    console.warn(`[DEBUG MENU] Sim players Content log debug ${next ? "ENABLED" : "DISABLED"} by ${player.name}`);
+                } catch { /* ignore */ }
+                return openSimPlayersDebugMenu(settings, fromDevTools);
+            }
+            return openDebugMenu(fromDevTools);
+        }).catch(() => openDebugMenu(fromDevTools));
     }
 
     function openMiningDebugMenu(settings, fromDevTools = false) {

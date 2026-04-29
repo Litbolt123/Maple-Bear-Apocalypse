@@ -6,9 +6,24 @@ Running log of **what changed and why** (gameplay, scripts, assets, docs). Used 
 
 ---
 
-**Date:** 2026-04-25 (in-game check)
+**Date:** 2026-04-29
+
+- **Sim players Content Log debug:** world property `mb_sim_players_debug` + Journal **Simulated players → Content log debug** (`mb_simPlayers.js`). When dev pack + sims enabled, throttled `console.warn` every 100t: `[SIM PLAYERS]` real/sim/merged counts, full stress, orbit radius, anchor→sim0 horizontal distance. **Debug Menu → Simulated players** mirrors the same toggle (`mb_codex.js`). Mirrored `BP/` ↔ `BP - Dev/`.
+- **Sim ghosts vs unloaded chunks:** `mb_spawnController.js` skips simulated players on a dimension tick when the ghost’s feet are not in a loaded chunk (`getBlockSafe`); `attemptSpawnType` suppresses `[SPAWN ERROR]` for sims on `LocationInUnloadedChunkError`. Mirrored `BP/` ↔ `BP - Dev/`.
+- **`getAllPlayersIncludingSim()`:** added in `mb_simPlayers.js` — canonical merge of `world.getAllPlayers()` plus ghost sims when `mb_sim_players` is on (same rules as `getCachedPlayers()`). Exported `isSimulatedPlayer(p)` for real-only branches. `mb_sharedCache.js` now calls this helper; spawn stress merge delegates to it when full stress is enabled. Mirrored `BP/` ↔ `BP - Dev/`.
+- **Sim “full stress” (dev-only):** world flag `mb_sim_players_full` + Journal toggle **Full stress** (`mb_codex.js`). When **`INCLUDE_FULL_DEVELOPER_TOOLS`** is true, `isSimFullBehaviorEnabled()` enables (1) **`syncSimPlayerInfectionEntries` / `tickSimulatedPlayerInfection`** in `main.js` — each ghost sim id `sim:N` gets a **minor** `playerInfection` entry with timer decay on the normal infection interval and reseed when it hits zero (no cough/transform/codex side effects); when full stress is off, `sim:` keys are removed from the map. (2) **`mergeSimPlayersForSpawnStress`** in `mb_spawnController.js` — ghost sims are merged into player lists used for spawn-auto / load counts. Release `BP/` ignores full stress because `isSimFullBehaviorEnabled()` is false without dev tools. Mirrored `BP/` ↔ `BP - Dev/`.
+- **Sim players dev HUD + visibility:** new merged action-bar slot `ACTION_BAR_SLOT.SIM_PLAYERS` (`mb_actionBarHud.js`) with a per-player toggle in **Journal → Developer Tools → HUD & action bar** (`mb_dev_hud_sim_players`). `mb_simPlayers.js` refreshes a compact `Sim` line (count, dim mode, pattern, radius, speed, nearest in-world distance, marker state) and optional **world** `mb_sim_players_markers` particle markers at ghost positions (addon `mb:white_dust_particle`); sims are still not real entities—markers/HUD are the intended “see them” path. Sim menu gained a **Particle markers** toggle. Mirrored `BP/` and `BP - Dev/`.
+- **Sim markers fix + stress entities:** marker particles now use **`mb:white_dust_particle_short`** (the long-lived `mb:white_dust_particle` emitter runs ~6s and looked like a ring). Optional **stress** toggles spawn **`minecraft:chest_minecart`** and/or **`minecraft:armor_stand`** per sim index (teleported every tick, minecarts filled with stacks + bundle attempts, stands get netherite+shield); world props `mb_sim_stress_chest_minecarts` / `mb_sim_stress_armor_stands`. Dev builds only (`INCLUDE_FULL_DEVELOPER_TOOLS`).
+
+---
 
 - **Script self-test:** After syncing the pack, Content Log shows **41** `BP` dynamic-import files (includes `mb_bearPopulationCull.js`) and **All 41 modules import OK**; **Full** harness still **21/21** spawns, **0** fails.
+
+**Date:** 2026-04-28
+
+- **Dev tool: simulated players (solo perf testing):** added `mb_simPlayers.js` (ghost players that orbit/jitter around an anchor) + a **Developer Tools** menu entry to enable/configure count/pattern/dimensions via world properties (`mb_sim_players*`). `getCachedPlayers()` now returns **real + simulated** players, so AI loops and cached per-dimension player positions can scale as if multiple players are present. Also fixed `mb_sharedCache.getCachedMobs` validity checks to use `isEntityValid` (Bedrock `Entity.isValid` is boolean, not a function).
+
+- **Concept audit doc:** wrote `[INFECTION_MOD_CONCEPT_AUDIT_2026-04-28.md](development/planning/INFECTION_MOD_CONCEPT_AUDIT_2026-04-28.md)` for Java+Bedrock infection mod design patterns and MapleBear mapping (concepts only; no implementation yet).
 
 **Date:** 2026-04-25 (follow-up — bear cull testing, next session)
 

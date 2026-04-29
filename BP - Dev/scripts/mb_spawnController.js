@@ -38,6 +38,7 @@ import {
 } from "./mb_spawnMobilityCamp.js";
 import { ACTION_BAR_SLOT, setHudActionBarSegment, clearHudActionBarSegment, getHudActiveSegmentCount } from "./mb_actionBarHud.js";
 import { INCLUDE_FULL_DEVELOPER_TOOLS } from "./mb_buildConfig.js";
+import { getAllPlayersIncludingSim, isSimFullBehaviorEnabled, areSimPlayersEnabled, isSimulatedPlayer } from "./mb_simPlayers.js";
 import {
     TINY_TYPE,
     INFECTED_TYPE,
@@ -816,9 +817,19 @@ const AUTO_SPAWN_SCAN_COMBO_TIERS = [
     { spawnKey: "ultraLow", scanKey: "minimal" }
 ];
 
+function mergeSimPlayersForSpawnStress(basePlayers) {
+    try {
+        if (!INCLUDE_FULL_DEVELOPER_TOOLS || !isSimFullBehaviorEnabled() || !areSimPlayersEnabled()) return basePlayers;
+        return getAllPlayersIncludingSim();
+    } catch {
+        return basePlayers;
+    }
+}
+
 function countOnlinePlayersForSpawnAuto() {
     try {
-        const pl = world.getAllPlayers();
+        let pl = world.getAllPlayers();
+        pl = mergeSimPlayersForSpawnStress(pl);
         if (!pl?.length) return 1;
         let n = 0;
         for (const p of pl) {
@@ -1635,7 +1646,8 @@ let cachedWorldSpawnLoadForCapTick = -1;
 /** Sum of spatial cluster counts per dimension (splitting across dims lowers effective load vs raw player count). */
 function getWorldWideSpawnLoadCount() {
     try {
-        const pl = world.getAllPlayers();
+        let pl = world.getAllPlayers();
+        pl = mergeSimPlayersForSpawnStress(pl);
         if (!pl || pl.length === 0) return 1;
         if (pl.length === 1) return 1;
         const byDim = new Map();
@@ -2131,6 +2143,15 @@ function getBlockSafe(dimension, x, y, z) {
     } catch {
         return null;
     }
+}
+
+/** Ghost sims can orbit outside simulation distance; `getBlock` fails for unloaded chunks. */
+function isSimulatedSpawnAnchorChunkLoaded(dimension, location) {
+    if (!dimension || !location) return false;
+    const x = Math.floor(location.x);
+    const y = Math.floor(location.y);
+    const z = Math.floor(location.z);
+    return getBlockSafe(dimension, x, y, z) != null;
 }
 
 function columnIsClear(dimension, x, z, startY, endY) {
@@ -7345,6 +7366,17 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
                 // The fallback will try to spawn an alternative entity
                 continue;
             }
+
+            const errRaw = error?.message || String(error) || "";
+            const errLow = errRaw.toLowerCase();
+            const isUnloadedChunkErr =
+                errLow.includes("locationinunloadedchunk") ||
+                errLow.includes("unloadedchunk") ||
+                errLow.includes("not in a chunk") ||
+                error?.name === "LocationInUnloadedChunkError";
+            if (isSimulatedPlayer(player) && isUnloadedChunkErr) {
+                continue;
+            }
             
             // For non-registration errors, track and log as before
             const failureInfo = entitySpawnFailures.get(config.id);
@@ -7675,7 +7707,7 @@ system.runInterval(() => {
         // Get all players and rotate processing
         let allPlayers;
         try {
-            allPlayers = world.getAllPlayers();
+            allPlayers = mergeSimPlayersForSpawnStress(world.getAllPlayers());
         } catch (error) {
             errorLog(`Error getting all players`, error);
             return;
@@ -7876,6 +7908,13 @@ system.runInterval(() => {
     // Process all selected players
     for (const player of playersToProcess) {
         if (!player) continue;
+
+        if (isSimulatedPlayer(player)) {
+            const anchorLoc = getActualPlayerPosition(player) || player.location;
+            if (!isSimulatedSpawnAnchorChunkLoaded(dimension, anchorLoc)) {
+                continue;
+            }
+        }
 
         // For tight groups, use group center instead of individual player position
         let playerPos;

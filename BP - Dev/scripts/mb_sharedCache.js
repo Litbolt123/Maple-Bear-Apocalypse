@@ -3,7 +3,8 @@
  * Reduces duplicate queries across mining, torpedo, and flying AI
  */
 
-import { world, system } from "@minecraft/server";
+import { system } from "@minecraft/server";
+import { getAllPlayersIncludingSim } from "./mb_simPlayers.js";
 
 /**
  * @minecraft/server `Entity.isValid` is a **boolean**; treat both boolean and
@@ -37,7 +38,7 @@ const MOB_CACHE_DISTANCE = 128; // Cache mobs within 128 blocks (larger than MAX
 let cachedMobsByDimension = new Map(); // Map<dimensionId, {mobs: Entity[], tick: number, center: {x, y, z}}>
 
 /**
- * Get all players (cached)
+ * Get all players (cached): real clients plus ghost sims when sim players are enabled (`getAllPlayersIncludingSim`).
  * @returns {Player[]} Array of all players
  */
 export function getCachedPlayers() {
@@ -50,7 +51,7 @@ export function getCachedPlayers() {
     
     // Update cache
     try {
-        cachedPlayers = world.getAllPlayers();
+        cachedPlayers = getAllPlayersIncludingSim();
         cachedPlayersTick = currentTick;
         
         // Also cache player positions by dimension
@@ -117,7 +118,7 @@ export function getCachedMobs(dimension, center = null, maxDistance = MOB_CACHE_
             const filtered = [];
             for (const mob of cached.mobs) {
                 try {
-                    if (!mob.isValid()) continue;
+                    if (!isEntityValid(mob)) continue;
                     const mobLoc = mob.location;
                     const dx = mobLoc.x - center.x;
                     const dy = mobLoc.y - center.y;
@@ -137,7 +138,7 @@ export function getCachedMobs(dimension, center = null, maxDistance = MOB_CACHE_
         // Filter out invalid mobs
         return cached.mobs.filter(mob => {
             try {
-                return mob.isValid();
+                return isEntityValid(mob);
             } catch {
                 return false;
             }
@@ -157,7 +158,7 @@ export function getCachedMobs(dimension, center = null, maxDistance = MOB_CACHE_
         const validMobs = [];
         for (const mob of allMobs) {
             try {
-                if (mob.isValid()) {
+                if (isEntityValid(mob)) {
                     validMobs.push(mob);
                 }
             } catch {
