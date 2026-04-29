@@ -558,6 +558,8 @@ try {
             if (!areSimPlayersDebugEnabled() || !areSimPlayersEnabled()) return;
             const real = world.getAllPlayers();
             const sims = getSimPlayers();
+            // No ghosts yet (count 0 / disabled anchor): skip heartbeat — avoids Content Log spam when sims stay armed but idle.
+            if (!sims.length) return;
             const merged = getAllPlayersIncludingSim();
             const full = isSimFullBehaviorEnabled();
             const rad = Math.max(6, Math.min(256, Math.floor(readNumber("mb_sim_players_radius", DEFAULT_RADIUS))));

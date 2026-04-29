@@ -87,3 +87,21 @@ export function getInfectionRate(day) {
     }
     return currentRate;
 }
+
+// --- Infection evolution: localized storm reservoirs (Phase 2, mb_snowStorm getStormReservoirSpawnChanceMult + mb_spawnController) ---
+/** Max extra natural spawn chance at storm eye; linear falloff to storm radius edge. Overworld only. */
+export const STORM_RESERVOIR_SPAWN_CHANCE_MAX_BUMP = 0.08;
+/** Inner fraction of storm radius where reservoir influence is full (1); outer ring fades to edge. */
+export const STORM_RESERVOIR_INNER_RADIUS_FRACTION = 0.35;
+
+// --- Infection director stages (Phase 3, mb_infectionDirector.js + mb_spawnController) ---
+/** Day bands for named director tiers (inclusive upper bounds for scout/pressure/surge). */
+export const INFECTION_DIRECTOR_DAY_SCOUT_MAX = 7;
+export const INFECTION_DIRECTOR_DAY_PRESSURE_MAX = 14;
+export const INFECTION_DIRECTOR_DAY_SURGE_MAX = 19;
+/** When spawn-load snapshot load01 is at or above this, director stage bumps one tier (capped). */
+export const INFECTION_DIRECTOR_LOAD_ESCALATE = 0.52;
+/** Per-stage natural spawn chance multiplier (scout → stormfront). */
+export const INFECTION_DIRECTOR_CHANCE_MULT = Object.freeze([1, 1.02, 1.045, 1.07]);
+/** Extra tile spawn attempts per config (surge/stormfront emphasize pressure vs pure rate). */
+export const INFECTION_DIRECTOR_ATTEMPT_BONUS = Object.freeze([0, 0, 1, 2]);

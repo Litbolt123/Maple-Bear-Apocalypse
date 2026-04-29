@@ -10,7 +10,7 @@ import { getWorldProperty, setWorldProperty, getWorldPropertyChunked, setWorldPr
 import { getCurrentDay, isMilestoneDay } from "./mb_dayTracker.js";
 import { isDebugEnabled, getPlayerSoundVolume, getStormParticleDensity } from "./mb_codex.js";
 import { isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
-import { getStormSpawnTiles } from "./mb_snowStorm.js";
+import { getStormSpawnTiles, getStormReservoirSpawnChanceMult } from "./mb_snowStorm.js";
 import { STORM_PARTICLE_PASS_THROUGH } from "./mb_blockLists.js";
 import { hasInfectionExposureLineOfSight } from "./mb_infectionExposureLos.js";
 import {
@@ -39,6 +39,8 @@ import {
 import { ACTION_BAR_SLOT, setHudActionBarSegment, clearHudActionBarSegment, getHudActiveSegmentCount } from "./mb_actionBarHud.js";
 import { INCLUDE_FULL_DEVELOPER_TOOLS } from "./mb_buildConfig.js";
 import { getAllPlayersIncludingSim, isSimFullBehaviorEnabled, areSimPlayersEnabled, isSimulatedPlayer } from "./mb_simPlayers.js";
+import { getStormTouchSpawnChanceMult } from "./mb_exposureSpawnPressure.js";
+import { getInfectionDirectorSpawnModifiers } from "./mb_infectionDirector.js";
 import {
     TINY_TYPE,
     INFECTED_TYPE,
@@ -8218,6 +8220,33 @@ system.runInterval(() => {
         chanceMultiplier *= validatedWeatherMultiplier; // Apply weather effect
         const campClusterIdx = dimClusterMeta?.byPlayerId?.get(player.id) ?? 0;
         chanceMultiplier *= getClusterSpawnPressureMult(dimension.id, campClusterIdx);
+        const stormTouchMult = getStormTouchSpawnChanceMult(player.id);
+        chanceMultiplier *= stormTouchMult;
+        if (stormTouchMult > 1.005) {
+            debugLog('spawn', `${player.name}: storm-touch spawn chance ×${stormTouchMult.toFixed(3)} (storm exposure)`);
+        }
+        let reservoirMult = 1;
+        try {
+            reservoirMult = getStormReservoirSpawnChanceMult(dimension, playerPos.x, playerPos.z);
+        } catch {
+            reservoirMult = 1;
+        }
+        chanceMultiplier *= reservoirMult;
+        if (reservoirMult > 1.005) {
+            debugLog('spawn', `${player.name}: storm-reservoir spawn chance ×${reservoirMult.toFixed(3)} (near storm center)`);
+        }
+
+        let directorMods = { chanceMult: 1, attemptBonus: 0, stageId: "scout" };
+        try {
+            directorMods = getInfectionDirectorSpawnModifiers(currentDay);
+        } catch {
+            directorMods = { chanceMult: 1, attemptBonus: 0, stageId: "scout" };
+        }
+        const directorChance = Number(directorMods.chanceMult);
+        chanceMultiplier *= Number.isFinite(directorChance) && directorChance > 0 ? directorChance : 1;
+        if (directorChance > 1.008) {
+            debugLog('spawn', `${player.name}: director (${directorMods.stageId}) spawn chance ×${directorChance.toFixed(3)}`);
+        }
 
         let extraCount = 0;
         if (density > 140) {
@@ -8245,6 +8274,10 @@ system.runInterval(() => {
             idealBearPressureChanceMult: idealBearPressure.chanceMult,
             idealBearSpawnRateMult: idealBearPressure.spawnRateMult
         };
+        const directorAttempts = Math.floor(Number(directorMods.attemptBonus));
+        if (Number.isFinite(directorAttempts) && directorAttempts !== 0) {
+            modifiers.attemptBonus = (modifiers.attemptBonus || 0) + directorAttempts;
+        }
         if (spawnDifficultyState.attemptBonus !== 0) {
             modifiers.attemptBonus = (modifiers.attemptBonus || 0) + spawnDifficultyState.attemptBonus;
         }

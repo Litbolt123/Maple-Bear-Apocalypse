@@ -18,7 +18,7 @@ MapleBear TakeOver is a Minecraft Bedrock Edition addon (behavior pack + resourc
 
 The JavaScript in `BP/scripts/` uses ES modules with `@minecraft/server` and `@minecraft/server-ui` APIs (provided at runtime by Minecraft, not npm packages).
 
-**Balance / tuning:** `mb_balance.js` centralizes spawn **entity-type caps**, **natural buff cooldown** tick length, **mob→bear conversion pressure** multipliers, **buff conversion near-cap**, and **getInfectionRate** (day-step table). **`mb_spawnConfigs.js`** owns **`SPAWN_CONFIGS`** (per-entity spawn curves). **`mb_spawnEntityIds.js`** centralizes spawn/conversion entity IDs.  
+**Balance / tuning:** `mb_balance.js` centralizes spawn **entity-type caps**, **natural buff cooldown** tick length, **mob→bear conversion pressure** multipliers, **buff conversion near-cap**, **getInfectionRate** (day-step table), storm-reservoir spawn bumps (Phase 2), and **infection director** tier constants (Phase 3). **`mb_spawnConfigs.js`** owns **`SPAWN_CONFIGS`** (per-entity spawn curves). **`mb_spawnEntityIds.js`** centralizes spawn/conversion entity IDs.  
 **Helpers (flat `scripts/`):** `mb_propertyMigration.js` (world schema version + one-shot key migrations), `mb_playerChangelog.js` / `mb_journalWhatsNew.js` (in-game **What's new**), `mb_bearTelemetry.js` (dev-only bear counts by type → content log when Spawn → **Bear telemetry** is on), `mb_miningConstants.js` (dimension IDs + mining bear types + pathfinding union + air set).
 
 ## Cursor Cloud specific instructions
@@ -62,7 +62,7 @@ When folding work from **`BP - Dev/`** / **`RP - Dev/`** into a store or public 
 
 - **Merge into public trees:** copy or sync changed scripts, JSON, and assets into **`BP/`** and **`RP/`** (whatever actually changed in dev).
 - **Do not paste the dev build config over release:** keep **`BP/scripts/mb_buildConfig.js`** as the **public** flavor — **`INCLUDE_FULL_DEVELOPER_TOOLS` must stay `false`**, `BUILD_FLAVOR` / version strings as intended for that release. Edit that file by hand if needed; never replace it wholesale with `BP - Dev/scripts/mb_buildConfig.js`.
-- **Manifests:** confirm **`BP/manifest.json`** and **`RP/manifest.json`** (name, description, uuid/version policy) match what you publish.
+- **Manifests:** confirm **`BP/manifest.json`** and **`RP/manifest.json`** (name, description, uuid/version policy) match what you publish; **description** beta label should match **`ADDON_VERSION_PRERELEASE`** and **`PLAYER_CHANGELOG_VERSION`** in **`mb_buildConfig.js`** / **`mb_playerChangelog.js`** (same for **`BP - Dev/`** + **`RP - Dev/`** when tagging dev builds).
 - **Validate:** run **`npm run check`** (or at least `npm run validate` + `npm run lint`) against the **`BP/`** and **`RP/`** trees after the merge.
 - **Ship only public packs** to players: **`BP/`** + **`RP/`** — do not distribute **`BP - Dev/`** or **`RP - Dev/`** as the main download.
 - **Optional:** add a short note to **`docs/context summary.md`** (dated section) for notable release-facing changes.

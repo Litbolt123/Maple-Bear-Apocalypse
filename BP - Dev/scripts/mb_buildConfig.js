@@ -12,7 +12,8 @@ export const INCLUDE_ADMIN_TOOLS = true;
 export const ADDON_VERSION_MAJOR = 0;
 export const ADDON_VERSION_MINOR = 9;
 export const ADDON_VERSION_PATCH = 0;
-export const ADDON_VERSION_PRERELEASE = "beta.1";
+/** Semver pre-release label — keep in sync with `PLAYER_CHANGELOG_VERSION` and pack manifest descriptions. */
+export const ADDON_VERSION_PRERELEASE = "beta.2";
 
 export function getAddonVersionDisplayString() {
     const v = `v${ADDON_VERSION_MAJOR}.${ADDON_VERSION_MINOR}.${ADDON_VERSION_PATCH}-${ADDON_VERSION_PRERELEASE}`;

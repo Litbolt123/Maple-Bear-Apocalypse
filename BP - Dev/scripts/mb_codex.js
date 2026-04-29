@@ -3681,9 +3681,10 @@ export function showCodexBook(player, context) {
             const minorS = !!codex.biomes.stormMinorSeen;
             const majorS = !!codex.biomes.stormMajorSeen;
             body += "§fInfection Storm\n";
+            body += "§6When they appear: §7Addon difficulty sets the first day storms can begin—§cHard §7day §f2§7, §6Normal §7day §f4§7, §aEasy §7day §f6§7. Through day §f10§7, only §fminor §7storms; §4major §7storms can appear from day §f11§7 onward (more likely toward day §f20§7). After day §f20§7, §4only major §7storms roll. Storm centers require §fopen sky§7 above ground—not underground caves.\n\n";
             if (minorS && majorS) {
                 body += "§7A moving wall of white dust that sweeps across the land. Bears spawn inside it. Standing in it causes blindness and speeds infection—similar to standing on corrupted blocks, but worse. You can hear it from far away.\n\n";
-                body += "§6Storm Types:\n§7Minor storms are smaller and shorter. Major storms are larger, last longer, and place more dust. After day 20, only major storms occur.\n\n";
+                body += "§6Storm Types:\n§7Minor storms are smaller and shorter. Major storms are larger, last longer, and place more dust.\n\n";
                 body += "§6Expert Notes:\n§7The storm carries the infection through the air. Maple Bears thrive in it.";
             } else if (minorS) {
                 body += "§7You've weathered a §fsmaller §7dust storm: it blinds you, speeds infection like bad ground, and you hear it before it hits.\n\n";
@@ -3696,6 +3697,7 @@ export function showCodexBook(player, context) {
             } else {
                 body += "§7A wall of white dust that moves across the land. It blinds you and spreads the infection.\n\n§8Survive inside specific storm sizes to split minor vs major notes.";
             }
+            body += "\n\n§6Pressure over time:\n§7Later weeks hit harder than the first. Bears press harder near open storms and storm centers as days advance; staying exposed stacks danger.\n\n§6Shelter & reclaim:\n§7Solid cover slows infection buildup during storms. Fuel an emulsifier—its detox bubble blocks natural Maple Bear spawns inside the field so you can push corruption back.";
             body += "\n\n";
         }
 
@@ -6849,7 +6851,7 @@ export function showCodexBook(player, context) {
 §7Players in storm: §f${state.playersInStorm}
 
 §8=== Settings ===
-§7Intensity: §f${ctrl.intensity != null ? ctrl.intensity.toFixed(2) : "auto"} §7| Max storms: §f${ctrl.maxConcurrentStorms} §7| Secondary: §f${(ctrl.secondaryStormChance * 100).toFixed(0)}%`;
+§7Intensity: §f${ctrl.intensity != null ? ctrl.intensity.toFixed(2) : "auto"} §7| Concurrent max §f${ctrl.maxConcurrentStorms}§8/3 §7| Secondary: §f${(ctrl.secondaryStormChance * 100).toFixed(0)}%`;
 
         const form = new ActionFormData()
             .title("§6Storm")

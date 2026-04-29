@@ -56,6 +56,8 @@ import { handleMobConversion, handleStormMobConversion } from "./mb_mainMobConve
 import { runWorldPropertyMigrations } from "./mb_propertyMigration.js";
 import { registerBearTelemetryTick } from "./mb_bearTelemetry.js";
 import { initializeBearPopulationCull } from "./mb_bearPopulationCull.js";
+import { registerStormSecondsForSpawnPressure } from "./mb_exposureSpawnPressure.js";
+import { initializeInfectionDirectorWatch } from "./mb_infectionDirector.js";
 
 // NOTE: Debug and testing features have been commented out for playability
 // To re-enable testing features, uncomment the following sections:
@@ -1129,6 +1131,14 @@ function getGroundExposureState(playerId) {
     }
     return created;
 }
+
+registerStormSecondsForSpawnPressure((playerId) => {
+    try {
+        return getGroundExposureState(playerId).stormSeconds ?? 0;
+    } catch {
+        return 0;
+    }
+});
 
 /**
  * When an infected player coughs or exhales dust, others within ~3 blocks and infection LOS gain `ambientSeconds`
@@ -8204,6 +8214,7 @@ system.run(() => {
 });
 initializeAdaptivePerformanceWatch();
 initializeSpawnLoadScalerWatch();
+initializeInfectionDirectorWatch();
 registerSpawnLoadProbes({
     storm: getActiveStormCount,
     wallStress: getPerfWallStress01,

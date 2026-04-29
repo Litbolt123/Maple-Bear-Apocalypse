@@ -43,6 +43,17 @@ export const STORM_PARTICLE_PASS_THROUGH = new Set([
     "minecraft:leaf_litter"
 ]);
 
+/**
+ * Blocks that count as "open sky" for storm spawn checks — air column through forest canopy.
+ * Includes explicit {@link STORM_PARTICLE_PASS_THROUGH} plus any type id containing `leaves`
+ * (covers variants and future vanilla leaf blocks like dense dark oak forests).
+ */
+export function isStormSkyPassThroughBlock(typeId) {
+    if (!typeId || typeof typeId !== "string") return false;
+    if (STORM_PARTICLE_PASS_THROUGH.has(typeId)) return true;
+    return typeId.toLowerCase().includes("leaves");
+}
+
 /** Blocks major storms can destroy when big (leaves, grass, flowers, bamboo). */
 export const STORM_DESTRUCT_BLOCKS = new Set([
     "minecraft:oak_leaves", "minecraft:spruce_leaves", "minecraft:birch_leaves", "minecraft:jungle_leaves",

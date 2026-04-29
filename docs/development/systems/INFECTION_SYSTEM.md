@@ -136,7 +136,9 @@ Boats and some water cases skip counting (see `isStandingOnInfectedGround`).
 
 - **`groundSeconds`** / warnings / **`ambientSeconds`** (many **visible** dusted blocks in radius; line-of-sight from the player’s eye to each cached `mb:dusted_dirt`—see `countNearbyDustedDirtBlocks` + `mb_infectionExposureLos.js`)—see `AMBIENT_PRESSURE_RADIUS` and `AMBIENT_PRESSURE_THRESHOLD` in `main.js`.
 - **`biomeSeconds`** — pressure while in infected biome (slow).
-- **`stormSeconds`** — from `getStormExposureRates()` in `mb_snowStorm.js` (faster than current ground rates).
+- **`stormSeconds`** — from `getStormExposureRates()` in `mb_snowStorm.js` (faster than current ground rates). While exposure ramps, natural Maple Bear spawn **chance** near that player can increase modestly via **`mb_exposureSpawnPressure.js`** (Phase 1; capped); see [INFECTION_MOD_PHASE1_STORM_TOUCH_SPEC.md](../planning/INFECTION_MOD_PHASE1_STORM_TOUCH_SPEC.md). **Near active storm centers** (Overworld), spawn chance can gain an additional localized bump via **`getStormReservoirSpawnChanceMult`** (Phase 2; capped); see [INFECTION_MOD_PHASE2_RESERVOIR_SPEC.md](../planning/INFECTION_MOD_PHASE2_RESERVOIR_SPEC.md).
+- **Director tiers (Phase 3)** — `mb_infectionDirector.js` assigns **scout / pressure / surge / stormfront** from **day bands**, optionally **escalates one tier** when **`mb_spawnLoadMetrics`** reports high **`load01`**. Natural spawn gets a modest **chance** multiplier and, at higher tiers, **extra spawn attempts** (not rate-only). Brief action-bar toasts when **day bands** advance. See [INFECTION_MOD_PHASE3_DIRECTOR_SPEC.md](../planning/INFECTION_MOD_PHASE3_DIRECTOR_SPEC.md).
+- **Player onboarding (Phase 4)** — **Powdery Journal → Biomes → Infection Storm** adds plain-language **pressure**, **shelter**, and **emulsifier reclaim** lines once storms are discovered. See [INFECTION_MOD_PHASE4_SHIP_SPEC.md](../planning/INFECTION_MOD_PHASE4_SHIP_SPEC.md).
 
 Crossing infection thresholds calls **`applyMajorInfectionFromGround`**, then resets the relevant timers.
 
@@ -188,7 +190,7 @@ Bear kills trigger **`spreadDustedDirt`** (radius/chance scales with victim and 
 
 ### 8.5 Storms (`mb_snowStorm.js`)
 
-Storms move, place/replace **`mb:snow_layer`**, damage mobs, track player **`stormSeconds`** for infection, particles/audio. Start day gated by **difficulty** (`getStormStartDay`: easy 13, normal 8, hard 4).
+Storms move, place/replace **`mb:snow_layer`**, damage mobs, track player **`stormSeconds`** for infection, particles/audio. First storm-eligible **calendar day** depends on **`getStormStartDay()`**: **Hard** day **2**, **Normal** day **4**, **Easy** day **6**. **Minor-only through day 10**; **major** chance ramps from day **11** toward day **20**; **day 20+** new storms are **always major**. Cooldown between storms scales from a **shorter** base band toward **~1.5 min** by day 20. New storm centers require **open air** above the surface column (not cave ceilings). (`mb_snowStorm.js`).
 
 ---
 

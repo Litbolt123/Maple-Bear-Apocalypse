@@ -85,6 +85,12 @@ Start here to navigate the repo. **Session log:** [context summary.md](context%2
 | [QOL_AND_EDGE_CASES.md](development/planning/QOL_AND_EDGE_CASES.md) | QoL edge cases |
 | [QoL_AND_DEV_TOOLS_IDEAS.md](development/planning/QoL_AND_DEV_TOOLS_IDEAS.md) | QoL & dev-tool ideas |
 | [STORM_SHELTER_BRAINSTORM.md](development/planning/STORM_SHELTER_BRAINSTORM.md) | Shelter brainstorm |
+| [INFECTION_MOD_CONCEPT_AUDIT_2026-04-28.md](development/planning/INFECTION_MOD_CONCEPT_AUDIT_2026-04-28.md) | Infection-mod archetypes vs Maple Bear (concepts) |
+| [INFECTION_MOD_GAME_PLAN_2026-04-29.md](development/planning/INFECTION_MOD_GAME_PLAN_2026-04-29.md) | Phased implementation game plan (follows audit) |
+| [INFECTION_MOD_PHASE1_STORM_TOUCH_SPEC.md](development/planning/INFECTION_MOD_PHASE1_STORM_TOUCH_SPEC.md) | Phase 1: storm-touch spawn pressure (implementation spec / patch list) |
+| [INFECTION_MOD_PHASE2_RESERVOIR_SPEC.md](development/planning/INFECTION_MOD_PHASE2_RESERVOIR_SPEC.md) | Phase 2: storm-center reservoir spawn pressure (implementation spec) |
+| [INFECTION_MOD_PHASE3_DIRECTOR_SPEC.md](development/planning/INFECTION_MOD_PHASE3_DIRECTOR_SPEC.md) | Phase 3: infection director tiers + spawn-load escalation (implementation spec) |
+| [INFECTION_MOD_PHASE4_SHIP_SPEC.md](development/planning/INFECTION_MOD_PHASE4_SHIP_SPEC.md) | Phase 4: ship checklist — codex copy, changelog, balance/perf pointers |
 
 ### `development/tracking/` — Changelogs & sessions
 

@@ -6,8 +6,58 @@ Running log of **what changed and why** (gameplay, scripts, assets, docs). Used 
 
 ---
 
+**Date:** 2026-04-29 (sim players — debug heartbeat)
+
+- **`mb_simPlayers.js`:** Throttled `[SIM PLAYERS]` Content Log line **does not run** when **`mb_sim_players_count` is 0** (no ghost clients): avoids warning spam every 100t while sims stay enabled but idle. **`BP/`** + **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-04-29 (codex — storm hub concurrent max wording)
+
+- **`mb_codex.js`:** Storm hub **Settings** line no longer reads like a global “max one storm” — it shows **Concurrent max X/3** (configured limit vs hard cap). **`BP/`** + **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-04-29 (self-test Content Log text)
+
+- **`mb_devScriptSelfTest.js`:** Replaced broken UTF-8 / replacement-character sequences in Quick + Full harness strings with **ASCII-safe** punctuation (`|`, `->`, `:`, `ch x`, etc.) so **Content Log** no longer shows `` for day/infection, spawn load, dust storm before/after, and related lines. Mirrored **`BP/`** ↔ **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-04-29 (storms — canopy pass-through for spawn check)
+
+- **`mb_blockLists.js`:** **`isStormSkyPassThroughBlock(typeId)`** — **`STORM_PARTICLE_PASS_THROUGH`** ∪ any type id containing **`leaves`** so forest canopies (e.g. dark oak) don’t block **`isOutdoorStormColumn`** in **`mb_snowStorm.js`**. **`SNOW_STORM_DESIGN.md`**. Mirrored **`BP/`** ↔ **`BP - Dev/`** (`mb_blockLists.js`, `mb_snowStorm.js`).
+
+---
+
+**Date:** 2026-04-29 (storms — cooldown + outdoor spawn)
+
+- **`mb_snowStorm.js`:** Shorter **post-storm cooldown** (`BASE_COOLDOWN_*`, `COOLDOWN_DAY_20_TICKS`). **`tryPickOutdoorStormCenter`** / **`isOutdoorStormColumn`** — storm centers need ~**28** blocks of open column above surface so eyes **don’t** spawn on **cave ceilings**; **`startStorm`** returns false if no valid site / **`summonStorm`** retries angles. **`mb_codex.js`** storm blurb mentions open sky. **`SNOW_STORM_DESIGN.md`**. Mirrored **`BP/`** ↔ **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-04-29 (storms — difficulty days + codex)
+
+- **`mb_snowStorm.js`:** **`getStormStartDay()`** — **Hard** day **2**, **Normal** day **4**, **Easy** day **6**; retained higher **`BASE_START_CHANCE`** / **`CHANCE_SCALE_PER_DAY`**, **`STORM_MAJOR_UNLOCK_DAY`** (minors through day 10; majors day 11→19; day 20+ majors only). **`mb_codex.js`** **Biomes → Infection Storm** documents schedule + tiers; **`SNOW_STORM_DESIGN.md`**, **`INFECTION_SYSTEM.md`**, **`PLAYER_CHANGELOG.md`**, **`mb_playerChangelog.js`**. Mirrored **`BP/`** ↔ **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-04-29 (follow-up)
+
+- **Snow placement logging:** Completion line after a placement wave (`Placement: … placed, … attempts`) now logs **only** when **snow_storm → placement** (or **all**) debug is enabled — avoids Content Log spam when a wave places **0** snow (e.g. storm center far from loaded chunks / no valid surfaces near players). Same change **`BP/`** + **`BP - Dev/`**.
+
+---
+
 **Date:** 2026-04-29
 
+- **Storm work spreading (`mb_snowStorm.js`):** Active storm loop uses **`runInterval(1)`** with **`currentTick % 10`** phases **`0 / 2 / 4 / 6 / 8`** so intersections + players (phase 0), particles (2), snow placement with **`_snowPending`** batches (4), mob damage with per-storm cooldown + iteration cap (6), and major destruct slicing + break cap (8) never all run in one tick. **`spawnParticle`** preferred over **`runCommand`** for white dust particles. **`SNOW_STORM_DESIGN.md`** documents the model; **`BP/`** and **`BP - Dev/`** mirrored.
+
+- **Version alignment (beta.2):** `ADDON_VERSION_PRERELEASE` + `PLAYER_CHANGELOG_VERSION` + all four pack **manifest descriptions** stay on **v0.9.0-beta.2**; `AGENTS.md` checklist now calls that out; `BETA_SMOKE_CHECKLIST.md` has a **beta.2** row; `mb_buildConfig.js` comments note sync with changelog/manifests (`BP/` + `BP - Dev/`).
+- **Infection Phase 4 (ship checklist):** Journal **Biomes → Infection Storm** — onboarding paragraphs **Pressure over time** + **Shelter & reclaim** (emulsifier detox bubble blocks natural Maple Bear spawns in-field). **`PLAYER_CHANGELOG_VERSION`** → **0.9.0-beta.2**; `docs/PLAYER_CHANGELOG.md` + `mb_playerChangelog.js` What's new. Spec: [INFECTION_MOD_PHASE4_SHIP_SPEC.md](development/planning/INFECTION_MOD_PHASE4_SHIP_SPEC.md). Game plan Phase 4 marked shipped. Mirrored `BP/` ↔ `BP - Dev/` (`mb_codex.js`, `mb_playerChangelog.js`).
+- **Infection Phase 3 (director):** `mb_infectionDirector.js` — named tiers **scout / pressure / surge / stormfront** from **day bands** (1–7 / 8–14 / 15–19 / 20+); **`load01`** from `mb_spawnLoadMetrics` can escalate **one** tier (capped). Applies spawn **chance** multiplier + **extra attempts** at surge/stormfront in `mb_spawnController.js`. **`initializeInfectionDirectorWatch()`** in `main.js` — action-bar toast when **day band** advances (cooldown). Constants in `mb_balance.js`. Self-test **+1** module + director line in harness. Spec: [INFECTION_MOD_PHASE3_DIRECTOR_SPEC.md](development/planning/INFECTION_MOD_PHASE3_DIRECTOR_SPEC.md). Mirrored `BP/` ↔ `BP - Dev/`.
+- **Infection Phase 2 (storm-center reservoir):** `mb_snowStorm.js` — `getStormReservoirSpawnChanceMult` applies up to **+8%** natural spawn chance when near an active storm eye (Overworld), tunable via `STORM_RESERVOIR_*` in `mb_balance.js`; wired in `mb_spawnController.js`. Spec: [INFECTION_MOD_PHASE2_RESERVOIR_SPEC.md](development/planning/INFECTION_MOD_PHASE2_RESERVOIR_SPEC.md). Mirrored `BP/` ↔ `BP - Dev/`.
+- **Infection Phase 1 (storm-touch spawn):** `mb_exposureSpawnPressure.js` — storm exposure (`groundExposureState.stormSeconds`) scales natural Maple Bear spawn **chance** up to **×1.15** (`registerStormSecondsForSpawnPressure` in `main.js`, `getStormTouchSpawnChanceMult` in `mb_spawnController.js`). Self-test imports +1. Mirrored `BP/` ↔ `BP - Dev/`. [Spec](development/planning/INFECTION_MOD_PHASE1_STORM_TOUCH_SPEC.md).
+- **Infection roadmap + Phase 0 (docs):** [game plan](development/planning/INFECTION_MOD_GAME_PLAN_2026-04-29.md) (phased, after [concept audit](development/planning/INFECTION_MOD_CONCEPT_AUDIT_2026-04-28.md)); [Phase 0](development/planning/INFECTION_MOD_PHASE0_2026-04-29.md) — pitch, provisional gates, engine touchpoints, Phase 1 option reminder. Indexed in `docs/README.md`. No `BP/scripts` changes.
 - **Sim players Content Log debug:** world property `mb_sim_players_debug` + Journal **Simulated players → Content log debug** (`mb_simPlayers.js`). When dev pack + sims enabled, throttled `console.warn` every 100t: `[SIM PLAYERS]` real/sim/merged counts, full stress, orbit radius, anchor→sim0 horizontal distance. **Debug Menu → Simulated players** mirrors the same toggle (`mb_codex.js`). Mirrored `BP/` ↔ `BP - Dev/`.
 - **Sim ghosts vs unloaded chunks:** `mb_spawnController.js` skips simulated players on a dimension tick when the ghost’s feet are not in a loaded chunk (`getBlockSafe`); `attemptSpawnType` suppresses `[SPAWN ERROR]` for sims on `LocationInUnloadedChunkError`. Mirrored `BP/` ↔ `BP - Dev/`.
 - **`getAllPlayersIncludingSim()`:** added in `mb_simPlayers.js` — canonical merge of `world.getAllPlayers()` plus ghost sims when `mb_sim_players` is on (same rules as `getCachedPlayers()`). Exported `isSimulatedPlayer(p)` for real-only branches. `mb_sharedCache.js` now calls this helper; spawn stress merge delegates to it when full stress is enabled. Mirrored `BP/` ↔ `BP - Dev/`.
@@ -17,7 +67,7 @@ Running log of **what changed and why** (gameplay, scripts, assets, docs). Used 
 
 ---
 
-- **Script self-test:** After syncing the pack, Content Log shows **41** `BP` dynamic-import files (includes `mb_bearPopulationCull.js`) and **All 41 modules import OK**; **Full** harness still **21/21** spawns, **0** fails.
+- **Script self-test:** After syncing the pack, Content Log shows **44** `BP` dynamic-import files (includes `mb_infectionDirector.js`) and **All 44 modules import OK**; **Full** harness still **21/21** spawns, **0** fails.
 
 **Date:** 2026-04-28
 

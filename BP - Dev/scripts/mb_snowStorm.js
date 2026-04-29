@@ -8,9 +8,10 @@ import { getAddonDifficultyState, getWorldPropertyChunked, setWorldPropertyChunk
 import { getCurrentDay } from "./mb_dayTracker.js";
 import { isScriptEnabled, SCRIPT_IDS, isDustStormsEnabled } from "./mb_scriptToggles.js";
 import { getPlayerSoundVolume, isDebugEnabled, getStormParticleDensity, markCodex } from "./mb_codex.js";
-import { SNOW_REPLACEABLE_BLOCKS, SNOW_NEVER_REPLACE_BLOCKS, SNOW_TWO_BLOCK_PLANTS, STORM_PARTICLE_PASS_THROUGH, STORM_DESTRUCT_BLOCKS, STORM_DESTRUCT_GLASS, STORM_DESTRUCT_GLASS_EXCLUDE } from "./mb_blockLists.js";
+import { SNOW_REPLACEABLE_BLOCKS, SNOW_NEVER_REPLACE_BLOCKS, SNOW_TWO_BLOCK_PLANTS, STORM_PARTICLE_PASS_THROUGH, STORM_DESTRUCT_BLOCKS, STORM_DESTRUCT_GLASS, STORM_DESTRUCT_GLASS_EXCLUDE, isStormSkyPassThroughBlock } from "./mb_blockLists.js";
 import { getStormWorkIntervalMultiplier } from "./mb_performanceProfile.js";
 import { getStormStartChanceCampScale } from "./mb_spawnMobilityCamp.js";
+import { STORM_RESERVOIR_INNER_RADIUS_FRACTION, STORM_RESERVOIR_SPAWN_CHANCE_MAX_BUMP } from "./mb_balance.js";
 
 /** Stretch storm work intervals when lag profile / player count / dev mult asks for lighter load. */
 function scaledStormTicks(baseTicks) {
@@ -94,16 +95,21 @@ const BASE_MINOR_DURATION_MIN_TICKS = 60 * 20; // 1 minute
 const BASE_MINOR_DURATION_MAX_TICKS = 240 * 20; // 4 minutes
 const BASE_MAJOR_DURATION_MIN_TICKS = 180 * 20; // 3 minutes
 const BASE_MAJOR_DURATION_MAX_TICKS = 600 * 20; // 10 minutes
-const BASE_COOLDOWN_MIN_TICKS = 300 * 20; // 5 minutes (start)
-const BASE_COOLDOWN_MAX_TICKS = 600 * 20; // 10 minutes (start)
-const COOLDOWN_DAY_20_TICKS = 180 * 20; // 3 minutes (by day 20)
-const BASE_START_CHANCE = 0.001; // 0.1% per check (very small at first)
-const BASE_MAJOR_CHANCE_DAY_20 = 0.05; // 5% on day 20
+const BASE_COOLDOWN_MIN_TICKS = 120 * 20; // 2 minutes (start; shorter gap between storms)
+const BASE_COOLDOWN_MAX_TICKS = 280 * 20; // ~4.7 minutes (start)
+const COOLDOWN_DAY_20_TICKS = 90 * 20; // 1.5 minutes by day 20
+/** Per storm check when no storm active: probability a new storm starts (see STORM_CHECK_INTERVAL). */
+const BASE_START_CHANCE = 0.0035;
+/** Extra start chance per day after first eligible day (additive each calendar day). */
+const CHANCE_SCALE_PER_DAY = 0.00035;
+/** Major-vs-minor roll approaches this weight by day 20 (before day 20 always-major rule). */
+const BASE_MAJOR_CHANCE_DAY_20 = 0.12;
 
-// Day scaling factors
+/** No major storms while `currentDay <=` this (minor-only tier); majors ramp from the next day through day 19. */
+const STORM_MAJOR_UNLOCK_DAY = 10;
+
 const DURATION_SCALE_PER_DAY = 0.02; // +2% per day to min duration
 const COOLDOWN_DAY_CAP = 20; // By day 20, cooldown is 3 min; interpolates from start day
-const CHANCE_SCALE_PER_DAY = 0.0001; // +0.01% per day to start chance
 
 // Check intervals
 const STORM_CHECK_INTERVAL = 100; // Check every 5 seconds (100 ticks)
@@ -186,15 +192,28 @@ const STORM_NAUSEA_INTERVAL = 200; // Check every 10 seconds
 const STORM_NAUSEA_CHANCE = 0.1;
 const STORM_NAUSEA_DURATION_TICKS = 200; // 10 seconds
 
+/** Spread heavy storm work across ticks: only these `currentTick % 10` phases run expensive buckets (see main loop). */
+const STORM_WORK_PHASE_BASE = 10;
+/** Major destruct: column samples per phase-8 tick (full pass was DESTRUCT_SAMPLES). */
+const STORM_DESTRUCT_SAMPLES_PER_TICK = 10;
+/** Major destruct: max block breaks per storm per phase-8 tick. */
+const STORM_DESTRUCT_MAX_BREAKS_PER_TICK = 28;
+/** Snow placement: max inner-loop attempts per storm per phase-4 tick (spread across ticks until target met). */
+const STORM_SNOW_MAX_ATTEMPTS_PER_TICK = 8;
+/** Particle budget per storm per phase-2 tick (spawnStormParticles caps iterations). */
+const STORM_PARTICLE_MAX_PER_STORM_PER_TICK = 8;
+/** Mob storm damage: max entities processed per storm per phase-6 tick after filtering. */
+const STORM_MOB_DAMAGE_MAX_MOBS_PER_TICK = 48;
+
 // ============================================================================
 // DIFFICULTY-BASED DAY GATES
 // ============================================================================
 
 function getStormStartDay() {
     const difficulty = getAddonDifficultyState();
-    if (difficulty.value === -1) return 13; // Easy: Day 13
-    if (difficulty.value === 1) return 4; // Hard: Day 4
-    return 8; // Normal: Day 8
+    if (difficulty.value === 1) return 2; // Hard
+    if (difficulty.value === -1) return 6; // Easy
+    return 4; // Normal
 }
 
 // ============================================================================
@@ -212,7 +231,7 @@ function getScaledDuration(minBase, maxBase, currentDay, startDay) {
 
 function getScaledCooldown(minBase, maxBase, currentDay, startDay) {
     if (currentDay < startDay) return { min: minBase, max: maxBase };
-    // Interpolate from 5–10 min (start) down to 3 min by day 20
+    // Interpolate from base band down to COOLDOWN_DAY_20_TICKS by day 20
     const daysToCap = COOLDOWN_DAY_CAP - startDay;
     const progress = daysToCap > 0
         ? Math.min(1, (currentDay - startDay) / daysToCap)
@@ -229,23 +248,21 @@ function getScaledStartChance(currentDay, startDay) {
 }
 
 function getScaledMajorChance(currentDay, startDay) {
-    // Major storms can occur before day 20, but with low chance that scales up
-    // After day 20, only major storms occur (100% chance when storm starts)
-    if (currentDay < startDay) return 0; // Too early for any storms
-    
-    // Before day 20: low chance that increases as day approaches 20
+    if (currentDay < startDay) return 0;
+
+    // Minor-only era: exemplify minors early, then majors after day 10
+    if (currentDay <= STORM_MAJOR_UNLOCK_DAY) return 0;
+
+    // Days (STORM_MAJOR_UNLOCK_DAY + 1) .. 19: ramp toward BASE_MAJOR_CHANCE_DAY_20
     if (currentDay < 20) {
-        const daysUntil20 = 20 - currentDay;
-        const daysFromStart = currentDay - startDay;
-        const totalDaysRange = 20 - startDay;
-        // Scale from 0% at start day to BASE_MAJOR_CHANCE_DAY_20 at day 20
-        const progress = totalDaysRange > 0 ? daysFromStart / totalDaysRange : 0;
-        return BASE_MAJOR_CHANCE_DAY_20 * progress; // Linear scaling from 0 to BASE_MAJOR_CHANCE_DAY_20
+        const span = 20 - STORM_MAJOR_UNLOCK_DAY;
+        const progress = span > 0 ? (currentDay - STORM_MAJOR_UNLOCK_DAY) / span : 0;
+        return BASE_MAJOR_CHANCE_DAY_20 * Math.min(1, Math.max(0, progress));
     }
-    
-    // After day 20: only major storms (return high chance, but checkStormStart will force major)
-    const daysSinceMajor = currentDay - 20;
-    return Math.min(0.5, BASE_MAJOR_CHANCE_DAY_20 + (daysSinceMajor * 0.01)); // +1% per day, cap at 50%
+
+    // Day 20+: checkStormStart forces major; keep tail for any caller reading params
+    const daysSince20 = currentDay - 20;
+    return Math.min(0.5, BASE_MAJOR_CHANCE_DAY_20 + daysSince20 * 0.01);
 }
 
 function getScaledPlacementCount(baseCount, currentDay, startDay) {
@@ -395,6 +412,59 @@ function isEntityShelteredFromStorm(entity) {
 // ============================================================================
 
 const WORLD_HEIGHT_OVERWORLD = 320; // Bedrock overworld max Y
+
+/** Minimum contiguous air/light pass-through column above surface solid so storms do not anchor on cave ceilings / enclosed gaps. */
+const STORM_MIN_OPEN_AIR_ABOVE_SURFACE = 28;
+
+/**
+ * True if (x,z) column has enough open space above the terrain solid for an outdoor storm eye (not a cave).
+ */
+function isOutdoorStormColumn(dimension, x, surfaceY, z) {
+    try {
+        let cleared = 0;
+        for (let y = surfaceY + 1; y <= WORLD_HEIGHT_OVERWORLD && cleared < STORM_MIN_OPEN_AIR_ABOVE_SURFACE; y++) {
+            const b = dimension.getBlock({ x, y, z });
+            if (!b) return false;
+            if (b.isAir || b.isLiquid || isStormSkyPassThroughBlock(b.typeId)) {
+                cleared++;
+            } else {
+                return false;
+            }
+        }
+        return cleared >= STORM_MIN_OPEN_AIR_ABOVE_SURFACE;
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * @returns {{ centerX: number, centerZ: number, driftAngle: number } | null}
+ */
+function tryPickOutdoorStormCenter(overworld, players, opts = {}) {
+    const minD = opts.minDist ?? STORM_SPAWN_MIN_DISTANCE;
+    const maxD = opts.maxDist ?? STORM_SPAWN_MAX_DISTANCE;
+    const maxAttempts = opts.maxAttempts ?? 18;
+    if (!overworld || !players?.length) return null;
+    const dSpan = Math.max(0, maxD - minD);
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        const p = players[Math.floor(Math.random() * players.length)];
+        if (!p?.isValid) continue;
+        const px = p.location.x;
+        const pz = p.location.z;
+        const dist = minD + (dSpan > 0 ? Math.random() * dSpan : 0);
+        const angle = Math.random() * Math.PI * 2;
+        const centerX = px + Math.cos(angle) * dist;
+        const centerZ = pz + Math.sin(angle) * dist;
+        const fx = Math.floor(centerX);
+        const fz = Math.floor(centerZ);
+        const surface = findSurfaceBlock(overworld, fx, fz);
+        if (!surface) continue;
+        if (!isOutdoorStormColumn(overworld, fx, surface.y, fz)) continue;
+        const driftAngle = Math.atan2(pz - centerZ, px - centerX);
+        return { centerX, centerZ, driftAngle };
+    }
+    return null;
+}
 
 /**
  * Find world surface at x,z - highest solid block (stays above ground, not underground)
@@ -625,7 +695,7 @@ function getParticleDensity(dimension) {
 }
 
 /**
- * Spawn a single particle (custom white dust only) - runCommand or spawnParticle fallback
+ * Spawn a single particle (custom white dust only) — prefers spawnParticle; runCommand fallback
  * @param {Dimension} dimension 
  * @param {{x: number, y: number, z: number}} loc 
  * @param {boolean} debugLog 
@@ -641,13 +711,13 @@ function spawnOneParticle(dimension, loc, debugLog = false) {
     }
     const x = Math.floor(loc.x), y = Math.floor(loc.y), z = Math.floor(loc.z);
     try {
-        dimension.runCommand(`particle mb:white_dust_particle ${x} ${y} ${z}`);
+        dimension.spawnParticle("mb:white_dust_particle", { x: loc.x, y: loc.y, z: loc.z });
         return true;
-    } catch (err) {
+    } catch {
         try {
-            dimension.spawnParticle("mb:white_dust_particle", { x: loc.x, y: loc.y, z: loc.z });
+            dimension.runCommand(`particle mb:white_dust_particle ${x} ${y} ${z}`);
             return true;
-        } catch (e) {
+        } catch (err) {
             if (debugLog) console.warn(`[SNOW STORM] Particle FAILED at (${x},${y},${z}):`, String(err?.message ?? err));
             return false;
         }
@@ -661,19 +731,21 @@ function spawnOneParticle(dimension, loc, debugLog = false) {
  * @param {{x: number, y: number, z: number}} center Storm center
  * @param {number} density 
  * @param {number} radius Current storm radius
+ * @param {number} [maxSpawns] Cap iterations (spread across ticks); default full pass.
  */
-function spawnStormParticles(dimension, center, density, radius) {
+function spawnStormParticles(dimension, center, density, radius, maxSpawns = Infinity) {
     lastParticleSpawned = 0;
     lastParticleSkipped = 0;
     const dbgParts = isDebugEnabled("snow_storm", "particles") || isDebugEnabled("snow_storm", "all");
 
     try {
         const centerCount = Math.min(12, Math.max(2, Math.floor(density * (radius / 40))));
+        const loopMax = Math.min(centerCount * 2, maxSpawns);
         let spawned = 0;
         let skipped = 0;
         let firstFailLogged = false;
 
-        for (let i = 0; i < centerCount * 2; i++) {
+        for (let i = 0; i < loopMax; i++) {
             const r = radius * Math.sqrt(Math.random());
             const angle = Math.random() * Math.PI * 2;
             const px = center.x + Math.cos(angle) * r;
@@ -722,20 +794,34 @@ function startStorm(type, initialCenter = null) {
     let centerX = 0, centerZ = 0, driftAngle = Math.random() * Math.PI * 2;
 
     if (initialCenter && typeof initialCenter.x === "number" && typeof initialCenter.z === "number") {
-        centerX = Math.floor(initialCenter.x);
-        centerZ = Math.floor(initialCenter.z);
+        centerX = initialCenter.x;
+        centerZ = initialCenter.z;
         if (initialCenter.targetX != null && initialCenter.targetZ != null) {
             driftAngle = Math.atan2(initialCenter.targetZ - centerZ, initialCenter.targetX - centerX);
         }
-    } else if (players.length > 0) {
-        const p = players[Math.floor(Math.random() * players.length)];
-        const px = p.location.x;
-        const pz = p.location.z;
-        const dist = STORM_SPAWN_MIN_DISTANCE + Math.random() * (STORM_SPAWN_MAX_DISTANCE - STORM_SPAWN_MIN_DISTANCE);
-        const angle = Math.random() * Math.PI * 2;
-        centerX = px + Math.cos(angle) * dist;
-        centerZ = pz + Math.sin(angle) * dist;
-        driftAngle = Math.atan2(pz - centerZ, px - centerX);
+        if (!overworld) return false;
+        const fx = Math.floor(centerX);
+        const fz = Math.floor(centerZ);
+        const surfInit = findSurfaceBlock(overworld, fx, fz);
+        if (!surfInit || !isOutdoorStormColumn(overworld, fx, surfInit.y, fz)) {
+            if (isDebugEnabled("snow_storm", "general") || isDebugEnabled("snow_storm", "all")) {
+                console.warn("[SNOW STORM] Storm center rejected (enclosed / cave column)");
+            }
+            return false;
+        }
+    } else if (players.length > 0 && overworld) {
+        const picked = tryPickOutdoorStormCenter(overworld, players);
+        if (!picked) {
+            if (isDebugEnabled("snow_storm", "general") || isDebugEnabled("snow_storm", "all")) {
+                console.warn("[SNOW STORM] No outdoor storm site found — storm not started");
+            }
+            return false;
+        }
+        centerX = picked.centerX;
+        centerZ = picked.centerZ;
+        driftAngle = picked.driftAngle;
+    } else {
+        return false;
     }
 
     const surfaceAtCenter = overworld ? findSurfaceBlock(overworld, Math.floor(centerX), Math.floor(centerZ)) : null;
@@ -775,6 +861,7 @@ function startStorm(type, initialCenter = null) {
     if (isDebugEnabled("snow_storm", "general") || isDebugEnabled("snow_storm", "all")) {
         console.warn(`[SNOW STORM] ${type.toUpperCase()} storm started! (${storms.length} active) Duration: ${Math.floor(duration / 20)}s at (${centerX}, ${centerZ})`);
     }
+    return true;
 }
 
 function driftStormCenter(overworld, storm) {
@@ -1044,12 +1131,15 @@ system.runInterval(() => {
     }
 }, STORM_CHECK_INTERVAL);
 
-// Particle and placement loop (during active storms)
+// Phased storm work (particles, snow, mob damage, destruct) — run every tick; heavy buckets only on tick % 10 ∈ {0,2,4,6,8}
 system.runInterval(() => {
     try {
         if (storms.length === 0 || !isScriptEnabled(SCRIPT_IDS.snowStorm) || !isDustStormsEnabled()) return;
 
         const currentTick = system.currentTick;
+        const phase = ((currentTick % STORM_WORK_PHASE_BASE) + STORM_WORK_PHASE_BASE) % STORM_WORK_PHASE_BASE;
+        if (![0, 2, 4, 6, 8].includes(phase)) return;
+
         const overworld = world.getDimension("overworld");
         if (!overworld) return;
 
@@ -1057,9 +1147,10 @@ system.runInterval(() => {
         const currentDay = getCurrentDay();
         const startDay = getStormStartDay();
 
-        updateStormIntersections(currentTick);
+        if (phase === 0) {
+            updateStormIntersections(currentTick);
+        }
 
-        // Precompute per-storm: duration, progress, radius, center (skip disabled)
         const stormData = [];
         for (const storm of storms) {
             if (!storm.enabled) continue;
@@ -1069,259 +1160,323 @@ system.runInterval(() => {
             const sizeMultiplier = getStormSizeMultiplier(progress);
             const baseRadius = storm.type === "major" ? BASE_STORM_RADIUS_MAJOR : BASE_STORM_RADIUS_MINOR;
             const currentRadius = baseRadius * sizeMultiplier * storm.intensity;
-            if (currentTick - storm.lastMoveTick >= scaledStormTicks(STORM_MOVE_INTERVAL)) {
-                storm.lastMoveTick = currentTick;
-                driftStormCenter(overworld, storm);
+
+            if (phase === 0) {
+                if (currentTick - storm.lastMoveTick >= scaledStormTicks(STORM_MOVE_INTERVAL)) {
+                    storm.lastMoveTick = currentTick;
+                    driftStormCenter(overworld, storm);
+                }
+                const surfaceAtCenter = findSurfaceBlock(overworld, Math.floor(storm.centerX), Math.floor(storm.centerZ));
+                const targetSurfaceY = surfaceAtCenter ? surfaceAtCenter.y + 2 : 64;
+                storm.centerY = storm.centerY * 0.85 + targetSurfaceY * 0.15;
             }
-            const surfaceAtCenter = findSurfaceBlock(overworld, Math.floor(storm.centerX), Math.floor(storm.centerZ));
-            const targetSurfaceY = surfaceAtCenter ? surfaceAtCenter.y + 2 : 64;
-            storm.centerY = storm.centerY * 0.85 + targetSurfaceY * 0.15;
+
             stormData.push({ storm, duration, progress, currentRadius });
         }
-        syncPrimaryStorm();
 
-        // Track which players are in storm (any storm)
-        const wasInStorm = new Set(playersInStorm);
-        const nowInStorm = new Set();
-        playersInStorm.clear();
-        for (const player of players) {
-            if (!player?.isValid) continue;
-            const gameMode = player.getGameMode?.();
-            if (gameMode === "creative" || gameMode === "spectator") continue;
+        if (phase === 0) {
+            syncPrimaryStorm();
 
-            let inAnyStorm = false;
-            let stormTypeForCodex = null;
-            for (const { storm, currentRadius } of stormData) {
-                const dx = player.location.x - storm.centerX;
-                const dz = player.location.z - storm.centerZ;
-                const distSq = dx * dx + dz * dz;
-                if (distSq <= currentRadius * currentRadius) {
-                    inAnyStorm = true;
-                    stormTypeForCodex = storm.type;
-                    break;
-                }
-            }
-            if (inAnyStorm) {
-                const sheltered = isEntityShelteredFromStorm(player);
-                if (!sheltered) {
-                    nowInStorm.add(player.id);
-                    playersInStorm.add(player.id);
-                    try {
-                        markCodex(player, "biomes.stormSeen");
-                        if (stormTypeForCodex === "minor") markCodex(player, "biomes.stormMinorSeen");
-                        if (stormTypeForCodex === "major") markCodex(player, "biomes.stormMajorSeen");
-                    } catch { }
-                    try {
-                        player.addEffect("blindness", BLINDNESS_DURATION_TICKS, { amplifier: 0, showParticles: false });
-                    } catch { }
-                    const lastSound = lastStormSoundTickByPlayer.get(player.id) ?? 0;
-                    if (currentTick - lastSound >= scaledStormTicks(STORM_SOUND_INTERVAL)) {
-                        try {
-                            const vol = (getPlayerSoundVolume?.(player) ?? 1) * STORM_SOUND_VOLUME;
-                            const soundIdx = Math.floor(Math.random() * STORM_AMBIENCE_SOUNDS.length);
-                            player.playSound(STORM_AMBIENCE_SOUNDS[soundIdx], { volume: vol, pitch: 0.9 });
-                            lastStormSoundTickByPlayer.set(player.id, currentTick);
-                        } catch { }
-                    }
-                    const lastNausea = lastStormNauseaTickByPlayer.get(player.id) ?? 0;
-                    if (currentTick - lastNausea >= scaledStormTicks(STORM_NAUSEA_INTERVAL) && Math.random() < STORM_NAUSEA_CHANCE) {
-                        try {
-                            player.addEffect("minecraft:nausea", STORM_NAUSEA_DURATION_TICKS, { amplifier: 0 });
-                            lastStormNauseaTickByPlayer.set(player.id, currentTick);
-                        } catch { }
-                    }
-                }
-            } else {
-                // Nearby but outside storm: play distant ambience (quieter)
-                let nearAny = false;
+            const wasInStorm = new Set(playersInStorm);
+            const nowInStorm = new Set();
+            playersInStorm.clear();
+            for (const player of players) {
+                if (!player?.isValid) continue;
+                const gameMode = player.getGameMode?.();
+                if (gameMode === "creative" || gameMode === "spectator") continue;
+
+                let inAnyStorm = false;
+                let stormTypeForCodex = null;
                 for (const { storm, currentRadius } of stormData) {
                     const dx = player.location.x - storm.centerX;
                     const dz = player.location.z - storm.centerZ;
                     const distSq = dx * dx + dz * dz;
-                    const nearbyRadius = currentRadius * STORM_NEARBY_RADIUS_MULT;
-                    if (distSq <= nearbyRadius * nearbyRadius) {
-                        nearAny = true;
+                    if (distSq <= currentRadius * currentRadius) {
+                        inAnyStorm = true;
+                        stormTypeForCodex = storm.type;
                         break;
                     }
                 }
-                const lastNearbySound = lastStormSoundTickByPlayer.get(player.id) ?? 0;
-                if (nearAny && currentTick - lastNearbySound >= scaledStormTicks(STORM_SOUND_INTERVAL)) {
+                if (inAnyStorm) {
+                    const sheltered = isEntityShelteredFromStorm(player);
+                    if (!sheltered) {
+                        nowInStorm.add(player.id);
+                        playersInStorm.add(player.id);
+                        try {
+                            markCodex(player, "biomes.stormSeen");
+                            if (stormTypeForCodex === "minor") markCodex(player, "biomes.stormMinorSeen");
+                            if (stormTypeForCodex === "major") markCodex(player, "biomes.stormMajorSeen");
+                        } catch { }
+                        try {
+                            player.addEffect("blindness", BLINDNESS_DURATION_TICKS, { amplifier: 0, showParticles: false });
+                        } catch { }
+                        const lastSound = lastStormSoundTickByPlayer.get(player.id) ?? 0;
+                        if (currentTick - lastSound >= scaledStormTicks(STORM_SOUND_INTERVAL)) {
+                            try {
+                                const vol = (getPlayerSoundVolume?.(player) ?? 1) * STORM_SOUND_VOLUME;
+                                const soundIdx = Math.floor(Math.random() * STORM_AMBIENCE_SOUNDS.length);
+                                player.playSound(STORM_AMBIENCE_SOUNDS[soundIdx], { volume: vol, pitch: 0.9 });
+                                lastStormSoundTickByPlayer.set(player.id, currentTick);
+                            } catch { }
+                        }
+                        const lastNausea = lastStormNauseaTickByPlayer.get(player.id) ?? 0;
+                        if (currentTick - lastNausea >= scaledStormTicks(STORM_NAUSEA_INTERVAL) && Math.random() < STORM_NAUSEA_CHANCE) {
+                            try {
+                                player.addEffect("minecraft:nausea", STORM_NAUSEA_DURATION_TICKS, { amplifier: 0 });
+                                lastStormNauseaTickByPlayer.set(player.id, currentTick);
+                            } catch { }
+                        }
+                    }
+                } else {
+                    let nearAny = false;
+                    for (const { storm, currentRadius } of stormData) {
+                        const dx = player.location.x - storm.centerX;
+                        const dz = player.location.z - storm.centerZ;
+                        const distSq = dx * dx + dz * dz;
+                        const nearbyRadius = currentRadius * STORM_NEARBY_RADIUS_MULT;
+                        if (distSq <= nearbyRadius * nearbyRadius) {
+                            nearAny = true;
+                            break;
+                        }
+                    }
+                    const lastNearbySound = lastStormSoundTickByPlayer.get(player.id) ?? 0;
+                    if (nearAny && currentTick - lastNearbySound >= scaledStormTicks(STORM_SOUND_INTERVAL)) {
+                        try {
+                            const vol = (getPlayerSoundVolume?.(player) ?? 1) * STORM_NEARBY_VOLUME;
+                            const soundIdx = Math.floor(Math.random() * STORM_AMBIENCE_SOUNDS.length);
+                            player.playSound(STORM_AMBIENCE_SOUNDS[soundIdx], { volume: vol, pitch: 0.85 });
+                            lastStormSoundTickByPlayer.set(player.id, currentTick);
+                        } catch { }
+                    }
+                }
+            }
+            for (const pid of wasInStorm) {
+                if (!nowInStorm.has(pid)) {
                     try {
-                        const vol = (getPlayerSoundVolume?.(player) ?? 1) * STORM_NEARBY_VOLUME;
-                        const soundIdx = Math.floor(Math.random() * STORM_AMBIENCE_SOUNDS.length);
-                        player.playSound(STORM_AMBIENCE_SOUNDS[soundIdx], { volume: vol, pitch: 0.85 });
-                        lastStormSoundTickByPlayer.set(player.id, currentTick);
+                        const p = players.find(pl => pl?.id === pid);
+                        if (p?.isValid) p.removeEffect("blindness");
                     } catch { }
                 }
             }
-        }
-        // Remove blindness immediately when player leaves storm
-        for (const pid of wasInStorm) {
-            if (!nowInStorm.has(pid)) {
-                try {
-                    const p = players.find(pl => pl?.id === pid);
-                    if (p?.isValid) p.removeEffect("blindness");
-                } catch { }
+
+            const dbgGen = isDebugEnabled("snow_storm", "general") || isDebugEnabled("snow_storm", "all");
+            if (dbgGen && currentTick % 100 === 50) {
+                const parts = storms.map((s, i) => {
+                    const ticksLeft = Math.max(0, s.endTick - currentTick);
+                    const prog = Math.min(1, Math.max(0, (currentTick - s.startTick) / (s.endTick - s.startTick)));
+                    const mult = getStormSizeMultiplier(prog);
+                    const r = (s.type === "major" ? BASE_STORM_RADIUS_MAJOR : BASE_STORM_RADIUS_MINOR) * mult * s.intensity;
+                    return `#${i + 1} ${s.type} (${Math.floor(s.centerX)},${Math.floor(s.centerZ)}) r${Math.floor(r)} ${Math.floor(ticksLeft / 20)}s`;
+                });
+                console.warn(`[SNOW STORM] ${storms.length} storm(s): ${parts.join(" | ")} | players: ${playersInStorm.size} | mobs: ${mobsInStormCount} | snow: ${totalSnowPlacedThisStorm}`);
             }
+            return;
         }
 
-        // Spawn particles for each storm
-        for (const { storm, currentRadius } of stormData) {
-            const stormCenter = { x: storm.centerX, y: storm.centerY, z: storm.centerZ };
-            const density = Math.max(1, Math.floor(getParticleDensity(overworld) * storm.intensity / Math.sqrt(getStormWorkIntervalMultiplier())));
-            spawnStormParticles(overworld, stormCenter, density, currentRadius);
+        if (phase === 2) {
+            for (const { storm, currentRadius } of stormData) {
+                const stormCenter = { x: storm.centerX, y: storm.centerY, z: storm.centerZ };
+                const density = Math.max(1, Math.floor(getParticleDensity(overworld) * storm.intensity / Math.sqrt(getStormWorkIntervalMultiplier())));
+                spawnStormParticles(overworld, stormCenter, density, currentRadius, STORM_PARTICLE_MAX_PER_STORM_PER_TICK);
+            }
+            return;
         }
 
-        // Place snow for each storm (only near players = loaded chunks)
-        const PLACEMENT_NEAR_PLAYER = 96;
-        const dbgPlace = isDebugEnabled("snow_storm", "placement") || isDebugEnabled("snow_storm", "all");
-        for (const { storm, currentRadius, progress } of stormData) {
-            const placeInterval = scaledStormTicks(storm.type === "major" ? MAJOR_PLACEMENT_INTERVAL : PLACEMENT_INTERVAL);
-            if (currentTick % placeInterval !== 0 || currentRadius < 5) continue;
-            const basePlacementCount = getScaledPlacementCount(
-                storm.type === "major" ? MAJOR_PLACEMENTS_PER_PASS : MINOR_PLACEMENTS_PER_PASS,
-                currentDay,
-                startDay
-            );
-            const placementCount = Math.max(1, Math.floor(basePlacementCount * storm.intensity));
-            const attemptMultiplier = storm.type === "major" ? 5 : 3;
-            const placeFunc = storm.type === "major" ? tryPlaceSnowLayerMajor : tryPlaceSnowLayerMinor;
-            let placed = 0;
-            let attempts = 0;
-            let noSurface = 0;
-            let placeFailed = 0;
-
-            for (let i = 0; i < placementCount * attemptMultiplier && placed < placementCount; i++) {
-                attempts++;
-                const angle = Math.random() * Math.PI * 2;
-                const distance = Math.random() * currentRadius * 0.9;
-                const x = Math.floor(storm.centerX + Math.cos(angle) * distance);
-                const z = Math.floor(storm.centerZ + Math.sin(angle) * distance);
-
-                const nearPlayer = players.some(p => p?.isValid && Math.hypot(p.location.x - x, p.location.z - z) <= PLACEMENT_NEAR_PLAYER);
-                if (!nearPlayer) continue;
-
-                const surface = findSurfaceBlock(overworld, x, z);
-                if (!surface) {
-                    noSurface++;
+        if (phase === 4) {
+            const PLACEMENT_NEAR_PLAYER = 96;
+            const dbgPlace = isDebugEnabled("snow_storm", "placement") || isDebugEnabled("snow_storm", "all");
+            for (const { storm, currentRadius } of stormData) {
+                const placeInterval = scaledStormTicks(storm.type === "major" ? MAJOR_PLACEMENT_INTERVAL : PLACEMENT_INTERVAL);
+                if (currentRadius < 5) {
+                    storm._snowPending = null;
                     continue;
                 }
-                if (placeFunc(overworld, surface.x, surface.y, surface.z)) {
-                    placed++;
-                    totalSnowPlacedThisStorm++;
-                    if (dbgPlace) console.warn(`[SNOW STORM] Placed snow at (${surface.x}, ${surface.y + 1}, ${surface.z})`);
-                } else {
-                    placeFailed++;
+
+                const lastPlace = storm._snowLastPlaceTick ?? -1e9;
+                if (!storm._snowPending && currentTick - lastPlace >= placeInterval) {
+                    storm._snowLastPlaceTick = currentTick;
+                    const basePlacementCount = getScaledPlacementCount(
+                        storm.type === "major" ? MAJOR_PLACEMENTS_PER_PASS : MINOR_PLACEMENTS_PER_PASS,
+                        currentDay,
+                        startDay
+                    );
+                    const placementCount = Math.max(1, Math.floor(basePlacementCount * storm.intensity));
+                    const attemptMultiplier = storm.type === "major" ? 5 : 3;
+                    storm._snowPending = {
+                        target: placementCount,
+                        placed: 0,
+                        iter: 0,
+                        maxAttempts: placementCount * attemptMultiplier,
+                        placeFunc: storm.type === "major" ? tryPlaceSnowLayerMajor : tryPlaceSnowLayerMinor
+                    };
+                }
+
+                const pend = storm._snowPending;
+                if (!pend) continue;
+
+                let batch = 0;
+                while (pend.placed < pend.target && pend.iter < pend.maxAttempts && batch < STORM_SNOW_MAX_ATTEMPTS_PER_TICK) {
+                    pend.iter++;
+                    batch++;
+                    const angle = Math.random() * Math.PI * 2;
+                    const distance = Math.random() * currentRadius * 0.9;
+                    const x = Math.floor(storm.centerX + Math.cos(angle) * distance);
+                    const z = Math.floor(storm.centerZ + Math.sin(angle) * distance);
+
+                    const nearPlayer = players.some(p => p?.isValid && Math.hypot(p.location.x - x, p.location.z - z) <= PLACEMENT_NEAR_PLAYER);
+                    if (!nearPlayer) continue;
+
+                    const surface = findSurfaceBlock(overworld, x, z);
+                    if (!surface) continue;
+                    if (pend.placeFunc(overworld, surface.x, surface.y, surface.z)) {
+                        pend.placed++;
+                        totalSnowPlacedThisStorm++;
+                        if (dbgPlace) console.warn(`[SNOW STORM] Placed snow at (${surface.x}, ${surface.y + 1}, ${surface.z})`);
+                    }
+                }
+
+                if (pend.placed >= pend.target || pend.iter >= pend.maxAttempts) {
+                    // Avoid spamming Content Log on empty waves (e.g. storm away from loaded chunks); use snow_storm→placement debug for details.
+                    if (dbgPlace) {
+                        console.warn(`[SNOW STORM] Placement: ${pend.placed}/${pend.target} placed, ${pend.iter} attempts`);
+                    }
+                    storm._snowPending = null;
                 }
             }
-            if (dbgPlace || placed === 0) {
-                console.warn(`[SNOW STORM] Placement: ${placed}/${placementCount} placed, ${attempts} attempts, noSurface=${noSurface}, failed=${placeFailed}`);
+            return;
+        }
+
+        if (phase === 6) {
+            const MOB_DAMAGE_NEAR_PLAYER = 96;
+            mobsInStormCount = 0;
+            const mobInterval = scaledStormTicks(STORM_MOB_DAMAGE_INTERVAL);
+            for (const { storm, currentRadius } of stormData) {
+                const stormNearPlayer = players.some(p => p?.isValid && Math.hypot(p.location.x - storm.centerX, p.location.z - storm.centerZ) <= MOB_DAMAGE_NEAR_PLAYER);
+                if (!stormNearPlayer || currentRadius < 5) continue;
+                const lastMob = storm._lastMobDamageTick ?? -1e9;
+                if (currentTick - lastMob < mobInterval) continue;
+                storm._lastMobDamageTick = currentTick;
+
+                const excludeTypes = new Set([
+                    "minecraft:item", "minecraft:xp_orb", "minecraft:arrow", "minecraft:fireball",
+                    "minecraft:small_fireball", "minecraft:firework_rocket"
+                ]);
+                const mbPrefixes = ["mb:mb_day", "mb:infected", "mb:buff_mb", "mb:flying_mb", "mb:mining_mb", "mb:torpedo_mb", "mb:infected_pig", "mb:infected_cow"];
+                let damaged = 0;
+                try {
+                    const mobs = overworld.getEntities({
+                        location: { x: storm.centerX, y: storm.centerY, z: storm.centerZ },
+                        maxDistance: currentRadius
+                    });
+                    let processed = 0;
+                    for (const mob of mobs) {
+                        if (processed >= STORM_MOB_DAMAGE_MAX_MOBS_PER_TICK) break;
+                        if (!mob?.isValid || mob instanceof Player) continue;
+                        const tid = mob.typeId || "";
+                        if (excludeTypes.has(tid)) continue;
+                        if (mbPrefixes.some(pr => tid.startsWith(pr))) continue;
+                        const dx = mob.location.x - storm.centerX;
+                        const dz = mob.location.z - storm.centerZ;
+                        if (dx * dx + dz * dz > currentRadius * currentRadius) continue;
+                        processed++;
+                        mobsInStormCount++;
+                        if (isEntityShelteredFromStorm(mob)) continue;
+                        const mobDamage = Math.max(1, Math.round(STORM_MOB_DAMAGE_AMOUNT * storm.intensity));
+                        try {
+                            mob.applyDamage(mobDamage);
+                            stormKillCandidates.set(mob.id, currentTick);
+                            damaged++;
+                        } catch { }
+                    }
+                    const dbgMob = isDebugEnabled("snow_storm", "general") || isDebugEnabled("snow_storm", "all");
+                    if (dbgMob && damaged > 0) console.warn(`[SNOW STORM] Mob damage: ${damaged} mobs damaged`);
+                } catch { }
             }
+            return;
         }
-        
-        // Mob storm damage — for each storm near players
-        const MOB_DAMAGE_NEAR_PLAYER = 96;
-        mobsInStormCount = 0;
-        for (const { storm, currentRadius } of stormData) {
-            const stormNearPlayer = players.some(p => p?.isValid && Math.hypot(p.location.x - storm.centerX, p.location.z - storm.centerZ) <= MOB_DAMAGE_NEAR_PLAYER);
-            if (!stormNearPlayer || currentTick % scaledStormTicks(STORM_MOB_DAMAGE_INTERVAL) !== 0 || currentRadius < 5) continue;
 
-            const excludeTypes = new Set([
-                "minecraft:item", "minecraft:xp_orb", "minecraft:arrow", "minecraft:fireball",
-                "minecraft:small_fireball", "minecraft:firework_rocket"
-            ]);
-            const mbPrefixes = ["mb:mb_day", "mb:infected", "mb:buff_mb", "mb:flying_mb", "mb:mining_mb", "mb:torpedo_mb", "mb:infected_pig", "mb:infected_cow"];
-            let damaged = 0;
-            try {
-                const mobs = overworld.getEntities({
-                    location: { x: storm.centerX, y: storm.centerY, z: storm.centerZ },
-                    maxDistance: currentRadius
-                });
-                for (const mob of mobs) {
-                    if (!mob?.isValid || mob instanceof Player) continue;
-                    const tid = mob.typeId || "";
-                    if (excludeTypes.has(tid)) continue;
-                    if (mbPrefixes.some(pr => tid.startsWith(pr))) continue;
-                    const dx = mob.location.x - storm.centerX;
-                    const dz = mob.location.z - storm.centerZ;
-                    if (dx * dx + dz * dz > currentRadius * currentRadius) continue;
-                    mobsInStormCount++;
-                    if (isEntityShelteredFromStorm(mob)) continue;
-                    const mobDamage = Math.max(1, Math.round(STORM_MOB_DAMAGE_AMOUNT * storm.intensity));
-                    try {
-                        mob.applyDamage(mobDamage);
-                        stormKillCandidates.set(mob.id, currentTick);
-                        damaged++;
-                    } catch { }
-                }
-                const dbgMob = isDebugEnabled("snow_storm", "general") || isDebugEnabled("snow_storm", "all");
-                if (dbgMob && damaged > 0) console.warn(`[SNOW STORM] Mob damage: ${damaged} mobs damaged`);
-            } catch { }
-        }
-        
-        // Major storm block destruction — for each major storm
-        const MOB_DAMAGE_NEAR_PLAYER_DESTRUCT = 96;
-        for (const { storm, currentRadius, progress } of stormData) {
-            if (storm.type !== "major") continue;
-            const stormNearPlayer = players.some(p => p?.isValid && Math.hypot(p.location.x - storm.centerX, p.location.z - storm.centerZ) <= MOB_DAMAGE_NEAR_PLAYER_DESTRUCT);
-            if (!stormNearPlayer || progress < 0.2 || progress > 0.8 || currentTick % scaledStormTicks(STORM_DESTRUCT_INTERVAL) !== 0) continue;
-
-            const distFromPeak = Math.abs(progress - 0.5);
-            const peakScale = Math.max(0, 1 - distFromPeak / 0.3);
-            const foliageChance = Math.min(0.96, STORM_DESTRUCT_CHANCE_BASE + (STORM_DESTRUCT_CHANCE_PEAK - STORM_DESTRUCT_CHANCE_BASE) * peakScale);
-            const glassChance = Math.min(0.85, STORM_DESTRUCT_GLASS_CHANCE_BASE + (STORM_DESTRUCT_GLASS_CHANCE_PEAK - STORM_DESTRUCT_GLASS_CHANCE_BASE) * peakScale);
-
+        if (phase === 8) {
+            const MOB_DAMAGE_NEAR_PLAYER_DESTRUCT = 96;
             const DESTRUCT_SAMPLES = 50;
             const DESTRUCT_HEIGHT = 20;
-            const DESTRUCT_MAX_PER_PASS = 140;
-            let destroyedThisPass = 0;
-            for (let i = 0; i < DESTRUCT_SAMPLES && destroyedThisPass < DESTRUCT_MAX_PER_PASS; i++) {
-                const angle = Math.random() * Math.PI * 2;
-                const r = currentRadius * 0.92 * Math.sqrt(Math.random());
-                const x = Math.floor(storm.centerX + Math.cos(angle) * r);
-                const z = Math.floor(storm.centerZ + Math.sin(angle) * r);
-                const surface = findSurfaceBlock(overworld, x, z);
-                if (!surface) continue;
-                let glassBroken = false;
-                for (let dy = 0; dy <= DESTRUCT_HEIGHT && !glassBroken && destroyedThisPass < DESTRUCT_MAX_PER_PASS; dy++) {
-                    const by = surface.y + dy;
-                    try {
-                        const block = overworld.getBlock({ x, y: by, z });
-                        if (!block?.typeId) continue;
-                        const tid = block.typeId;
-                        const isBamboo = tid.includes("bamboo");
-                        const destructChance = isBamboo ? STORM_DESTRUCT_BAMBOO_CHANCE : foliageChance;
-                        if (STORM_DESTRUCT_BLOCKS.has(tid) && Math.random() < destructChance) {
-                            block.setType("minecraft:air");
-                            destroyedThisPass++;
-                        } else if (STORM_DESTRUCT_GLASS.has(tid) && !STORM_DESTRUCT_GLASS_EXCLUDE.has(tid) &&
-                            !tid.includes("tinted") && !tid.includes("hardened") && !tid.includes("hard_glass") &&
-                            Math.random() < glassChance) {
-                            block.setType("minecraft:air");
-                            glassBroken = true;
-                            destroyedThisPass++;
-                        }
-                    } catch { }
+            const destructInterval = scaledStormTicks(STORM_DESTRUCT_INTERVAL);
+
+            for (const { storm, currentRadius, progress } of stormData) {
+                if (storm.type !== "major") continue;
+                const stormNearPlayer = players.some(p => p?.isValid && Math.hypot(p.location.x - storm.centerX, p.location.z - storm.centerZ) <= MOB_DAMAGE_NEAR_PLAYER_DESTRUCT);
+                if (!stormNearPlayer || progress < 0.2 || progress > 0.8) {
+                    storm._destructSampleIdx = undefined;
+                    continue;
+                }
+
+                let idx = storm._destructSampleIdx;
+                if (idx == null || idx >= DESTRUCT_SAMPLES) {
+                    const lastD = storm._lastDestructWaveTick ?? -1e9;
+                    if (currentTick - lastD < destructInterval) continue;
+                    storm._lastDestructWaveTick = currentTick;
+                    idx = 0;
+                    storm._destructSampleIdx = 0;
+                }
+
+                const distFromPeak = Math.abs(progress - 0.5);
+                const peakScale = Math.max(0, 1 - distFromPeak / 0.3);
+                const foliageChance = Math.min(0.96, STORM_DESTRUCT_CHANCE_BASE + (STORM_DESTRUCT_CHANCE_PEAK - STORM_DESTRUCT_CHANCE_BASE) * peakScale);
+                const glassChance = Math.min(0.85, STORM_DESTRUCT_GLASS_CHANCE_BASE + (STORM_DESTRUCT_GLASS_CHANCE_PEAK - STORM_DESTRUCT_GLASS_CHANCE_BASE) * peakScale);
+
+                let destroyedThisTick = 0;
+                const startS = storm._destructSampleIdx ?? 0;
+                const sampleEnd = Math.min(DESTRUCT_SAMPLES, startS + STORM_DESTRUCT_SAMPLES_PER_TICK);
+                let abortedBetweenColumns = false;
+
+                for (let si = startS; si < sampleEnd; si++) {
+                    if (destroyedThisTick >= STORM_DESTRUCT_MAX_BREAKS_PER_TICK) {
+                        storm._destructSampleIdx = si;
+                        abortedBetweenColumns = true;
+                        break;
+                    }
+                    const angle = Math.random() * Math.PI * 2;
+                    const r = currentRadius * 0.92 * Math.sqrt(Math.random());
+                    const x = Math.floor(storm.centerX + Math.cos(angle) * r);
+                    const z = Math.floor(storm.centerZ + Math.sin(angle) * r);
+                    const surface = findSurfaceBlock(overworld, x, z);
+                    if (!surface) continue;
+                    let glassBroken = false;
+                    for (let dy = 0; dy <= DESTRUCT_HEIGHT && !glassBroken && destroyedThisTick < STORM_DESTRUCT_MAX_BREAKS_PER_TICK; dy++) {
+                        const by = surface.y + dy;
+                        try {
+                            const block = overworld.getBlock({ x, y: by, z });
+                            if (!block?.typeId) continue;
+                            const tid = block.typeId;
+                            const isBamboo = tid.includes("bamboo");
+                            const destructChance = isBamboo ? STORM_DESTRUCT_BAMBOO_CHANCE : foliageChance;
+                            if (STORM_DESTRUCT_BLOCKS.has(tid) && Math.random() < destructChance) {
+                                if (destroyedThisTick >= STORM_DESTRUCT_MAX_BREAKS_PER_TICK) break;
+                                block.setType("minecraft:air");
+                                destroyedThisTick++;
+                            } else if (STORM_DESTRUCT_GLASS.has(tid) && !STORM_DESTRUCT_GLASS_EXCLUDE.has(tid) &&
+                                !tid.includes("tinted") && !tid.includes("hardened") && !tid.includes("hard_glass") &&
+                                Math.random() < glassChance) {
+                                if (destroyedThisTick >= STORM_DESTRUCT_MAX_BREAKS_PER_TICK) break;
+                                block.setType("minecraft:air");
+                                glassBroken = true;
+                                destroyedThisTick++;
+                            }
+                        } catch { }
+                    }
+                }
+
+                if (!abortedBetweenColumns) {
+                    storm._destructSampleIdx = sampleEnd;
+                    if (storm._destructSampleIdx >= DESTRUCT_SAMPLES) {
+                        storm._destructSampleIdx = undefined;
+                    }
                 }
             }
         }
-        
-        // Periodic comprehensive status (every ~5 sec) when general or all
-        const dbgGen = isDebugEnabled("snow_storm", "general") || isDebugEnabled("snow_storm", "all");
-        if (dbgGen && currentTick % 100 === 50) {
-            const parts = storms.map((s, i) => {
-                const ticksLeft = Math.max(0, s.endTick - currentTick);
-                const progress = Math.min(1, Math.max(0, (currentTick - s.startTick) / (s.endTick - s.startTick)));
-                const mult = getStormSizeMultiplier(progress);
-                const r = (s.type === "major" ? BASE_STORM_RADIUS_MAJOR : BASE_STORM_RADIUS_MINOR) * mult * s.intensity;
-                return `#${i + 1} ${s.type} (${Math.floor(s.centerX)},${Math.floor(s.centerZ)}) r${Math.floor(r)} ${Math.floor(ticksLeft / 20)}s`;
-            });
-            console.warn(`[SNOW STORM] ${storms.length} storm(s): ${parts.join(" | ")} | players: ${playersInStorm.size} | mobs: ${mobsInStormCount} | snow: ${totalSnowPlacedThisStorm}`);
-        }
     } catch (error) {
-        console.warn(`[SNOW STORM] Error in particle/placement loop:`, error);
+        console.warn(`[SNOW STORM] Error in phased storm loop:`, error);
     }
-}, 10); // Run every 0.5 seconds
+}, 1);
 
 // ============================================================================
 // EXPORTS (for integration with main.js ground exposure)
@@ -1363,6 +1518,49 @@ export function isPositionInStormRadius(x, z) {
         if ((dx * dx + dz * dz) <= radius * radius) return true;
     }
     return false;
+}
+
+/**
+ * Phase 2 reservoir prototype: extra natural spawn **chance** when near active storm centers (Overworld).
+ * Reuses the existing storm list as localized anchors — no new entities or global scans; ends when storms end.
+ * If multiple storms overlap, uses the strongest local influence.
+ * @param {import("@minecraft/server").Dimension} dimension
+ * @param {number} x
+ * @param {number} z
+ * @returns {number} multiplier >= 1
+ */
+export function getStormReservoirSpawnChanceMult(dimension, x, z) {
+    try {
+        if (!dimension?.id || dimension.id !== "minecraft:overworld") return 1;
+        if (!Number.isFinite(x) || !Number.isFinite(z)) return 1;
+        if (storms.length === 0) return 1;
+        const currentTick = system.currentTick;
+        let best = 0;
+        const innerFrac = Math.min(0.95, Math.max(0.05, STORM_RESERVOIR_INNER_RADIUS_FRACTION));
+        for (const storm of storms) {
+            if (storm.enabled === false) continue;
+            const duration = storm.endTick - storm.startTick;
+            const progress = Math.min(1, Math.max(0, (currentTick - storm.startTick) / duration));
+            const mult = getStormSizeMultiplier(progress);
+            const baseRadius = storm.type === "major" ? BASE_STORM_RADIUS_MAJOR : BASE_STORM_RADIUS_MINOR;
+            const radius = baseRadius * mult * storm.intensity;
+            const dx = x - storm.centerX;
+            const dz = z - storm.centerZ;
+            const distSq = dx * dx + dz * dz;
+            const r = Math.max(1, radius);
+            if (distSq > r * r) continue;
+            const dist = Math.sqrt(distSq);
+            const inner = r * innerFrac;
+            let influence = 1;
+            if (dist > inner) {
+                influence = Math.max(0, 1 - (dist - inner) / Math.max(1e-6, r - inner));
+            }
+            if (influence > best) best = influence;
+        }
+        return 1 + STORM_RESERVOIR_SPAWN_CHANCE_MAX_BUMP * best;
+    } catch {
+        return 1;
+    }
 }
 
 /** Returns storm spawn info for spawn controller (primary storm for backward compat). */
@@ -1470,13 +1668,19 @@ export function summonStorm(type, targetPlayer = null, distance = 0) {
     const targetX = loc.x;
     const targetZ = loc.z;
     const dist = distance > 0 ? distance : (STORM_SPAWN_MIN_DISTANCE + Math.random() * (STORM_SPAWN_MAX_DISTANCE - STORM_SPAWN_MIN_DISTANCE));
-    const angle = Math.random() * Math.PI * 2;
-    const centerX = targetX + Math.cos(angle) * dist;
-    const centerZ = targetZ + Math.sin(angle) * dist;
+    const picked = tryPickOutdoorStormCenter(overworld, [target], { minDist: dist, maxDist: dist, maxAttempts: 28 });
+    if (!picked) {
+        console.warn("[SNOW STORM] Cannot summon storm — no outdoor column (open air above surface) near player");
+        return false;
+    }
 
-    startStorm(type, { x: centerX, z: centerZ, targetX, targetZ });
-    
-    console.warn(`[SNOW STORM] Summoned ${type} storm at (${Math.floor(centerX)}, ${Math.floor(centerZ)}) near ${target.name}`);
+    const ok = startStorm(type, { x: picked.centerX, z: picked.centerZ, targetX, targetZ });
+    if (!ok) {
+        console.warn("[SNOW STORM] Summon failed outdoor validation");
+        return false;
+    }
+
+    console.warn(`[SNOW STORM] Summoned ${type} storm at (${Math.floor(picked.centerX)}, ${Math.floor(picked.centerZ)}) near ${target.name}`);
     return true;
 }
 

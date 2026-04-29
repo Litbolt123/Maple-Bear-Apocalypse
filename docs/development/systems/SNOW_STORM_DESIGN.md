@@ -104,6 +104,39 @@ Recommendation: Start with **particles + placement** everywhere; add **optional*
 
 ---
 
+## Schedule (world day)
+
+Implemented in **`mb_snowStorm.js`** (`getStormStartDay`, `getScaledStartChance`, `getScaledMajorChance`, `checkStormStart`):
+
+| Rule | Behavior |
+|------|----------|
+| **First eligible day** | **`getStormStartDay()`** from addon difficulty: **Hard** day **2**, **Normal** day **4**, **Easy** day **6**. No storms when `currentDay` is below that. |
+| **Start frequency** | Each **`STORM_CHECK_INTERVAL`** (100 ticks), if cooldown elapsed and no storm (or multi-storm secondary roll), roll **`startChance`** — base **`BASE_START_CHANCE`** plus **`CHANCE_SCALE_PER_DAY`** × days since first eligible. Scaled by **`getStormStartChanceCampScale()`**. |
+| **Minor vs major (day &lt; 20)** | While **`currentDay ≤ STORM_MAJOR_UNLOCK_DAY` (10)** → major weight **0** (minors only). From **day 11** through **19**, major roll ramps linearly toward **`BASE_MAJOR_CHANCE_DAY_20`**. |
+| **Day 20+** | New storms are **always major** (minor tier off). |
+| **Cooldown between storms** | Base **`BASE_COOLDOWN_MIN_TICKS`–`BASE_COOLDOWN_MAX_TICKS`** (~**2–~5 min**), interpolating toward **`COOLDOWN_DAY_20_TICKS`** (**~1.5 min**) by day **`COOLDOWN_DAY_CAP`** (20), keyed off **`getStormStartDay()`**. |
+| **Spawn location** | Natural spawn and **`summonStorm`** pick rings near players; **`isOutdoorStormColumn`** counts ~28 vertical steps of air, liquid, and canopy pass-through (**`isStormSkyPassThroughBlock`** — list blocks plus any id containing `leaves`) so forests stay valid; cave ceilings without open sky still fail. |
+
+Constants are grouped near the top of **`mb_snowStorm.js`** (`STORM_*`, `BASE_START_CHANCE`, etc.).
+
+---
+
+## Performance: phased tick work and budgets
+
+Storm visuals and terrain work used to share one dense interval callback; **`mb_snowStorm.js`** now drives them from **`system.runInterval(..., 1)`** and only runs heavy buckets when **`currentTick % 10`** is **`0`, `2`, `4`, `6`, or `8`** (other ticks return immediately).
+
+| Phase (`tick % 10`) | Work |
+|---------------------|------|
+| **0** | `updateStormIntersections`, drift + center Y smoothing, `syncPrimaryStorm`, player storm effects (blindness, ambience, nausea). |
+| **2** | Particles only — budgeted per storm per tick; **`spawnParticle`** is preferred for `mb:white_dust_particle`, **`runCommand('particle …')`** as fallback. |
+| **4** | Snow layer placement — placement waves use **`_snowPending`** carry-over with a capped number of attempts per tick until the pass completes. |
+| **6** | Mob storm damage — per-storm elapsed time vs **`STORM_MOB_DAMAGE_INTERVAL`** (scaled), then cap how many entities are processed after **`getEntities`**. |
+| **8** | Major storm destruct — sliced sample index across ticks (**~10** column samples per phase tick), **`~28`** block breaks per storm per tick max, wave gated by scaled **`STORM_DESTRUCT_INTERVAL`**. |
+
+Module-level caps are named **`STORM_*`** near the top of **`mb_snowStorm.js`**.
+
+---
+
 ## Optional: Custom “snow” particle
 
 - You can add `mb:snow_storm_particle` (RP particle JSON) similar to `white_dust_particle` but tuned for falling/sideways “snow” (size, speed, lifetime) and use it instead of or in addition to `minecraft:snowflake` and `mb:white_dust_particle` for variety.

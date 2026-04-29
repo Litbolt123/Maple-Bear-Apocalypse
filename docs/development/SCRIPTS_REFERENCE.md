@@ -50,7 +50,7 @@ One-line (or short) descriptions of each JavaScript module in the behavior pack.
 | File | Purpose |
 |------|---------|
 | **`mb_dayTracker.js`** | Day counter, milestones, scoreboard, daily events, **`getCurrentDay`**, action-bar day text (merged with other HUD), intro/day display helpers. |
-| **`mb_playerChangelog.js`** | In-game “what changed” / changelog data for dev or release notes (consumed by journal). |
+| **`mb_playerChangelog.js`** | In-game “What's new” body; **`PLAYER_CHANGELOG_VERSION`** pairs with **`docs/PLAYER_CHANGELOG.md`** for beta notes. |
 | **`mb_journalWhatsNew.js`** | “What’s new” journal section wiring. |
 
 ---
@@ -62,9 +62,11 @@ One-line (or short) descriptions of each JavaScript module in the behavior pack.
 | **`mb_spawnEntityIds.js`** | Canonical string IDs for bear tiers and infected pig/cow; **`MAPLE_BEAR_*`** aliases for `main.js`. |
 | **`mb_spawnConfigs.js`** | **`SPAWN_CONFIGS`** (per-type natural spawn curves) and display names for dev toggles. |
 | **`mb_spawnController.js`** | Main spawn system: tiles, scanning, caps, difficulty, emulsifier zones, spawn overrides, dev spawn UI hooks, dusted-dirt registration helpers, much of natural bear spawning. |
+| **`mb_exposureSpawnPressure.js`** | Storm exposure (`stormSeconds`) → modest natural spawn **chance** multiplier; accessor registered from `main.js` (avoids circular import with spawn controller). |
+| **`mb_infectionDirector.js`** | Phase 3 **director** tiers (day bands + spawn-load escalation): spawn **chance** + **attempt** modifiers; HUD toasts on day-band changes (`initializeInfectionDirectorWatch` from `main.js`). |
 | **`mb_spawnLoadMetrics.js`** | Samples bear/mob/item/storm load; drives spawn-interval and block-budget scaling; **`getSpawnLoadDebugSnapshot`** for HUD and dev menus. |
 | **`mb_spawnMobilityCamp.js`** | Player cluster / mobility camp ramp and storm-start scaling used by spawn and storms. |
-| **`mb_snowStorm.js`** | Dust storms, exposure, storm placement/kill tracking, **`getActiveStormCount`**, storm dev/admin hooks. |
+| **`mb_snowStorm.js`** | Dust storms, exposure, storm placement/kill tracking, **`getActiveStormCount`**, **`getStormReservoirSpawnChanceMult`** (Phase 2 localized spawn pressure near storm centers), storm dev/admin hooks. |
 | **`mb_performanceProfile.js`** | Wall-clock tick stress and weighted “expensive mob” pressure for adaptive storm/mining multipliers and spawn probes. |
 
 ---
