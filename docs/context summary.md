@@ -6,6 +6,45 @@ Running log of **what changed and why** (gameplay, scripts, assets, docs). Used 
 
 ---
 
+**Date:** 2026-04-29 (release label — v0.9.0-beta.3)
+
+- **`ADDON_VERSION_PRERELEASE`** → **`beta.3`** (stay on **0.9.0**); **`PLAYER_CHANGELOG_VERSION`** → **`0.9.0-beta.3`**; all four **`manifest.json`** descriptions and **`docs/PLAYER_CHANGELOG.md`** + **`mb_playerChangelog.js`** (both **`BP/`** and **`BP - Dev/`**) aligned. Smoke checklist row added for beta.3.
+
+---
+
+**Date:** 2026-04-30 (bear cull — per-type dev control)
+
+- **`mb_bearCullDev.js`:** World JSON **`mb_dev_bear_cull_enabled_types`** (array of `typeId`s from **`ALL_MB_BEAR_TYPES`**) overrides which bears can be culled; unset = pack default (tiny + infected). **`getBearCullEligibleTypeSet()`**, **`BEAR_CULL_TYPE_GROUPS`** for journal submenus, **`DEFAULT_PACK_BEAR_CULL_TYPE_IDS`**. Cleared with other dev cull keys on reset.
+- **`mb_bearPopulationCull.js`:** Cull batch uses **`getBearCullEligibleTypeSet()`** each pass; log line includes enabled type count.
+- **`mb_codex.js`:** Bear cull dev menu — **Per-type eligibility** (6 groups: tiny, infected, buff, flying, mining, torpedo) with per-variant toggles; main screen shows **eligible types X/21**. **`BP/`** + **`BP - Dev/`**.
+
+---
+
+- **`mb_bearCullDev.js`:** World overrides (`mb_dev_bear_cull_*`) merge with **`mb_balance.js`** defaults; **`getBearCullEffectiveParams()`** used by **`mb_bearPopulationCull.js`**. Cull loop polls every **20t** but respects editable **interval** between passes.
+- **`mb_codex.js`:** Journal **Developer Tools → Performance → Bear cull tuning (dev)** — summary, **Reset pack defaults**, modal sliders (trigger/target/removals/urgent/distances/interval). Dev pack + pin list only **`bear_cull_dev`** when dev flavor. **`BP/`** + **`BP - Dev/`**.
+- **`mb_devScriptSelfTest.js`:** Dynamic import list **`+mb_bearCullDev.js`**.
+
+---
+
+**Date:** 2026-04-30 (bear population cull — 80 threshold, tiny/infected only)
+
+- **`mb_balance.js`:** Cull activates when global Maple Bear count **> 80** (was 200); works toward **68** total; **6** removals max per **40t** pass (was 4). **Urgent** distance relax at global **> 140** (was 360). **`BP/`** + **`BP - Dev/`**.
+- **`mb_bearPopulationCull.js`:** Only **tiny** (`mb:mb_day*`) and **infected** family (`mb:infected*`, pig/cow) are eligible; **buff / flying / mining / torpedo** are never culled here. Same distance rules (≥**56**m normal, ≥**28**m urgent), thrall skip unchanged. **`BP/`** + **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-04-30 (storms — player-distance lite mode)
+
+- **`mb_snowStorm.js`:** If **no overworld player** is within **200** blocks (horizontal) of a storm center, that storm skips **particles** and **snow placement** (and clears pending snow), drifts **less often** (`200t` vs `20t`), and only refreshes **center Y** from terrain every **100t**. Lifecycle (end tick, cooldown, player blindness when inside radius, etc.) unchanged. **Mob damage** and **major destruct** were already gated by a player within **96** blocks of the storm center. **`BP/`** + **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-04-29 (mining AI — pathfinding cleanup lookup)
+
+- **`mb_miningAI.js`:** Pathfinding cleanup interval no longer scans **3 dimensions × 8 entity types × all matching entities** per tracked pathfinding state to see if an entity still exists; it uses **`world.getEntity(entityId)`** + **`isEntityValid`**. Same cadence (**100t**), far cheaper on busy worlds. **`BP/`** + **`BP - Dev/`**.
+
+---
+
 **Date:** 2026-04-29 (sim players — debug heartbeat)
 
 - **`mb_simPlayers.js`:** Throttled `[SIM PLAYERS]` Content Log line **does not run** when **`mb_sim_players_count` is 0** (no ghost clients): avoids warning spam every 100t while sims stay enabled but idle. **`BP/`** + **`BP - Dev/`**.

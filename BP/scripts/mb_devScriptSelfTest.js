@@ -25,6 +25,7 @@ const SELF_TEST_MODULE_IMPORTS = [
     "./mb_actionBarHud.js",
     "./mb_balance.js",
     "./mb_bearPopulationCull.js",
+    "./mb_bearCullDev.js",
     "./mb_bearSnapshot.js",
     "./mb_bearTelemetry.js",
     "./mb_biomeAmbience.js",

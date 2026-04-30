@@ -5,7 +5,7 @@
 
 import { getAddonVersionDisplayString } from "./mb_buildConfig.js";
 
-export const PLAYER_CHANGELOG_VERSION = "0.9.0-beta.2";
+export const PLAYER_CHANGELOG_VERSION = "0.9.0-beta.3";
 
 /** @returns {string} Formatted body for ActionFormData (Minecraft color codes). */
 export function getPlayerChangelogBody() {
@@ -14,10 +14,10 @@ export function getPlayerChangelogBody() {
         `§eMapleBear TakeOver §7— §f${ver}`,
         "",
         "§7Recent highlights:",
-        "§8• §7Storms: difficulty sets first storm day (Hard 2 / Normal 4 / Easy 6); minors through day 10, majors from day 11, only majors after day 20",
-        "§8• §7Journal / Biomes: storm entry covers schedule, shelter, and emulsifier reclaim",
-        "§8• §7Performance: spawn load still auto-throttles scans when the world is heavy",
-        "§8• §7Spawn caps, buff cooldown, What's new (see full changelog in repo)",
+        "§8• §7Storms: lighter work when no overworld player is near the storm (particles/snow reduced); lifecycle unchanged",
+        "§8• §7Bear population cull: tighter global threshold and dev tuning (types/caps; dev pack)",
+        "§8• §7Mining bears: cheaper pathfinding cleanup on busy worlds",
+        "§8• §7Codex storm hub clarifies concurrent storm limit vs engine cap",
         "",
         "§8Full notes: §7see docs/PLAYER_CHANGELOG.md in the repo"
     ];

@@ -1,6 +1,7 @@
 /**
- * When global Maple Bear population is high, despawn a few mobs that are *far* from the nearest
- * player in their dimension (like vanilla "natural" culling) — not `remove()` on everything.
+ * When global Maple Bear population is high, despawn a few addon bears that are *far* from the nearest
+ * player in their dimension (like vanilla "natural" culling). Which typeIds are eligible is pack-default
+ * (tiny + infected) or overridden per-type via dev world props (`mb_bearCullDev.js`).
  * World property `mb_bear_cull` = `0` to disable. Optional `mb_bear_cull_log` = `1` for throttled
  * `console.warn` (dev). Skips `infected_by` thrall bodies (player corpses) from culling.
  */
@@ -9,17 +10,18 @@ import { system, world } from "@minecraft/server";
 import { countBearsAcrossDimensions, getBearSnapshot, invalidateBearSnapshots } from "./mb_bearSnapshot.js";
 import { isEntityValid } from "./mb_sharedCache.js";
 import { getWorldProperty } from "./mb_dynamicPropertyHandler.js";
-import {
-    MB_BEAR_CULL_WHEN_GLOBAL_ABOVE,
-    MB_BEAR_CULL_TARGET_GLOBAL,
-    MB_BEAR_CULL_MAX_REMOVED_PER_PASS,
-    MB_BEAR_CULL_MIN_NEAREST_PLAYER_BLOCKS,
-    MB_BEAR_CULL_URGENT_WHEN_GLOBAL_ABOVE,
-    MB_BEAR_CULL_URGENT_MIN_NEAREST_PLAYER_BLOCKS,
-    MB_BEAR_CULL_INTERVAL_TICKS
-} from "./mb_balance.js";
+import { getBearCullEffectiveParams, getBearCullEligibleTypeSet, BEAR_CULL_POLL_INTERVAL_TICKS } from "./mb_bearCullDev.js";
 
 const DIMENSION_IDS = ["overworld", "nether", "the_end"];
+
+function isCullEligibleBear(entity, eligibleTypeIds) {
+    try {
+        const id = entity?.typeId;
+        return !!id && eligibleTypeIds.has(id);
+    } catch {
+        return false;
+    }
+}
 
 function isCullingOff() {
     const v = getWorldProperty("mb_bear_cull");
@@ -53,20 +55,22 @@ function nearestPlayerDistSqInDimension(entity, players) {
 }
 
 let lastLogTick = -999999;
+let lastBearCullPassTick = -999999;
 
-function runCullPass() {
+/** @param {ReturnType<typeof getBearCullEffectiveParams>} [p] */
+function runCullPass(p) {
     if (isCullingOff()) return 0;
+    const tuning = p ?? getBearCullEffectiveParams();
+    const eligibleTypeIds = getBearCullEligibleTypeSet();
 
     const total = countBearsAcrossDimensions(DIMENSION_IDS);
-    if (total <= MB_BEAR_CULL_WHEN_GLOBAL_ABOVE) return 0;
+    if (total <= tuning.whenAbove) return 0;
 
-    const toRemove = Math.min(MB_BEAR_CULL_MAX_REMOVED_PER_PASS, total - MB_BEAR_CULL_TARGET_GLOBAL);
+    const toRemove = Math.min(tuning.maxRemovedPerPass, total - tuning.targetGlobal);
     if (toRemove <= 0) return 0;
 
-    const urgent = total > MB_BEAR_CULL_URGENT_WHEN_GLOBAL_ABOVE;
-    const minBlocks = urgent
-        ? MB_BEAR_CULL_URGENT_MIN_NEAREST_PLAYER_BLOCKS
-        : MB_BEAR_CULL_MIN_NEAREST_PLAYER_BLOCKS;
+    const urgent = total > tuning.urgentWhenAbove;
+    const minBlocks = urgent ? tuning.urgentMinNearestBlocks : tuning.minNearestBlocks;
     const needSq = minBlocks * minBlocks;
 
     const players = world.getAllPlayers();
@@ -82,6 +86,7 @@ function runCullPass() {
         const snap = getBearSnapshot(dim);
         for (const entity of snap.all) {
             if (!isEntityValid(entity)) continue;
+            if (!isCullEligibleBear(entity, eligibleTypeIds)) continue;
             if (isThrallBody(entity)) continue;
             const dSq = nearestPlayerDistSqInDimension(entity, players);
             if (dSq < needSq) continue;
@@ -109,7 +114,7 @@ function runCullPass() {
     if (removed > 0 && (doLog === 1 || doLog === true || doLog === "1")) {
         if (system.currentTick - lastLogTick > 20 * 30) {
             const mode = urgent ? "urgent" : "normal";
-            console.warn(`[BEAR CULL] removed ${removed} (mode=${mode} · total≈${total} · minDist≥${minBlocks}m to nearest player)`);
+            console.warn(`[BEAR CULL] removed ${removed} (mode=${mode} · total≈${total} · minDist≥${minBlocks}m · types=${eligibleTypeIds.size})`);
             lastLogTick = system.currentTick;
         }
     }
@@ -124,9 +129,13 @@ export function initializeBearPopulationCull() {
     started = true;
     system.runInterval(() => {
         try {
-            runCullPass();
+            const now = system.currentTick;
+            const p = getBearCullEffectiveParams();
+            if (now - lastBearCullPassTick < p.intervalTicks) return;
+            lastBearCullPassTick = now;
+            runCullPass(p);
         } catch (err) {
             console.warn("[BEAR CULL] tick error:", err);
         }
-    }, MB_BEAR_CULL_INTERVAL_TICKS);
+    }, BEAR_CULL_POLL_INTERVAL_TICKS);
 }

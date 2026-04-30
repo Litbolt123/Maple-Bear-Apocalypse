@@ -154,6 +154,11 @@ const STORM_SOUND_INTERVAL = 80; // Play sound every 4 seconds
 const STORM_NEARBY_RADIUS_MULT = 1.8; // Players within 1.8x radius hear distant ambience
 const STORM_NEARBY_VOLUME = 0.4; // Quieter when outside storm
 
+/** Beyond this horizontal distance from any overworld player to storm center: skip particles & snow; drift less often. (Mob damage / major destruct already require a player within 96 blocks of the storm.) */
+const STORM_PLAYER_LITE_DISTANCE_BLOCKS = 200;
+/** When no player is within STORM_PLAYER_LITE_DISTANCE_BLOCKS, move storm center at this cadence instead of STORM_MOVE_INTERVAL. */
+const STORM_FAR_MOVE_INTERVAL_TICKS = 200;
+
 // Mob storm damage
 const STORM_MOB_DAMAGE_INTERVAL = 200; // Damage mobs every 10 seconds
 const STORM_MOB_DAMAGE_AMOUNT = 1; // 1 HP every 10 sec
@@ -864,6 +869,27 @@ function startStorm(type, initialCenter = null) {
     return true;
 }
 
+/**
+ * @param {{ centerX: number, centerZ: number }} storm
+ * @param {import("@minecraft/server").Player[]} players
+ * @param {number} horizontalBlocks
+ */
+function isStormCenterNearAnyPlayerHorizontal(storm, players, horizontalBlocks) {
+    if (!players?.length) return false;
+    const cx = storm.centerX;
+    const cz = storm.centerZ;
+    const rSq = horizontalBlocks * horizontalBlocks;
+    for (const p of players) {
+        if (!p?.isValid) continue;
+        try {
+            const dx = p.location.x - cx;
+            const dz = p.location.z - cz;
+            if (dx * dx + dz * dz <= rSq) return true;
+        } catch { /* ignore */ }
+    }
+    return false;
+}
+
 function driftStormCenter(overworld, storm) {
     const ticksSinceDirChange = system.currentTick - storm.driftAngleChangeTick;
     const shouldChangeDir = Math.random() < 0.15 || (ticksSinceDirChange > 600 && Math.random() < 0.4);
@@ -1162,13 +1188,18 @@ system.runInterval(() => {
             const currentRadius = baseRadius * sizeMultiplier * storm.intensity;
 
             if (phase === 0) {
-                if (currentTick - storm.lastMoveTick >= scaledStormTicks(STORM_MOVE_INTERVAL)) {
+                const stormNearLite = isStormCenterNearAnyPlayerHorizontal(storm, players, STORM_PLAYER_LITE_DISTANCE_BLOCKS);
+                const moveEveryTicks = stormNearLite ? STORM_MOVE_INTERVAL : STORM_FAR_MOVE_INTERVAL_TICKS;
+                if (currentTick - storm.lastMoveTick >= scaledStormTicks(moveEveryTicks)) {
                     storm.lastMoveTick = currentTick;
                     driftStormCenter(overworld, storm);
                 }
-                const surfaceAtCenter = findSurfaceBlock(overworld, Math.floor(storm.centerX), Math.floor(storm.centerZ));
-                const targetSurfaceY = surfaceAtCenter ? surfaceAtCenter.y + 2 : 64;
-                storm.centerY = storm.centerY * 0.85 + targetSurfaceY * 0.15;
+                // Far storms: refresh vertical anchor occasionally (findSurfaceBlock) instead of every phase.
+                if (stormNearLite || currentTick % 100 === 0) {
+                    const surfaceAtCenter = findSurfaceBlock(overworld, Math.floor(storm.centerX), Math.floor(storm.centerZ));
+                    const targetSurfaceY = surfaceAtCenter ? surfaceAtCenter.y + 2 : 64;
+                    storm.centerY = storm.centerY * 0.85 + targetSurfaceY * 0.15;
+                }
             }
 
             stormData.push({ storm, duration, progress, currentRadius });
@@ -1275,6 +1306,7 @@ system.runInterval(() => {
 
         if (phase === 2) {
             for (const { storm, currentRadius } of stormData) {
+                if (!isStormCenterNearAnyPlayerHorizontal(storm, players, STORM_PLAYER_LITE_DISTANCE_BLOCKS)) continue;
                 const stormCenter = { x: storm.centerX, y: storm.centerY, z: storm.centerZ };
                 const density = Math.max(1, Math.floor(getParticleDensity(overworld) * storm.intensity / Math.sqrt(getStormWorkIntervalMultiplier())));
                 spawnStormParticles(overworld, stormCenter, density, currentRadius, STORM_PARTICLE_MAX_PER_STORM_PER_TICK);
@@ -1286,6 +1318,10 @@ system.runInterval(() => {
             const PLACEMENT_NEAR_PLAYER = 96;
             const dbgPlace = isDebugEnabled("snow_storm", "placement") || isDebugEnabled("snow_storm", "all");
             for (const { storm, currentRadius } of stormData) {
+                if (!isStormCenterNearAnyPlayerHorizontal(storm, players, STORM_PLAYER_LITE_DISTANCE_BLOCKS)) {
+                    storm._snowPending = null;
+                    continue;
+                }
                 const placeInterval = scaledStormTicks(storm.type === "major" ? MAJOR_PLACEMENT_INTERVAL : PLACEMENT_INTERVAL);
                 if (currentRadius < 5) {
                     storm._snowPending = null;

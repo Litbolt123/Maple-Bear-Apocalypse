@@ -58,6 +58,15 @@ import {
     isSpawnLoadAutoEnabled,
     setSpawnLoadBiasLevel
 } from "./mb_spawnLoadMetrics.js";
+import { ALL_MB_BEAR_TYPES } from "./mb_bearSnapshot.js";
+import {
+    getBearCullEffectiveParams,
+    hasBearCullDevOverrides,
+    clearBearCullDevOverrides,
+    BEAR_CULL_DEV_KEYS,
+    getBearCullEligibleTypeSet,
+    BEAR_CULL_TYPE_GROUPS
+} from "./mb_bearCullDev.js";
 import { showJournalWhatsNew } from "./mb_journalWhatsNew.js";
 
 const SPAWN_DIFFICULTY_PROPERTY = "mb_spawnDifficulty";
@@ -4540,6 +4549,7 @@ export function showCodexBook(player, context) {
         { id: "kill_bears", label: "Kill Bears %", action: () => openKillBearsMenu() },
         { id: "clear_bears", label: "Clear Bears", action: () => openClearBearsMenu() },
         { id: "ai_throttle", label: "AI Throttle & Speed", action: () => openAIThrottleMenu() },
+        { id: "bear_cull_dev", label: "Bear cull tuning (dev)", action: () => openBearCullDevMenu() },
         { id: "sim_players", label: "Simulated players (dev)", action: () => openSimulatedPlayersMenu() },
         { id: "debug_menu", label: "Debug Menu", action: () => openDebugMenu() },
         { id: "fully_unlock", label: "Fully Unlock Codex", action: () => { fullyUnlockCodex(player); player.sendMessage(CHAT_SUCCESS + "Codex fully unlocked."); journalPowerToolsBack(); } },
@@ -4609,10 +4619,14 @@ export function showCodexBook(player, context) {
     }
 
     function getPinEligibleDevItems() {
-        const dev = INCLUDE_FULL_DEVELOPER_TOOLS || INCLUDE_ADMIN_TOOLS
-            ? PINNABLE_DEV_ITEMS.slice()
-            : PINNABLE_DEV_ITEMS.filter((it) => it.pinInReleaseAdmin);
-        return [...getJournalMainPinnableItems(), ...dev];
+        let items =
+            INCLUDE_FULL_DEVELOPER_TOOLS || INCLUDE_ADMIN_TOOLS
+                ? PINNABLE_DEV_ITEMS.slice()
+                : PINNABLE_DEV_ITEMS.filter((it) => it.pinInReleaseAdmin);
+        if (!INCLUDE_FULL_DEVELOPER_TOOLS) {
+            items = items.filter((it) => it.id !== "bear_cull_dev");
+        }
+        return [...getJournalMainPinnableItems(), ...items];
     }
 
     function getPinnedDevItems(p) {
@@ -5044,10 +5058,14 @@ export function showCodexBook(player, context) {
         form.button("§6Heavy perf §8(storm, mining, spatial)");
         form.button("§eCamp / mobility debug");
         form.button("§eAI throttle & speed");
+        if (INCLUDE_FULL_DEVELOPER_TOOLS) {
+            form.button("§cBear cull tuning §8(dev)");
+        }
         form.button("§8Back");
+        const perfMenuBackIdx = INCLUDE_FULL_DEVELOPER_TOOLS ? 6 : 5;
         form.show(player).then((res) => {
             const v = getPlayerSoundVolume(player);
-            if (!res || res.canceled || res.selection === 5) {
+            if (!res || res.canceled || res.selection === perfMenuBackIdx) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * v });
                 return openDeveloperTools();
             }
@@ -5060,6 +5078,7 @@ export function showCodexBook(player, context) {
             else if (res.selection === 2) openHeavyPerfPresetsMenu();
             else if (res.selection === 3) openMobilityCampDevMenu();
             else if (res.selection === 4) openAIThrottleMenu();
+            else if (INCLUDE_FULL_DEVELOPER_TOOLS && res.selection === 5) openBearCullDevMenu();
         }).catch(() => openDeveloperTools());
     }
 
@@ -7145,6 +7164,169 @@ export function showCodexBook(player, context) {
         miningIntervalMin: "mb_ai_mining_interval_min",
         miningIntervalOverride: "mb_ai_mining_interval_override"
     };
+
+    function openBearCullDevMenu() {
+        if (!INCLUDE_FULL_DEVELOPER_TOOLS) {
+            try {
+                player.sendMessage(CHAT_WARNING + "Bear cull tuning is only available in the dev behavior pack.");
+            } catch { /* ignore */ }
+            try {
+                journalPowerToolsBack();
+            } catch { /* ignore */ }
+            return;
+        }
+        const eff = getBearCullEffectiveParams();
+        const ov = hasBearCullDevOverrides();
+        const typeOn = getBearCullEligibleTypeSet().size;
+        const form = new ActionFormData()
+            .title("§cBear cull (dev)")
+            .body(
+                "§7When §fglobal §7Maple Bear count §f(all types) §7exceeds the threshold, distant bears whose §ftype §7is eligible may be removed §8(requires §7mb_bear_cull§8 on).\n\n" +
+                    `§8Active: §fabove ${eff.whenAbove} §7toward §f${eff.targetGlobal} §7· §f${eff.maxRemovedPerPass}/pass §7· urgent §f>${eff.urgentWhenAbove}\n` +
+                    `§8Distance: §f${eff.minNearestBlocks}m §7normal §8| §f${eff.urgentMinNearestBlocks}m §7urgent §8| §fevery ${eff.intervalTicks}t\n` +
+                    `§8Eligible types: §f${typeOn}§7/§f${ALL_MB_BEAR_TYPES.length}\n` +
+                    (ov ? "§eWorld overrides: §aON\n" : "§7World overrides: §8none §7(pack defaults)\n") +
+                    "\n§8Keys: §7mb_dev_bear_cull_*"
+            );
+        form.button("§eEdit numeric values…");
+        form.button("§ePer-type eligibility…");
+        form.button(ov ? "§cReset to pack defaults" : "§8Reset §7(already default)");
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            const v = getPlayerSoundVolume(player);
+            if (!res || res.canceled || res.selection === 3) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * v });
+                return journalPowerToolsBack();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * v });
+            if (res.selection === 2) {
+                clearBearCullDevOverrides();
+                try {
+                    saveAllProperties();
+                } catch { /* ignore */ }
+                player.sendMessage(CHAT_SUCCESS + "Bear cull dev overrides cleared (pack defaults).");
+                return openBearCullDevMenu();
+            }
+            if (res.selection === 1) {
+                return openBearCullDevTypesMenu();
+            }
+            openBearCullDevEditModal();
+        }).catch(() => journalPowerToolsBack());
+    }
+
+    function openBearCullDevTypesMenu() {
+        const enabled = getBearCullEligibleTypeSet();
+        const form = new ActionFormData()
+            .title("§cBear cull — per type")
+            .body(
+                `§7Toggle which addon bear §ftypes §7can be culled when distant.\n§8Enabled: §f${enabled.size}§7/§f${ALL_MB_BEAR_TYPES.length}\n\n§8Pick a group:`
+            );
+        for (const g of BEAR_CULL_TYPE_GROUPS) {
+            const onInGroup = g.typeIds.filter((t) => enabled.has(t)).length;
+            form.button(`§f${g.label} §8(${onInGroup}/${g.typeIds.length})`);
+        }
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            const v = getPlayerSoundVolume(player);
+            const backIdx = BEAR_CULL_TYPE_GROUPS.length;
+            if (!res || res.canceled || res.selection === backIdx) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * v });
+                return openBearCullDevMenu();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * v });
+            const g = BEAR_CULL_TYPE_GROUPS[res.selection];
+            if (g) openBearCullDevTypesGroupModal(g);
+            else openBearCullDevTypesMenu();
+        }).catch(() => openBearCullDevMenu());
+    }
+
+    function openBearCullDevTypesGroupModal(group) {
+        const enabled = getBearCullEligibleTypeSet();
+        const v = getPlayerSoundVolume(player);
+        const modal = new ModalFormData().title(`§cCull: ${group.label}`);
+        for (const tid of group.typeIds) {
+            const label = tid.startsWith("mb:") ? tid.slice(3) : tid;
+            modal.toggle(`§f${label}`, { defaultValue: enabled.has(tid) });
+        }
+        modal.show(player).then((res) => {
+            if (!res || res.canceled) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * v });
+                return openBearCullDevTypesMenu();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * v });
+            const next = new Set(getBearCullEligibleTypeSet());
+            const fv = res.formValues || [];
+            for (let i = 0; i < group.typeIds.length; i++) {
+                const tid = group.typeIds[i];
+                if (fv[i]) next.add(tid);
+                else next.delete(tid);
+            }
+            if (next.size === 0) {
+                player.sendMessage(CHAT_WARNING + "Keep at least one type enabled for culling.");
+                return openBearCullDevTypesGroupModal(group);
+            }
+            try {
+                setWorldProperty(BEAR_CULL_DEV_KEYS.enabledTypes, JSON.stringify([...next]));
+                saveAllProperties();
+            } catch { /* ignore */ }
+            player.sendMessage(CHAT_SUCCESS + `Bear cull: ${next.size} type(s) eligible (saved).`);
+            openBearCullDevTypesMenu();
+        }).catch(() => openBearCullDevTypesMenu());
+    }
+
+    function openBearCullDevEditModal() {
+        const eff = getBearCullEffectiveParams();
+        const v = getPlayerSoundVolume(player);
+        const targetDef = Math.min(Math.max(5, eff.targetGlobal), Math.max(5, eff.whenAbove - 1));
+        const modal = new ModalFormData()
+            .title("§cBear cull — world overrides")
+            .slider("§fGlobal total above §8(trigger)", 15, 400, { valueStep: 1, defaultValue: Math.min(400, Math.max(15, eff.whenAbove)) })
+            .slider("§fTarget floor §8(work toward)", 5, 380, { valueStep: 1, defaultValue: targetDef })
+            .slider("§fMax removals per pass", 1, 24, { valueStep: 1, defaultValue: Math.min(24, Math.max(1, eff.maxRemovedPerPass)) })
+            .slider("§fUrgent mode above §8(relaxed min distance)", 25, 500, { valueStep: 1, defaultValue: Math.min(500, Math.max(25, eff.urgentWhenAbove)) })
+            .slider("§fMin distance §8(normal blocks)", 8, 128, { valueStep: 1, defaultValue: Math.min(128, Math.max(8, eff.minNearestBlocks)) })
+            .slider("§fMin distance §8(urgent blocks)", 4, 96, { valueStep: 1, defaultValue: Math.min(96, Math.max(4, eff.urgentMinNearestBlocks)) })
+            .slider("§fInterval §8(ticks between passes)", 20, 400, { valueStep: 10, defaultValue: Math.min(400, Math.max(20, Math.round(eff.intervalTicks / 10) * 10)) });
+
+        modal.show(player).then((res) => {
+            if (!res || res.canceled) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * v });
+                return openBearCullDevMenu();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * v });
+            const fv = res.formValues || [];
+            let whenAbove = Math.floor(Number(fv[0]) || eff.whenAbove);
+            whenAbove = Math.max(15, Math.min(400, whenAbove));
+            let targetGlobal = Math.floor(Number(fv[1]) || eff.targetGlobal);
+            targetGlobal = Math.max(5, Math.min(whenAbove - 1, targetGlobal));
+            let maxRp = Math.floor(Number(fv[2]) || eff.maxRemovedPerPass);
+            maxRp = Math.max(1, Math.min(24, maxRp));
+            let urgentAbove = Math.floor(Number(fv[3]) || eff.urgentWhenAbove);
+            urgentAbove = Math.max(whenAbove + 1, Math.min(500, urgentAbove));
+            let minDist = Math.floor(Number(fv[4]) || eff.minNearestBlocks);
+            minDist = Math.max(8, Math.min(128, minDist));
+            let urgDist = Math.floor(Number(fv[5]) || eff.urgentMinNearestBlocks);
+            urgDist = Math.max(4, Math.min(minDist, urgDist));
+            let intervalTicks = Math.floor(Number(fv[6]) || eff.intervalTicks);
+            intervalTicks = Math.max(20, Math.min(400, Math.round(intervalTicks / 10) * 10));
+
+            try {
+                setWorldProperty(BEAR_CULL_DEV_KEYS.whenAbove, whenAbove);
+                setWorldProperty(BEAR_CULL_DEV_KEYS.targetGlobal, targetGlobal);
+                setWorldProperty(BEAR_CULL_DEV_KEYS.maxRemovedPerPass, maxRp);
+                setWorldProperty(BEAR_CULL_DEV_KEYS.urgentWhenAbove, urgentAbove);
+                setWorldProperty(BEAR_CULL_DEV_KEYS.minNearestBlocks, minDist);
+                setWorldProperty(BEAR_CULL_DEV_KEYS.urgentMinNearestBlocks, urgDist);
+                setWorldProperty(BEAR_CULL_DEV_KEYS.intervalTicks, intervalTicks);
+                saveAllProperties();
+            } catch { /* ignore */ }
+            player.sendMessage(
+                CHAT_SUCCESS +
+                    `Bear cull dev: above ${whenAbove} toward ${targetGlobal} · ${maxRp}/pass · urgent>${urgentAbove} · dist ${minDist}/${urgDist}m · ${intervalTicks}t`
+            );
+            openBearCullDevMenu();
+        }).catch(() => openBearCullDevMenu());
+    }
 
     function openAIThrottleMenu() {
         const miningState = getMiningAIState();

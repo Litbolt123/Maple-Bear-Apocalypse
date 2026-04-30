@@ -10984,28 +10984,14 @@ function initializeMiningAI() {
                 continue;
             }
             
-            // Check if entity still exists (mining bears + infected entities share pathfinding)
+            // Entity lookup by id (avoid scanning every dim × type × mob every cleanup tick).
             try {
                 let entityExists = false;
-                for (const dimId of DIMENSION_IDS) {
-                    try {
-                        const dimension = world.getDimension(dimId);
-                        if (!dimension) continue;
-                        
-                        for (const typeId of PATHFINDING_ENTITY_TYPES) {
-                            const entities = dimension.getEntities({ type: typeId });
-                            for (const e of entities) {
-                                if (e.id === entityId) {
-                                    entityExists = true;
-                                    break;
-                                }
-                            }
-                            if (entityExists) break;
-                        }
-                        if (entityExists) break;
-                    } catch { }
-                }
-                
+                try {
+                    const ent = world.getEntity(entityId);
+                    entityExists = !!(ent && isEntityValid(ent));
+                } catch { /* ignore */ }
+
                 if (!entityExists && state.status === 'in_progress') {
                     if (getDebugPathfinding()) {
                         console.warn(`[MINING AI] Canceling pathfinding for non-existent entity ${entityId.substring(0, 8)}`);
