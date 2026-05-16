@@ -1,5 +1,5 @@
 {
-  "name": "maplebear-takeover",
+  "name": "M.B.A",
   "version": "1.0.0",
   "private": true,
   "type": "module",
@@ -19,7 +19,7 @@
     "url": "git+https://github.com/Litbolt123/Maple-Bear-Take-Over.git"
   },
   "keywords": ["minecraft", "bedrock", "addon"],
-  "author": "Maple Bear Industries",
+  "author": "Litbolt123 and Compoohter",
   "license": "ISC",
   "bugs": {
     "url": "https://github.com/Litbolt123/Maple-Bear-Take-Over/issues"
