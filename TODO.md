@@ -5,6 +5,14 @@
 
 ---
 
+## Near-term — GitHub versioning & releases
+
+Playbook (MSBuild/.NET oriented; **reuse the workflow ideas** for this repo): [`docs/development/github-versioning-releases-agent-guide.md`](docs/development/github-versioning-releases-agent-guide.md).
+
+- [ ] **Implement when ready:** align **single source of truth** (`mb_buildConfig.js` / manifests / `PLAYER_CHANGELOG`) with **`v*` tags**, optional **`workflow_dispatch`** QA artifacts, and a **tag == version** guard in CI — adapt §2–5 of the guide (not `dotnet msbuild`).
+
+---
+
 ## Next steps (suggested order)
 
 1. **Playtest**: Multiplayer + spawn presets + multi-storm + Emulsifier; watch TPS and edge cases.  
@@ -125,4 +133,4 @@
 
 ---
 
-*Last updated: 2026-03-20*
+*Last updated: 2026-05-17*

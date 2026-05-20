@@ -34,6 +34,7 @@ Start here to navigate the repo. **Session log:** [context summary.md](context%2
 | [ADDON_SYSTEMS_AND_FEATURES.md](development/ADDON_SYSTEMS_AND_FEATURES.md) | Systems map + links to deep docs |
 | [PROJECT_STATUS.md](development/PROJECT_STATUS.md) | Snapshot: done / gaps / next steps |
 | [SCRIPTS_REFERENCE.md](development/SCRIPTS_REFERENCE.md) | What each `BP/scripts/*.js` module does |
+| [github-versioning-releases-agent-guide.md](development/github-versioning-releases-agent-guide.md) | Reference playbook: SemVer, tags, GitHub Actions/Releases (adapt from MSBuild to pack versioning) |
 
 ### `development/guides/` — How-to & compatibility
 
