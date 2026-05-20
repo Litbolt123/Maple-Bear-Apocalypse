@@ -10,6 +10,8 @@ Start here to navigate the repo. **Session log:** [context summary.md](context%2
 |------|---------|
 | [context summary.md](context%20summary.md) | Running change log (humans + AI) |
 | [PLAYER_CHANGELOG.md](PLAYER_CHANGELOG.md) | Player-facing beta notes (referenced in-game) |
+| [RELEASE_BODY.md](RELEASE_BODY.md) | GitHub Release description (CI; edit before each tag) |
+| [releasing.md](releasing.md) | Maintainer runbook: tag → Actions → `.mcpack` on Releases |
 | [README.md](README.md) | This index |
 | [ORGANIZATION.md](ORGANIZATION.md) | Folder tree and conventions |
 

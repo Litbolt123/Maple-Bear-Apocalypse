@@ -1,0 +1,102 @@
+# Tag-triggered release: validate, zip BP/RP (+ Dev twins), publish GitHub Release.
+# Version source: BP/scripts/mb_buildConfig.js — tag must be v + that semver.
+# Export .mcpack in Bridge locally; CI ships source pack folders as .zip.
+
+name: Release build
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ship:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Read version from mb_buildConfig.js
+        id: ver
+        run: node tools/getVersion.js --github-output >> "$GITHUB_OUTPUT"
+
+      - name: Detect prerelease (semver hyphen suffix)
+        id: flags
+        run: |
+          if [ "${{ steps.ver.outputs.prerelease }}" = "true" ]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+            echo "make_latest=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+            echo "make_latest=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Verify tag matches version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          TAG="${GITHUB_REF#refs/tags/v}"
+          VER="${{ steps.ver.outputs.version }}"
+          if [ "$TAG" != "$VER" ]; then
+            echo "::error::Tag v${TAG} does not match mb_buildConfig.js version ${VER}"
+            exit 1
+          fi
+
+      - name: Sync pack metadata (manifest descriptions)
+        run: node tools/syncPackMetadata.js
+
+      - name: Validate JSON and release scripts
+        run: |
+          npm run validate:json
+          node tools/testAllScripts.js --release-only
+
+      - name: Lint release + tools
+        run: npm run lint
+
+      - name: Zip pack folders (BP, RP, BP - Dev, RP - Dev)
+        run: node tools/packageRelease.js --out dist
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Maple-Bear-${{ steps.ver.outputs.version }}
+          path: dist/*.zip
+          if-no-files-found: error
+
+      - name: Verify RELEASE_BODY.md
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          if [ ! -f docs/RELEASE_BODY.md ]; then
+            echo "::error::docs/RELEASE_BODY.md is required before tagging"
+            exit 1
+          fi
+          LEN=$(wc -c < docs/RELEASE_BODY.md | tr -d ' ')
+          if [ "$LEN" -lt 80 ]; then
+            echo "::error::docs/RELEASE_BODY.md is too short (${LEN} bytes)"
+            exit 1
+          fi
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: The Maple Bear Apocalypse ${{ steps.ver.outputs.version }}
+          body_path: docs/RELEASE_BODY.md
+          generate_release_notes: false
+          prerelease: ${{ steps.flags.outputs.prerelease == 'true' }}
+          make_latest: ${{ steps.flags.outputs.make_latest == 'true' }}
+          files: dist/*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

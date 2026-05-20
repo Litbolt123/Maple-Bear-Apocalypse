@@ -6,6 +6,16 @@ Running log of **what changed and why** (gameplay, scripts, assets, docs). Used 
 
 ---
 
+**Date:** 2026-05-19 (GitHub Releases CI — pack folder zips, Bridge for .mcpack)
+
+- Tag **`v*`** → **`.github/workflows/release.yml`**: validate, **`tools/packageRelease.js`** zips **`BP/`**, **`RP/`**, **`BP - Dev/`**, **`RP - Dev/`** (no CI `.mcpack` — Bridge export on maintainer machine). **`docs/RELEASE_BODY.md`**, **`docs/releasing.md`**, **`tools/getVersion.js`**.
+
+**Date:** 2026-05-19 (GitHub Releases CI — initial .mcpack attempt, superseded)
+
+- First CI draft built `.mcpack` in Actions; replaced by folder zips per maintainer preference.
+
+---
+
 **Date:** 2026-05-19 (release — v0.9.0-beta.4)
 
 - Shipped **beta.4** after user playtest (lag, buff cap, death explosions). **`ADDON_VERSION_PRERELEASE`** → **`beta.4`**; **`PLAYER_CHANGELOG_VERSION`** → **`0.9.0-beta.4`**; **`npm run sync:pack-metadata`**; **`docs/PLAYER_CHANGELOG.md`**, **`mb_playerChangelog.js`** (both packs), **`docs/development/releases/v0.9.0-beta.4.md`**, smoke checklist row. Tag **`v0.9.0-beta.4`** for GitHub Release (public **`BP/`** + **`RP/`**).

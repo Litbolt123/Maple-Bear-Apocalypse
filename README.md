@@ -24,9 +24,15 @@ Minecraft **Bedrock Edition** addon (**M.B.A**): a day-driven invasion of Maple 
 | `docs/` | Design, mechanics, systems reference, testing checklists |
 | `tools/` | Node maintenance scripts |
 
+## Install (players)
+
+Download **`BP`** and **`RP`** pack zips from **[GitHub Releases](https://github.com/Litbolt123/Maple-Bear-Take-Over/releases), unzip, then export `.mcpack` from **Bridge** (recommended) or use the folders in your Bedrock project. Enable both behavior and resource packs on your world.
+
 ## Documentation
 
 Full index: **[`docs/README.md`](docs/README.md)**.
+
+**Releases (maintainers):** [`docs/releasing.md`](docs/releasing.md) — bump version, edit `docs/RELEASE_BODY.md`, push `v*` tag; CI zips `BP`/`RP`/dev folders (Bridge for `.mcpack`).
 
 **Start here**
 

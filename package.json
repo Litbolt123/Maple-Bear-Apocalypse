@@ -17,7 +17,9 @@
     "bridge:config:dev": "node tools/copyBridgeConfig.js dev",
     "bridge:config:release": "node tools/copyBridgeConfig.js release",
     "bridge:config:dev:sync": "node tools/copyBridgeConfig.js dev --sync-names",
-    "bridge:config:release:sync": "node tools/copyBridgeConfig.js release --sync-names"
+    "bridge:config:release:sync": "node tools/copyBridgeConfig.js release --sync-names",
+    "version": "node tools/getVersion.js",
+    "release:package": "node tools/packageRelease.js"
   },
   "repository": {
     "type": "git",

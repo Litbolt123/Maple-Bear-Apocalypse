@@ -1,8 +1,10 @@
 # Agent guide: GitHub versioning, Actions, and Releases
 
+**This repo (Maple Bear):** use [`docs/releasing.md`](../releasing.md) — version in `BP/scripts/mb_buildConfig.js`, tag `v*` → [`.github/workflows/release.yml`](../../.github/workflows/release.yml) zips `BP/` + `RP/` + dev twins; **Bridge** exports `.mcpack`, body from [`docs/RELEASE_BODY.md`](../RELEASE_BODY.md).
+
 **Purpose:** A **shareable, project-agnostic** playbook for AI assistants and humans setting up (or debugging) **semantic versioning**, **Git tags**, **GitHub Actions**, and **GitHub Releases** for a desktop or CLI app shipped as binaries (e.g. .NET + optional installer).
 
-**Reference implementation:** This repository ([`Directory.Build.props`](../Directory.Build.props), [`.github/workflows/release-windows.yml`](../.github/workflows/release-windows.yml), [`docs/releasing.md`](releasing.md)). Adapt names (`WhatAmIDoing`, paths, Inno) to the target product.
+**Reference implementation (What Am I Doing):** [`Directory.Build.props`](https://github.com/Litbolt123/What-Am-I-Doing/blob/main/Directory.Build.props), `.github/workflows/release-windows.yml`, `docs/releasing.md`. Adapt names, paths, and packaging to the target product.
 
 ---
 
