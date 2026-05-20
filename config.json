@@ -1,9 +1,9 @@
 {
 	"type": "minecraftBedrock",
-	"name": "MapleBear TakeOver",
+	"name": "M.B.A",
 	"namespace": "bridge",
 	"authors": [
-		"Maple Bear Industries"
+		"Litbolt123 and Compoohter"
 	],
 	"targetVersion": "1.21.130",
 	"description": "Don't do drugs kids...",
@@ -30,7 +30,7 @@
 			[
 				"simpleRewrite",
 				{
-					"packName": "MapleBear TakeOver"
+					"packName": "M.B.A"
 				}
 			]
 		]
