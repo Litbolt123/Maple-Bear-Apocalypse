@@ -1,6 +1,12 @@
 import { world, system, EntityTypes, Entity, Player, ItemStack } from "@minecraft/server";
 import { ActionFormData, ModalFormData } from "@minecraft/server-ui";
 import "./mb_buildConfig.js";
+import {
+    INCLUDE_FULL_DEVELOPER_TOOLS,
+    isReleaseAdminBuild,
+    RELEASE_ADMIN_FORCE_SPAWN_IDS,
+    RELEASE_ADMIN_FORCE_SPAWN_MAX
+} from "./mb_buildConfig.js";
 import { getCodex, getDefaultCodex, markCodex, markSubsectionUnlock, markSectionUnlock, showCodexBook, saveCodex, recordBiomeVisit, getBiomeInfectionLevel, shareKnowledge, isDebugEnabled, showBasicJournalUI, showFirstTimeWelcomeScreen, getPlayerSoundVolume, getPlayerSettings, checkKnowledgeProgression, showEmulsifierMachineUI, getInfectionCueEmitterTier, getInfectionCueHearOthersTier } from "./mb_codex.js";
 import { initializeDayTracking, getCurrentDay, setCurrentDay, getInfectionMessage, checkDailyEventsForAllPlayers, getDayDisplayInfo, recordDailyEvent, mbiHandleMilestoneDay, isMilestoneDay } from "./mb_dayTracker.js";
 import { registerDustedDirtBlock, unregisterDustedDirtBlock, countNearbyDustedDirtBlocks, upsertEmulsifierZoneAtBlock, removeEmulsifierZoneAtBlock, getEmulsifierZoneAtBlock, getZoneFuelQueueForUI, isInsideEmulsifierNoSpawnZone } from "./mb_spawnController.js";
@@ -7770,6 +7776,10 @@ function executeMbCommand(sender, subcommand, args = []) {
                 distanceArg = args[1];
                 quantity = Math.min(10, Math.max(1, parseInt(args[2], 10) || 1));
             } else if (args.length >= 4) {
+                if (isReleaseAdminBuild()) {
+                    sender.sendMessage(CHAT_WARNING + "Release host tools: spawn near yourself only (use the journal menu).");
+                    return;
+                }
                 target = args[1] ? world.getAllPlayers().find(p => p.name === args[1]) : sender;
                 distanceArg = args[2];
                 quantity = Math.min(10, Math.max(1, parseInt(args[3], 10) || 1));
@@ -7783,12 +7793,27 @@ function executeMbCommand(sender, subcommand, args = []) {
                 }
             }
             if (!target) { sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `No player named ${args[1]} found.`); return; }
+            if (isReleaseAdminBuild()) {
+                if (!RELEASE_ADMIN_FORCE_SPAWN_IDS.has(entityId)) {
+                    sender.sendMessage(CHAT_WARNING + "That bear type is not allowed on the release pack. Use Host tools in the journal.");
+                    return;
+                }
+                target = sender;
+                quantity = Math.min(RELEASE_ADMIN_FORCE_SPAWN_MAX, quantity);
+                if (distanceArg === "random" || String(distanceArg).toLowerCase() === "random") {
+                    distanceArg = "10";
+                }
+            }
             let distance = 2;
             if (distanceArg === "random" || (typeof distanceArg === "string" && distanceArg.toLowerCase() === "random")) {
                 distance = 1 + Math.floor(Math.random() * 20);
             } else if (distanceArg !== undefined && distanceArg !== null && distanceArg !== "") {
                 const parsed = parseInt(String(distanceArg), 10);
-                if (!Number.isNaN(parsed) && parsed >= 0) distance = Math.min(64, Math.max(0, parsed));
+                if (!Number.isNaN(parsed) && parsed >= 0) {
+                    distance = isReleaseAdminBuild()
+                        ? Math.min(24, Math.max(0, parsed))
+                        : Math.min(64, Math.max(0, parsed));
+                }
             }
             try {
                 const loc = target.location;
@@ -8081,10 +8106,17 @@ function executeMbCommand(sender, subcommand, args = []) {
                 sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Usage: summon_storm <minor|major> [playerName] [distance]");
                 return;
             }
+            if (isReleaseAdminBuild() && type === "major") {
+                sender.sendMessage(CHAT_WARNING + "Release host tools: minor storms only.");
+                return;
+            }
             const targetName = args[1];
-            const distance = parseInt(args[2], 10) || 0;
+            let distance = parseInt(args[2], 10) || 0;
             let target = sender;
-            if (targetName && String(targetName).trim()) {
+            if (isReleaseAdminBuild()) {
+                target = sender;
+                distance = Math.min(32, Math.max(0, distance));
+            } else if (targetName && String(targetName).trim()) {
                 target = world.getAllPlayers().find(p => p.name === targetName);
                 if (!target) {
                     sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `No player named ${targetName} found.`);

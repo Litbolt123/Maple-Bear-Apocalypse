@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "MapleBear TakeOver - Minecraft Bedrock Edition Addon",
+  "description": "M.B.A (Maple Bear Apocalypse) - Minecraft Bedrock Edition Addon",
   "scripts": {
     "lint": "eslint BP/scripts/ \"BP - Dev/scripts/\" tools/",
     "lint:fix": "eslint --fix BP/scripts/ \"BP - Dev/scripts/\" tools/",
@@ -12,19 +12,20 @@
     "test:scripts": "node tools/testAllScripts.js",
     "test:scripts:release": "node tools/testAllScripts.js --release-only",
     "validate": "npm run validate:json && npm run validate:syntax",
-    "check": "npm run validate && npm run lint"
+    "check": "npm run validate && npm run lint",
+    "sync:pack-metadata": "node tools/syncPackMetadata.js"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Litbolt123/Maple-Bear-Take-Over.git"
+    "url": "git+https://github.com/Litbolt123/Maple-Bear-Apocalypse.git"
   },
   "keywords": ["minecraft", "bedrock", "addon"],
   "author": "Litbolt123 and Compoohter",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/Litbolt123/Maple-Bear-Take-Over/issues"
+    "url": "https://github.com/Litbolt123/Maple-Bear-Apocalypse/issues"
   },
-  "homepage": "https://github.com/Litbolt123/Maple-Bear-Take-Over#readme",
+  "homepage": "https://github.com/Litbolt123/Maple-Bear-Apocalypse#readme",
   "devDependencies": {
     "eslint": "^10.0.3"
   }

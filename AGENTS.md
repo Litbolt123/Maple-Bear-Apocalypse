@@ -2,10 +2,10 @@
 
 ## Project overview
 
-MapleBear TakeOver is a Minecraft Bedrock Edition addon (behavior pack + resource pack). It is **not** a traditional web application — there is no backend server, database, or frontend framework.
+**M.B.A (Maple Bear Apocalypse)** is a Minecraft Bedrock Edition addon (behavior pack + resource pack). Public name on packs: **M.B.A**; full title **Maple Bear Apocalypse**. (*Maple Bear Takeover* is an archived former title.) It is **not** a traditional web application — there is no backend server, database, or frontend framework.
 
-- `BP/` — Behavior Pack — **public / store release** tree: `mb_buildConfig.js` keeps **`INCLUDE_FULL_DEVELOPER_TOOLS` false** so no developer UI is reachable. **Admin tools** (storms, force spawn, list bears) stay available with cheats; players get a **one-time admin disclaimer** (`mb_admin_tools_disclaimer_v1`). Do **not** publish `BP - Dev/` to players.
-- `BP - Dev/` — Internal/testing copy; `mb_buildConfig.js` enables full developer tools + same admin paths (admin disclaimer skipped when dev tools are on). **Public admin preview:** Developer Tools includes toggling §6Admin tools on the journal main menu (world flag `mb_world_dev_preview_admin_main`) and opening the admin panel through the same disclaimer flow as the public pack.
+- `BP/` — **Public release only** (CurseForge / players). `mb_buildConfig.js`: **`INCLUDE_FULL_DEVELOPER_TOOLS === false`** → gated **Host tools** for `mb_cheats` / Litbolt123 (minor storms, capped spawns, list bears, journal pins). No Developer Tools tree. Ship with `RP/`.
+- `BP - Dev/` — **Never publish.** Same scripts as `BP/` for parity, but `mb_buildConfig.js` keeps **`INCLUDE_FULL_DEVELOPER_TOOLS === true`** → full Developer Tools, Debug, spawn controller, storm hub, etc. After copying dev scripts into `BP/`, **restore** `BP - Dev/scripts/mb_buildConfig.js` (do not paste release config over dev). Optional: dev menu can preview public Host tools via world flag `mb_world_dev_preview_admin_main`.
 - `RP/` — Resource Pack (models, textures, sounds, particles, animations)
 - `RP - Dev/` — Dev twin; keep manifest versions aligned with `BP - Dev/`
 - `tools/` — Node.js developer tooling scripts
@@ -54,14 +54,18 @@ All commands are defined in `package.json`:
 
 ### Bridge / local dev pack
 
+**[`config.json`](config.json)** at repo root is **Bridge’s** project file (`type: minecraftBedrock`, `packs` → `./BP`, `./RP`). It is not loaded by Minecraft scripts. Point Bridge at **`BP - Dev/`** and **`RP - Dev/`** for internal work (adjust `packs` paths in Bridge if you use a dev-only Bridge project).
+
 Point Bridge (or any Bedrock pack project) at **`BP - Dev/`** and **`RP - Dev/`**: copy or sync those folders into your Bridge behavior pack and resource pack roots (replace the pack contents you use for Maple Bear). After a full sync from public `BP/`, restore **`BP - Dev/scripts/mb_buildConfig.js`** so `INCLUDE_FULL_DEVELOPER_TOOLS` stays `true`. Entry script loads **`./mb_buildConfig.js` first** from `main.js`; on **public** `BP/`, that module no-ops `console.log` / `info` / `warn` / `debug` so release builds stay quiet (`console.error` unchanged).
+
+**Bridge `.mcpack` export:** Bump semver in `BP/scripts/mb_buildConfig.js`, then run **`npm run sync:pack-metadata`** so manifests + `config.json` show **The Maple Bear Apocalypse** and `v0.9.0-beta.x` in descriptions. See [`docs/development/BRIDGE_EXPORT_AND_VERSIONING.md`](docs/development/BRIDGE_EXPORT_AND_VERSIONING.md).
 
 ### Release checklist (public `BP/` + `RP/`)
 
 When folding work from **`BP - Dev/`** / **`RP - Dev/`** into a store or public drop:
 
 - **Merge into public trees:** copy or sync changed scripts, JSON, and assets into **`BP/`** and **`RP/`** (whatever actually changed in dev).
-- **Do not paste the dev build config over release:** keep **`BP/scripts/mb_buildConfig.js`** as the **public** flavor — **`INCLUDE_FULL_DEVELOPER_TOOLS` must stay `false`**, `BUILD_FLAVOR` / version strings as intended for that release. Edit that file by hand if needed; never replace it wholesale with `BP - Dev/scripts/mb_buildConfig.js`.
+- **Do not swap build configs between packs:** **`BP/scripts/mb_buildConfig.js`** → `BUILD_FLAVOR = "release"`, **`INCLUDE_FULL_DEVELOPER_TOOLS = false`**. **`BP - Dev/scripts/mb_buildConfig.js`** → `BUILD_FLAVOR = "dev"`, **`INCLUDE_FULL_DEVELOPER_TOOLS = true`**. One file controls all journal gating (`isReleaseAdminBuild()` in codex).
 - **Manifests:** confirm **`BP/manifest.json`** and **`RP/manifest.json`** (name, description, uuid/version policy) match what you publish; **description** beta label should match **`ADDON_VERSION_PRERELEASE`** and **`PLAYER_CHANGELOG_VERSION`** in **`mb_buildConfig.js`** / **`mb_playerChangelog.js`** (same for **`BP - Dev/`** + **`RP - Dev/`** when tagging dev builds).
 - **Validate:** run **`npm run check`** (or at least `npm run validate` + `npm run lint`) against the **`BP/`** and **`RP/`** trees after the merge.
 - **Ship only public packs** to players: **`BP/`** + **`RP/`** — do not distribute **`BP - Dev/`** or **`RP - Dev/`** as the main download.

@@ -6,6 +6,50 @@ Running log of **what changed and why** (gameplay, scripts, assets, docs). Used 
 
 ---
 
+**Date:** 2026-05-17 (world setup — no experiments on 1.26.2+)
+
+- **Playtest:** Infected custom biomes work on **Bedrock 1.26.2** with **no world experiments** (Custom Biomes off). **`docs/development/WORLD_SETUP.md`** is canonical; README, TODO, Patreon/Discord prompts, ADDON_SYSTEMS, PROJECT_STATUS, DEVELOPER_ONBOARDING updated. Old “enable Custom Biomes” guidance retired for 1.26.2+.
+
+---
+
+**Date:** 2026-05-17 (Bridge export name + version sync + GitHub rename prep)
+
+- **Pack display name:** **The Maple Bear Apocalypse** in `BP/RP` manifests, `config.json` (`simpleRewrite.packName`), `PACK_DISPLAY_NAME` in `mb_buildConfig.js`.
+- **`npm run sync:pack-metadata`** (`tools/syncPackMetadata.js`) — bumps manifest `header.name`, description with full semver, `header.version` `[0,9,0]` from build config.
+- **GitHub:** `package.json` URLs → `Maple-Bear-Apocalypse`; rename steps in `docs/development/GITHUB_RENAME.md` (web/CLI — not run from agent).
+
+---
+
+**Date:** 2026-05-17 (rebrand — M.B.A / Maple Bear Apocalypse)
+
+- **Canonical names:** **M.B.A** = **Maple Bear Apocalypse**; *Maple Bear Takeover* archived. **`docs/marketing/NAMING.md`**; updated README, AGENTS, package.json, DESIGN_VISION banner, Patreon + Discord Comet prompts.
+
+---
+
+**Date:** 2026-05-17 (Discord — Comet server prompt)
+
+- **`docs/marketing/DISCORD_SERVER_COMET_PROMPT.md`:** Paste-in prompt for Comet AI — channels, roles, rules, FAQ, tone, placeholders, anti-impersonation / spoiler notes; links Patreon `[DISCORD_LINK]` when live.
+
+---
+
+**Date:** 2026-05-17 (build config docs — dev vs release gating)
+
+- Clarified **`mb_buildConfig.js`**: public **`BP/`** only gates Host tools (`INCLUDE_FULL_DEVELOPER_TOOLS` false); **`BP - Dev/`** must keep full dev true and is never shipped. **`AGENTS.md`** release/merge notes updated.
+
+---
+
+**Date:** 2026-05-17 (release — Host tools / dumbed-down admin)
+
+- **Public `BP/`:** Journal **Host tools** (was full Admin menu) for `mb_cheats` / Litbolt123 — minor storm + end all, enable dust if off, spawn tiny/infected only (1–3, near self), list bears, pin journal sections only. No dev pins, no storm override/multi/major, no spawn-controller path. **`mb_buildConfig.js`:** `isReleaseAdminBuild()`, allowlist + cap; **`main.js`** enforces on `force_spawn` / `summon_storm`. Dev pack unchanged (full Developer Tools when `INCLUDE_FULL_DEVELOPER_TOOLS`).
+
+---
+
+**Date:** 2026-05-17 (release journal — dev pin leak fix)
+
+- **`mb_codex.js` (`BP/` + `BP - Dev/`):** `getPinEligibleDevItems()` wrongly treated `INCLUDE_ADMIN_TOOLS` like full dev and exposed **all** pinnable dev tools on the public pack; with `mb_cheats` / Litbolt123, pins could open Spawn Controller and other dev menus. Fixed: release admin only **`pinInReleaseAdmin`** items (storm hub, list bears); `sanitizePinnedDevItems()` on journal open; `openSpawnControllerMenu()` hard-blocks when `INCLUDE_FULL_DEVELOPER_TOOLS` is false.
+
+---
+
 **Date:** 2026-05-17 (Patreon — dread section + Comet archive)
 
 - **`docs/marketing/PATREON_FIRST_POST_DRAFT.md`:** Added **The feeling of dread** section (slow-burn / ambient horror, no jumpscares; time pressure, false safety, world watches back, powder, co-op blame, death persists). Archived Comet browser export verbatim with diff table; note Comet used **Maple Bear Apocalypse** vs repo **Takeover**.

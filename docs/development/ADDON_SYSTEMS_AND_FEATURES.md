@@ -94,7 +94,7 @@ Shared helpers and **consistent chat color tokens** for UI and messages.
 - **Entities**: Day-tier Maple Bears (tiny, infected, buff), **flying**, **mining**, **torpedo**, infected animals, corpse/loot variants as defined under `BP/entities/`.
 - **Items**: `mb:snow`, journals, cure-related consumption hooks; crafting for Powdery Journal.
 - **Blocks**: `mb:dusted_dirt`, `mb:snow_layer`, **Emulsifier machine**, related placement and loot.
-- **World generation**: **Overworld** infected biome replacement (requires **Custom Biomes** experiment); Nether/End use **scripted spawning on vanilla surfaces**, not `replace_biomes` in those dimensions (see [`DIMENSION_ADAPTATIONS.md`](systems/DIMENSION_ADAPTATIONS.md)).
+- **World generation**: **Overworld** infected biome replacement (`replace_biomes`); **no world experiments on 1.26.2+** ([`WORLD_SETUP.md`](WORLD_SETUP.md)). Nether/End use **scripted spawning on vanilla surfaces** (see [`DIMENSION_ADAPTATIONS.md`](systems/DIMENSION_ADAPTATIONS.md)).
 - **RP**: Models, animations, **sounds**, **particles**, **client biome** fog/sky/water for infected biome.
 
 ---

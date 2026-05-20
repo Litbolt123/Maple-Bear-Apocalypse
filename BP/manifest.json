@@ -14,8 +14,8 @@
 		}
 	},
 	"header": {
-		"name": "M.B.A",
-		"description": "Beta v0.9.0-beta.3 — release pack (admin storms/spawn only; no full dev tools). Semver in BP/scripts/mb_buildConfig.js.",
+		"name": "The Maple Bear Apocalypse",
+		"description": "v0.9.0-beta.3 — The Maple Bear Apocalypse (release). Host tools on cheats; no full dev menus.",
 		"min_engine_version": [
 			1,
 			26,
@@ -23,8 +23,8 @@
 		],
 		"uuid": "064b6f9c-349b-4ab1-80d3-c95f732db577",
 		"version": [
-			1,
 			0,
+			9,
 			0
 		]
 	},
@@ -33,8 +33,8 @@
 			"type": "data",
 			"uuid": "fd131ed7-ec19-427a-a7cb-a2628e6f9a14",
 			"version": [
-				1,
 				0,
+				9,
 				0
 			]
 		},
@@ -44,8 +44,8 @@
 			"uuid": "68f5a9b0-5aac-47cc-961d-3b87ba331a0b",
 			"entry": "scripts/main.js",
 			"version": [
-				1,
 				0,
+				9,
 				0
 			]
 		}
@@ -65,8 +65,8 @@
 		{
 			"uuid": "2a4d2f59-f46d-47fc-a3c1-7a26d46d2157",
 			"version": [
-				1,
 				0,
+				9,
 				0
 			]
 		}

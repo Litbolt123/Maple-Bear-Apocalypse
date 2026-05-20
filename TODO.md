@@ -33,7 +33,7 @@ Playbook (MSBuild/.NET oriented; **reuse the workflow ideas** for this repo): [`
 - **Item corruption** on infected bear death; loot and world feedback tied to design.
 
 ### World & dimensions
-- **Overworld** custom infected biome + **client** fog/sky/water (Custom Biomes experiment).  
+- **Overworld** custom infected biome + **client** fog/sky/water (`replace_biomes`; no world experiments on **1.26.2+** — see `docs/development/WORLD_SETUP.md`).  
 - **Nether & End**: **block-based spawning** on native surfaces; **Nether fire resistance** by bear tier (`mb_dimensionAdaptation.js`); **End** flying/torpedo spawn emphasis scaling with day.  
 - **Dusted dirt** registration and spread-related play; **Emulsifier** zones (fuel queue, dome purification scan, no-spawn bubble, machine UI, dev tools).
 
@@ -106,7 +106,7 @@ Playbook (MSBuild/.NET oriented; **reuse the workflow ideas** for this repo): [`
 
 ## Known issues & notes
 
-- **Custom biomes**: Experimental; enable **Custom Biomes**; old chunks can **seam** against new generation — test on fresh worlds or backups.  
+- **Custom biomes**: On **1.26.2+**, **Custom Biomes experiment not required** (playtested). Old chunks can still **seam** against new generation — use fresh worlds or backups.  
 - **Chat-based debug**: API 2.0.0 chat limitations led to **item/journal-based** debug flows.  
 - **Animation controller** log noise: handled where possible; often non-fatal.  
 - **Pre-existing**: `tools/updateMiningBlocks.js` needs `minecraft:break_blocks` on mining entities if you regenerate lists (see `AGENTS.md`).

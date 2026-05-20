@@ -1,6 +1,8 @@
-# Maple Bear Takeover - Design Vision & Intentions
+# Maple Bear Apocalypse (M.B.A) — Design Vision & Intentions
 
-This document captures the core design philosophy, intentions, and vision for the Maple Bear Takeover addon. This is the "source of truth" for understanding what the addon should feel like and how features should align with the overall vision.
+> **Naming:** Public title is **Maple Bear Apocalypse** (**M.B.A**). *Maple Bear Takeover* is an archived former name; this doc may still say "Takeover" in places until copy is refreshed.
+
+This document captures the core design philosophy, intentions, and vision for the addon. This is the "source of truth" for understanding what the addon should feel like and how features should align with the overall vision.
 
 ---
 

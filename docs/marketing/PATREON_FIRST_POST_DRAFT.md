@@ -1,8 +1,9 @@
 # Patreon — first post draft
 
-**Suggested page title:** Maple Bear Takeover is here — and the world won't stay clean  
-**Subtitle (optional):** Welcome to the invasion — v0.9 beta  
+**Suggested page title:** M.B.A is here — Maple Bear Apocalypse  
+**Subtitle (optional):** The world won't stay clean · v0.9 beta  
 **Creators:** Litbolt123 & Compoohter  
+**Short name:** **M.B.A** (Maple Bear Apocalypse) — *Maple Bear Takeover* is archived  
 
 Placeholders for Comet: `[HERO_IMAGE]` `[GAMEPLAY_GIF]` `[DOWNLOAD_LINK]` `[DISCORD_LINK]` `[TIER_1_BENEFITS]` `[SUPPORT_THANK_YOU]`
 
@@ -10,15 +11,15 @@ Placeholders for Comet: `[HERO_IMAGE]` `[GAMEPLAY_GIF]` `[DOWNLOAD_LINK]` `[DISC
 
 ## Main post (paste into Patreon)
 
-Something changes the first time you load Maple Bear Takeover into a world. The sky still looks familiar, but the ground does not stay yours for long. Days tick forward whether you are ready or not. Small bears become serious ones. A strange white powder creeps through the land. Storms roll in. And somewhere out there, the world is learning how to push back against every trick you have ever used to feel safe in Minecraft.
+Something changes the first time you load Maple Bear Apocalypse into a world. The sky still looks familiar, but the ground does not stay yours for long. Days tick forward whether you are ready or not. Small bears become serious ones. A strange white powder creeps through the land. Storms roll in. And somewhere out there, the world is learning how to push back against every trick you have ever used to feel safe in Minecraft.
 
-We are **Litbolt123** and **Compoohter**, and this is our Bedrock survival invasion addon — **Maple Bear Takeover** (you will also see **M.B.A** on the packs). We built it for players who want tension that grows over time, not a one-off boss fight. If you have been waiting for a reason to start a fresh world with friends, this is that post. *Don't do drugs kids…* — that line is part of the tone of the project, not a lecture. Think unsettling mystery first, harder truths later.
+We are **Litbolt123** and **Compoohter**, and this is **M.B.A** — **Maple Bear Apocalypse** — our Bedrock survival invasion addon (the name on the packs is **M.B.A**). We built it for players who want tension that grows over time, not a one-off boss fight. If you have been waiting for a reason to start a fresh world with friends, this is that post. *Don't do drugs kids…* — that line is part of the tone of the project, not a lecture. Think unsettling mystery first, harder truths later.
 
 ---
 
-### What is Maple Bear Takeover?
+### What is M.B.A?
 
-Maple Bear Takeover is a **Minecraft Bedrock Edition** addon (behavior pack + resource pack). It is **not** a custom map. You add it to a normal survival world and the invasion begins.
+Maple Bear Apocalypse is a **Minecraft Bedrock Edition** addon (behavior pack + resource pack). It is **not** a custom map. You add it to a normal survival world and the invasion begins.
 
 Progress is tied to **world days**. Early on you meet tiny Maple Bears. By around day 4, infected bears show up and the infection loop becomes real. Day 8 brings heavier threats. Day 13 ramps pressure again. Day 20 is where the sky and the stone under your feet stop being reliable — **flying bears**, **mining bears** that path toward you underground, and **torpedo bears** that punish sky bases. Between those milestones you are surviving, researching, and deciding how much of the white powder you are willing to touch.
 
@@ -40,7 +41,7 @@ Picture this: your first real storm at night, wind and powder in the air, shelte
 
 ### The feeling of dread
 
-We are not making a jumpscare machine. The dread in Maple Bear Takeover is **slow**, **ambient**, and **personal** — the kind that sits in your stomach after you log off.
+We are not making a jumpscare machine. The dread in Maple Bear Apocalypse is **slow**, **ambient**, and **personal** — the kind that sits in your stomach after you log off.
 
 **Time is not on your side.** World days advance whether you are geared or not. You can feel the calendar in your bones: yesterday’s problem bear is today’s baseline, and tomorrow adds something you have not met yet. Dread here is **anticipation** — not “something popped out,” but “something is *coming*.”
 
@@ -54,7 +55,7 @@ We are not making a jumpscare machine. The dread in Maple Bear Takeover is **slo
 
 **Death is not a full reset.** The world can remember you — an infected form left behind, corruption that does not care that you respawned. Dread is seeing your own failure still walking around.
 
-If Maple Bear Takeover works the way we want, you will have nights where Minecraft feels like **home** and **hostile** at the same time — familiar blocks, wrong rules, and the sense that the map is learning you faster than you are learning it.
+If Maple Bear Apocalypse works the way we want, you will have nights where Minecraft feels like **home** and **hostile** at the same time — familiar blocks, wrong rules, and the sense that the map is learning you faster than you are learning it.
 
 ---
 
@@ -72,7 +73,7 @@ A full roster of variants that escalate with days. Mining bears use real pathfin
 Multiple storms can be active. Shelter and positioning matter. Recent beta work also eases distant storm effects when no player is near — far storms still matter, but your game should not melt when chaos is happening three valleys away.
 
 **World**  
-Infected overworld biomes (large, medium, and small patches) replace many vanilla biomes when world generation allows. You will want the **Custom Biomes** experiment enabled when you create the world. **Dusted dirt** and addon snow layers spread the infection visually and mechanically.
+Infected overworld biomes (large, medium, and small patches) replace many vanilla biomes when world generation allows. On **Bedrock 1.26.2+**, you do **not** need to turn on world experiments (we verified **Custom Biomes** off). **Dusted dirt** and addon snow layers spread the infection visually and mechanically.
 
 **Powdery Journal**  
 Search, settings, achievements, daily log flavor, and **knowledge sharing** — stand near a friend who holds the journal and you can spread what you have learned. Co-op groups feel smarter together.
@@ -110,10 +111,10 @@ We will share progress here: beta notes, behind-the-scenes thoughts, and honest 
 
 **Version:** v0.9.0-beta.3  
 **Platform:** Minecraft Bedrock **1.26.10** or newer  
-**World setup:** Enable **Custom Biomes** when creating a world for infected biome generation. A **fresh world** is strongly recommended; mixing old chunks and new generation can show ugly seams.  
+**World setup:** **Bedrock 1.26.2+** — no experiments required. A **fresh world** is still recommended for infected biomes; mixing old and new chunks can show ugly seams.  
 
 **Get the pack:** `[DOWNLOAD_LINK]`  
-**Bug reports:** [GitHub Issues](https://github.com/Litbolt123/Maple-Bear-Take-Over/issues)  
+**Bug reports:** [GitHub Issues](https://github.com/Litbolt123/Maple-Bear-Apocalypse/issues)  
 **Community:** `[DISCORD_LINK]`
 
 Expect rough edges. Tell us what melted your realm. That feedback is how beta becomes something you are proud to recommend.
@@ -134,7 +135,7 @@ If you are here on day one, thank you. You are early to a world that is still le
 
 ### Start here
 
-Create a world with **Custom Biomes** on. Install **M.B.A**. Grab a friend. Find the **Powdery Journal** before the bears find you first.
+Create a **fresh world**, install **M.B.A** (both packs). Grab a friend. Find the **Powdery Journal** before the bears find you first.
 
 More posts soon — roadmap beats, beta changelogs, and whatever we broke (and fixed) that week.
 
@@ -144,13 +145,13 @@ More posts soon — roadmap beats, beta changelogs, and whatever we broke (and f
 
 ## About blurb (Patreon page / sidebar)
 
-Maple Bear Takeover is a Bedrock survival invasion addon where days unlock deadlier bears, white powder spreads through your world, and the Powdery Journal reveals the truth only if you survive long enough to read it. Co-op recommended. Currently in **v0.9.0-beta.3**. Patreon supports development toward the full Day 100 arc.
+Maple Bear Apocalypse is a Bedrock survival invasion addon where days unlock deadlier bears, white powder spreads through your world, and the Powdery Journal reveals the truth only if you survive long enough to read it. Co-op recommended. Currently in **v0.9.0-beta.3**. Patreon supports development toward the full Day 100 arc.
 
 ---
 
 ## Social teaser (~280 characters)
 
-The world won't stay clean. Maple Bear Takeover — Bedrock invasion survival, co-op-ready, v0.9 beta. Days unlock deadlier bears, storms stack, and the Powdery Journal hides what you haven't earned yet. Custom Biomes on. Friends optional. Fear recommended.
+The world won't stay clean. Maple Bear Apocalypse — Bedrock invasion survival, co-op-ready, v0.9 beta. Days unlock deadlier bears, storms stack, and the Powdery Journal hides what you haven't earned yet. 1.26.2+, no experiments. Friends optional. Fear recommended.
 
 ---
 
@@ -167,13 +168,13 @@ The world won't stay clean. Maple Bear Takeover — Bedrock invasion survival, c
 ## Comet browser export (archived)
 
 **Source:** Comet AI paste into Patreon page (user-provided, undated).  
-**Canonical product name in repo:** **Maple Bear Takeover** (`README.md`, pack manifests **M.B.A**). Comet used **Maple Bear Apocalypse** throughout — treat as alternate/marketing copy unless you officially rebrand.
+**Note:** That paste already used **Maple Bear Apocalypse** — aligned with current branding. Old repo title **Maple Bear Takeover** is archived (see [NAMING.md](NAMING.md)). Comet text still says **enable Custom Biomes** — outdated for **1.26.2+**; use the main post above and [WORLD_SETUP.md](../development/WORLD_SETUP.md).
 
 **Diff vs this draft:**
 
 | Item | Comet export | Repo draft (`## Main post` above) |
 |------|----------------|-----------------------------------|
-| Display name | Maple Bear Apocalypse | Maple Bear Takeover |
+| Display name | Maple Bear Apocalypse | M.B.A / Maple Bear Apocalypse |
 | Dread section | *(none — merged into “How it is meant to feel”)* | Dedicated **The feeling of dread** section |
 | Structure | Flat paragraphs, no `---` breaks | Section headers + dread block |
 | Links | GitHub issues URL inline | Same + placeholders for download/Discord |
@@ -183,7 +184,7 @@ The world won't stay clean. Maple Bear Takeover — Bedrock invasion survival, c
 <details>
 <summary>Click to expand Comet export</summary>
 
-Maple Bear Takeover is here — and the world won't stay clean
+Maple Bear Apocalypse is here — and the world won't stay clean
 
 Something changes the first time you load Maple Bear Apocalypse into a world. The sky still looks familiar, but the ground does not stay yours for long. Days tick forward whether you are ready or not. Small bears become serious ones. A strange white powder creeps through the land. Storms roll in. And somewhere out there, the world is learning how to push back against every trick you have ever used to feel safe in Minecraft.
 We are Litbolt123 and Compoohter, and this is our Bedrock survival invasion addon — Maple Bear Apocalypse (you will also see M.B.A on the packs). We built it for players who want tension that grows over time, not a one-off boss fight. If you have been waiting for a reason to start a fresh world with friends, this is that post. Don't do drugs kids… — that line is part of the tone of the project, not a lecture. Think unsettling mystery first, harder truths later.

@@ -13,7 +13,7 @@ Snapshot of **where the addon stands** and **what to tackle next**. For task-lev
 - **Emulsifier**: Zones with fuel queue, burn order, ring-based dome purification scan, netherite rules, break-drop behavior, spawn suppression near machines.
 - **Codex / journal**: Search, settings, achievements gated on journal ownership or persisted unlock, knowledge sharing, extensive Developer Tools.
 - **Dimensions**: Nether/End **spawning on native blocks**; Nether **fire resistance** by day tier; End **flying/torpedo spawn emphasis** scaling with day.
-- **Overworld**: Custom infected biome (experiment) + client visuals; dusted ground infection pipeline.
+- **Overworld**: Custom infected biomes + client visuals; dusted ground infection pipeline (no experiments on 1.26.2+).
 - **Infrastructure**: Dynamic property handler caching, shared entity/player caches, item registry pattern.
 
 ---
@@ -32,7 +32,7 @@ Snapshot of **where the addon stands** and **what to tackle next**. For task-lev
 - **Automated tests**: None in-world; validation is `npm run check` + manual Minecraft play.
 - **Mining block list tool**: `tools/updateMiningBlocks.js` expects `minecraft:break_blocks` on mining entities — verify entity JSON if regenerating lists.
 - **ESLint**: Many pre-existing `no-unused-vars` warnings; not a signal of runtime bugs.
-- **Custom biomes**: Experimental; mixed old/new chunks can show seams — document for players.
+- **Custom biomes**: No experiment toggle on 1.26.2+; mixed old/new chunks can still show seams — fresh worlds recommended.
 
 ---
 

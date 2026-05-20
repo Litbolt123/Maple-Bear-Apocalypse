@@ -36,6 +36,7 @@ import { getHudActionBarDebugInfo, formatHudMergeOrderForMenu, clearAllHudSegmen
 import {
     INCLUDE_FULL_DEVELOPER_TOOLS,
     INCLUDE_ADMIN_TOOLS,
+    isReleaseAdminBuild,
     getAddonVersionDisplayString
 } from "./mb_buildConfig.js";
 import { summonStorm, endStorm, getStormState, getStormDebugInfo, setStormOverride, resetStormOverride, getStormControlParams, isMultiStormEnabled, setMultiStormEnabled, getStorms, endStormById, setStormEnabled } from "./mb_snowStorm.js";
@@ -1822,6 +1823,7 @@ export function showCodexBook(player, context) {
 
         const hasPowerToolsAccess = (player.hasTag && player.hasTag("mb_cheats")) || player?.name === "Litbolt123";
         if (hasPowerToolsAccess && (INCLUDE_ADMIN_TOOLS || INCLUDE_FULL_DEVELOPER_TOOLS)) {
+            sanitizePinnedDevItems(player);
             const pinned = getPinnedDevItems(player);
             const LEGACY_PIN_IDS = { spawn_difficulty: "spawn_controller", spawn_type_toggles: "spawn_controller", force_spawn: "spawn_controller" };
             const eligiblePins = new Set(getPinEligibleDevItems().map((i) => i.id));
@@ -1851,7 +1853,7 @@ export function showCodexBook(player, context) {
                 buttonActions.push(() => openDeveloperToolsWithDisclaimer());
             }
             if (INCLUDE_ADMIN_TOOLS && (!INCLUDE_FULL_DEVELOPER_TOOLS || isDevPreviewAdminMainMenuEnabled())) {
-                buttons.push("§6Admin tools");
+                buttons.push(isReleaseAdminBuild() ? "§6Host tools" : "§6Admin tools");
                 buttonActions.push(() => openAdminToolsWithDisclaimer());
             }
         }
@@ -4619,10 +4621,13 @@ export function showCodexBook(player, context) {
     }
 
     function getPinEligibleDevItems() {
-        let items =
-            INCLUDE_FULL_DEVELOPER_TOOLS || INCLUDE_ADMIN_TOOLS
-                ? PINNABLE_DEV_ITEMS.slice()
-                : PINNABLE_DEV_ITEMS.filter((it) => it.pinInReleaseAdmin);
+        let items;
+        if (INCLUDE_FULL_DEVELOPER_TOOLS) {
+            items = PINNABLE_DEV_ITEMS.slice();
+        } else {
+            // Release: journal section pins only — no storm/spawn dev shortcuts on the main menu.
+            items = [];
+        }
         if (!INCLUDE_FULL_DEVELOPER_TOOLS) {
             items = items.filter((it) => it.id !== "bear_cull_dev");
         }
@@ -4653,6 +4658,17 @@ export function showCodexBook(player, context) {
         try {
             setPlayerProperty(p, "mb_pinned_dev_items", JSON.stringify(ids));
         } catch { }
+    }
+
+    /** Drop pins that are not allowed on this build (e.g. full dev pins after switching from dev pack). */
+    function sanitizePinnedDevItems(p) {
+        const eligible = new Set(getPinEligibleDevItems().map((i) => i.id));
+        const LEGACY_PIN_IDS = { spawn_difficulty: "spawn_controller", spawn_type_toggles: "spawn_controller", force_spawn: "spawn_controller" };
+        const pinned = getPinnedDevItems(p);
+        const kept = pinned.filter((id) => eligible.has(LEGACY_PIN_IDS[id] || id));
+        if (kept.length !== pinned.length) {
+            setPinnedDevItems(p, kept);
+        }
     }
 
     function openPinUnpinMenu() {
@@ -4927,9 +4943,12 @@ export function showCodexBook(player, context) {
                 return;
             }
         } catch { /* ignore */ }
+        const noticeBody = isReleaseAdminBuild()
+            ? `§e§lHost play tools§r\n\n§7Limited storms and spawns for realms — no world tuning or dev menus.\n\n§7Version: §f${getAddonVersionDisplayString()}\n\n§7Continue only if you understand and accept this.`
+            : `§e§lNotice§r\n\n§7These options can start storms and spawn Maple Bear mobs. They are meant for hosts and should not corrupt saves, but heavy use can cause lag or chaos.\n\n§7Version: §f${getAddonVersionDisplayString()}\n\n§7Continue only if you understand and accept this.`;
         const form = new ActionFormData()
-            .title("§6Admin tools")
-            .body(`§e§lNotice§r\n\n§7These options can start storms and spawn Maple Bear mobs. They are meant for hosts and should not corrupt saves, but heavy use can cause lag or chaos.\n\n§7Version: §f${getAddonVersionDisplayString()}\n\n§7Continue only if you understand and accept this.`)
+            .title(isReleaseAdminBuild() ? "§6Host tools" : "§6Admin tools")
+            .body(noticeBody)
             .button("§aI understand — continue")
             .button("§8Go back");
         form.show(player).then((res) => {
@@ -4960,6 +4979,10 @@ export function showCodexBook(player, context) {
 
     function openAdminToolsMenu() {
         if (!INCLUDE_ADMIN_TOOLS) return;
+        if (isReleaseAdminBuild()) {
+            openReleaseHostToolsMenu();
+            return;
+        }
         journalPowerToolsBack = () => openAdminToolsMenu();
         const form = new ActionFormData()
             .title("§6Admin tools")
@@ -4995,6 +5018,159 @@ export function showCodexBook(player, context) {
                 openListBearsMenu();
             }
         }).catch(() => openMain());
+    }
+
+    /** Public pack: safe host toys — no world tuning, no heavy bear types, capped spawns. */
+    function openReleaseHostToolsMenu() {
+        journalPowerToolsBack = () => openReleaseHostToolsMenu();
+        const form = new ActionFormData()
+            .title("§6Host tools")
+            .body(
+                `§7Play with storms and a few bears — §fnot§7 full dev control.\n` +
+                    `§8No day edits, spawn sliders, or mining/torpedo spawns.\n\n§8${getAddonVersionDisplayString()}`
+            )
+            .button("§6Storms §8(minor / end)")
+            .button("§fSpawn a few bears §8(capped)")
+            .button("§fList nearby bears §8(read-only)")
+            .button("§fPin journal shortcuts")
+            .button("§8Back");
+        form.show(player).then((res) => {
+            const v = getPlayerSoundVolume(player);
+            if (!res || res.canceled || res.selection === 4) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * v });
+                return openMain();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * v });
+            if (res.selection === 0) {
+                openReleaseStormHubMenu();
+                return;
+            }
+            if (res.selection === 1) {
+                forceSpawnNav.rootBack = () => openReleaseHostToolsMenu();
+                forceSpawnNav.afterComplete = () => openReleaseHostToolsMenu();
+                openReleaseForceSpawnMenu();
+                return;
+            }
+            if (res.selection === 2) {
+                openListBearsMenu();
+                return;
+            }
+            if (res.selection === 3) {
+                journalPowerToolsBack = () => openReleaseHostToolsMenu();
+                openPinUnpinMenu();
+            }
+        }).catch(() => openMain());
+    }
+
+    function openReleaseStormHubMenu() {
+        journalPowerToolsBack = () => openReleaseStormHubMenu();
+        const state = getStormState();
+        const dustOn = isDustStormsEnabled();
+        const info = getStormDebugInfo();
+        const countStr = state.stormCount > 1 ? ` §8(${state.stormCount})` : "";
+        const body =
+            `§7Host storm toys — §fminor only§7, no intensity or multi-storm tuning.\n\n` +
+            `§8Active: §f${info.active}${countStr}\n` +
+            `§8Dust storms: §f${dustOn ? "ON" : "OFF"}`;
+        const form = new ActionFormData().title("§6Storms").body(body);
+        if (!dustOn) {
+            form.button("§aEnable dust storms §8(world)");
+        }
+        form.button("§bSummon minor storm §8(near you, 20m)");
+        form.button(state.active ? "§4End all storms" : "§8End all §7(none)");
+        form.button("§8Back");
+        const backIdx = dustOn ? 2 : 3;
+        form.show(player).then((res) => {
+            const v = getPlayerSoundVolume(player);
+            if (!res || res.canceled || res.selection === backIdx) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * v });
+                return openReleaseHostToolsMenu();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * v });
+            let sel = res.selection;
+            if (!dustOn) {
+                if (sel === 0) {
+                    setDustStormsEnabled(true);
+                    try {
+                        saveAllProperties();
+                    } catch { /* ignore */ }
+                    player.sendMessage(CHAT_INFO + "Dust storms enabled for this world.");
+                    openReleaseStormHubMenu();
+                    return;
+                }
+                sel -= 1;
+            }
+            if (sel === 0) {
+                triggerDebugCommand("summon_storm", ["minor", "", "20"], () => openReleaseStormHubMenu());
+            } else if (sel === 1 && state.active) {
+                endStorm(true);
+                player.sendMessage(CHAT_INFO + "All storms ended.");
+                openReleaseStormHubMenu();
+            } else {
+                openReleaseStormHubMenu();
+            }
+        }).catch(() => openReleaseHostToolsMenu());
+    }
+
+    const RELEASE_FORCE_SPAWN_MENU_OPTIONS = [
+        { id: "mb:mb_day00", label: "Tiny (day 0)" },
+        { id: "mb:mb_day04", label: "Tiny (day 4)" },
+        { id: "mb:infected", label: "Infected" }
+    ];
+
+    const RELEASE_FORCE_SPAWN_COUNTS = [
+        { value: 1, label: "1 bear" },
+        { value: 2, label: "2 bears" },
+        { value: 3, label: "3 bears §8(max)" }
+    ];
+
+    function openReleaseForceSpawnMenu() {
+        journalPowerToolsBack = () => openReleaseForceSpawnMenu();
+        const form = new ActionFormData()
+            .title("§fSpawn bears")
+            .body("§7Near you only · up to 3 · tiny or infected.\n§8No flying, mining, torpedo, or buff spawns.");
+        for (const opt of RELEASE_FORCE_SPAWN_MENU_OPTIONS) {
+            form.button(`§f${opt.label}`);
+        }
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            const v = getPlayerSoundVolume(player);
+            if (!res || res.canceled || res.selection === RELEASE_FORCE_SPAWN_MENU_OPTIONS.length) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * v });
+                return runForceSpawnRootBack();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * v });
+            const opt = RELEASE_FORCE_SPAWN_MENU_OPTIONS[res.selection];
+            if (opt) {
+                openReleaseForceSpawnCountMenu(opt);
+            } else {
+                runForceSpawnRootBack();
+            }
+        }).catch(() => runForceSpawnRootBack());
+    }
+
+    function openReleaseForceSpawnCountMenu(opt) {
+        const form = new ActionFormData()
+            .title("§fHow many?")
+            .body(`§7Spawn §f${opt.label} §7within 10 blocks.`);
+        for (const q of RELEASE_FORCE_SPAWN_COUNTS) {
+            form.button(q.label);
+        }
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            const v = getPlayerSoundVolume(player);
+            if (!res || res.canceled || res.selection === RELEASE_FORCE_SPAWN_COUNTS.length) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * v });
+                return openReleaseForceSpawnMenu();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * v });
+            const qOpt = RELEASE_FORCE_SPAWN_COUNTS[res.selection];
+            if (qOpt) {
+                triggerDebugCommand("force_spawn", [opt.id, "10", String(qOpt.value)], () => runForceSpawnAfterComplete());
+            } else {
+                openReleaseForceSpawnMenu();
+            }
+        }).catch(() => openReleaseForceSpawnMenu());
     }
 
     /**
@@ -5577,6 +5753,15 @@ export function showCodexBook(player, context) {
     }
 
     function openSpawnControllerMenu() {
+        if (!INCLUDE_FULL_DEVELOPER_TOOLS) {
+            try {
+                player.sendMessage(CHAT_WARNING + "Spawn Controller is only in the dev behavior pack. On release, use Admin tools.");
+            } catch { /* ignore */ }
+            try {
+                journalPowerToolsBack();
+            } catch { /* ignore */ }
+            return;
+        }
         const spawnEnabled = getAllScriptToggles()[SCRIPT_IDS.spawnController];
         const diffRaw = Number(getWorldProperty(SPAWN_DIFFICULTY_PROPERTY) ?? 0);
         const diffLabel = getSpawnDifficultyLabel(diffRaw);
@@ -6686,6 +6871,10 @@ export function showCodexBook(player, context) {
     ];
 
     function openForceSpawnMenu() {
+        if (isReleaseAdminBuild()) {
+            openReleaseForceSpawnMenu();
+            return;
+        }
         const form = new ActionFormData()
             .title("§cForce Spawn")
             .body("§7Choose a category, then type, target, distance, and count.");
@@ -6855,6 +7044,10 @@ export function showCodexBook(player, context) {
     }
 
     function openStormHubMenu() {
+        if (isReleaseAdminBuild()) {
+            openReleaseStormHubMenu();
+            return;
+        }
         const state = getStormState();
         const ctrl = getStormControlParams();
         const multiOn = isMultiStormEnabled();
@@ -8904,7 +9097,7 @@ export function showBasicJournalUI(player) {
         buttonActions.push(() => showCodexBook(player, { ...journalCtxBase, entry: "dev" }));
     }
     if (hasPowerToolsAccess && INCLUDE_ADMIN_TOOLS && (!INCLUDE_FULL_DEVELOPER_TOOLS || isDevPreviewAdminMainMenuEnabled())) {
-        buttons.push("§6Admin tools");
+        buttons.push(isReleaseAdminBuild() ? "§6Host tools" : "§6Admin tools");
         buttonIcons.push(undefined);
         buttonActions.push(() => showCodexBook(player, { ...journalCtxBase, entry: "admin" }));
     }

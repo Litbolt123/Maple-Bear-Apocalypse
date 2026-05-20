@@ -136,6 +136,7 @@ New tags: `surface_mineshaft`, `high_seas`, `fast_fishing`, `swamp_water_huge_mu
 
 - **Idea:** Add `slime` to infected biome for higher slime spawns as an optional threat.
 - `Biome Replacement` enabled in Nether—could support infected nether content later.
+- **1.26.2 playtest:** MBA infected overworld biomes worked with **no world experiments** (Custom Biomes off). See [`../WORLD_SETUP.md`](../WORLD_SETUP.md).
 
 ---
 

@@ -31,10 +31,21 @@ Start here to navigate the repo. **Session log:** [context summary.md](context%2
 | File | Purpose |
 |------|---------|
 | [DEVELOPER_ONBOARDING.md](development/DEVELOPER_ONBOARDING.md) | Repo layout, `npm run check`, testing |
+| [WORLD_SETUP.md](development/WORLD_SETUP.md) | Bedrock world: **no experiments on 1.26.2+** (verified) |
+| [BRIDGE_EXPORT_AND_VERSIONING.md](development/BRIDGE_EXPORT_AND_VERSIONING.md) | Bridge `.mcpack` name + `npm run sync:pack-metadata` |
+| [GITHUB_RENAME.md](development/GITHUB_RENAME.md) | Rename repo to `Maple-Bear-Apocalypse` on GitHub |
 | [ADDON_SYSTEMS_AND_FEATURES.md](development/ADDON_SYSTEMS_AND_FEATURES.md) | Systems map + links to deep docs |
 | [PROJECT_STATUS.md](development/PROJECT_STATUS.md) | Snapshot: done / gaps / next steps |
 | [SCRIPTS_REFERENCE.md](development/SCRIPTS_REFERENCE.md) | What each `BP/scripts/*.js` module does |
 | [github-versioning-releases-agent-guide.md](development/github-versioning-releases-agent-guide.md) | Reference playbook: SemVer, tags, GitHub Actions/Releases (adapt from MSBuild to pack versioning) |
+
+### `marketing/` — Community copy
+
+| File | Purpose |
+|------|---------|
+| [NAMING.md](marketing/NAMING.md) | Canonical names: **M.B.A** / Maple Bear Apocalypse |
+| [PATREON_FIRST_POST_DRAFT.md](marketing/PATREON_FIRST_POST_DRAFT.md) | First Patreon post + Comet archive |
+| [DISCORD_SERVER_COMET_PROMPT.md](marketing/DISCORD_SERVER_COMET_PROMPT.md) | Comet prompt to build official Discord server |
 
 ### `development/guides/` — How-to & compatibility
 

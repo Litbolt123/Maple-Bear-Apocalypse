@@ -1,27 +1,61 @@
 /**
- * Build flavor — keep in sync when copying scripts between release (`BP/`) and dev (`BP - Dev/`).
+ * RELEASE behavior pack — ship **only** `BP/` + `RP/` to players (CurseForge, etc.).
  *
- * Public / CurseForge / “final” release: ship **only** this `BP/` + matching `RP/`. Keep
- * `INCLUDE_FULL_DEVELOPER_TOOLS === false` so no dev UI is reachable (dead code may remain for
- * parity with `BP - Dev/`; do not ship `BP - Dev/` to players).
+ * When merging scripts from `BP - Dev/`, copy into `BP/scripts/` but **do not** overwrite this file
+ * with the dev copy. Dev must keep `INCLUDE_FULL_DEVELOPER_TOOLS === true` in `BP - Dev/scripts/mb_buildConfig.js`.
  *
- * Admin tools (storms, force spawn, list bears) stay available when `INCLUDE_ADMIN_TOOLS` is true;
- * players must accept a separate in-game disclaimer once per player.
+ * Gating (this file):
+ * - `INCLUDE_FULL_DEVELOPER_TOOLS === false` → no Developer Tools / Debug menus.
+ * - `INCLUDE_ADMIN_TOOLS === true` → journal **Host tools** only (`mb_cheats` / Litbolt123): capped storms/spawns.
+ *
+ * `BP - Dev/` is internal only — never publish it.
  */
 
 export const BUILD_FLAVOR = "release";
 
-/** Full Powdery Journal “Developer Tools” tree (risky / save-breaking). MUST stay false on public packs. */
+/** MUST stay `false` on this pack. Full dev UI lives only in `BP - Dev/`. */
 export const INCLUDE_FULL_DEVELOPER_TOOLS = false;
 
-/** Safer host shortcuts; still requires disclaimer on release builds. */
+/** Dumbed-down journal Host tools on release; requires one-time disclaimer per player. */
 export const INCLUDE_ADMIN_TOOLS = true;
+
+/** Release admin: allowed `force_spawn` entity types (toy spawns only). */
+export const RELEASE_ADMIN_FORCE_SPAWN_IDS = new Set([
+    "mb:mb_day00",
+    "mb:mb_day04",
+    "mb:infected"
+]);
+
+/** Release admin: max bears per force-spawn action. */
+export const RELEASE_ADMIN_FORCE_SPAWN_MAX = 3;
+
+/** True on public `BP/` when only dumbed-down host tools should show (not full Developer Tools). */
+export function isReleaseAdminBuild() {
+    return INCLUDE_ADMIN_TOOLS && !INCLUDE_FULL_DEVELOPER_TOOLS;
+}
 
 export const ADDON_VERSION_MAJOR = 0;
 export const ADDON_VERSION_MINOR = 9;
 export const ADDON_VERSION_PATCH = 0;
 /** Semver pre-release label, e.g. beta.1, beta.2 — keep in sync with `PLAYER_CHANGELOG_VERSION` and pack manifest descriptions. */
 export const ADDON_VERSION_PRERELEASE = "beta.3";
+
+/** In-game / Bridge export display name (release). */
+export const PACK_DISPLAY_NAME = "The Maple Bear Apocalypse";
+
+/** Dev pack label (used by tools/syncPackMetadata.js for BP - Dev / RP - Dev). */
+export const PACK_DISPLAY_NAME_DEV = "The Maple Bear Apocalypse (Dev)";
+
+/** Semver string for manifests, Bridge, changelogs — bump with ADDON_VERSION_* above. */
+export function getAddonSemverString() {
+    const core = `${ADDON_VERSION_MAJOR}.${ADDON_VERSION_MINOR}.${ADDON_VERSION_PATCH}`;
+    return ADDON_VERSION_PRERELEASE ? `${core}-${ADDON_VERSION_PRERELEASE}` : core;
+}
+
+/** Manifest `header.version` as three integers (Bedrock has no prerelease field). */
+export function getManifestVersionTriple() {
+    return [ADDON_VERSION_MAJOR, ADDON_VERSION_MINOR, ADDON_VERSION_PATCH];
+}
 
 /**
  * Shown in Settings and disclaimer forms. Omits internal “release” word for public release builds.

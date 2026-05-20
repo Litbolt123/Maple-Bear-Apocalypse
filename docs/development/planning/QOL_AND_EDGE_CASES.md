@@ -83,7 +83,7 @@ Brainstormed quality-of-life features and edge cases to consider for the addon. 
 - ✅ **Chunk unload** – *Spawn controller: validTiles, skip inactive chunks (e.g. ~2304).*
 - ✅ **No valid spawn blocks** – *filteredCandidates.length === 0 handled; fail gracefully.*
 - ⚠️ **Spawn cap / density** – *Caps exist; verify per-dimension/region under load.*
-- ⚠️ **Custom biome not enabled** – *Documented in TODO; no in-game warning.*
+- ~~**Custom biome not enabled**~~ – *On 1.26.2+, Custom Biomes experiment not required; see [`WORLD_SETUP.md`](../WORLD_SETUP.md).*
 
 ### Codex & Persistence
 

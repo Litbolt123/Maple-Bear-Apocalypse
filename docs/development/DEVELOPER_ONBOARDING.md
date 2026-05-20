@@ -28,7 +28,7 @@ Cloud or minimal environments may not have Node; run these on your PC before pus
 
 ## Testing in-game
 
-There is no headless runner. Install the packs in a Bedrock world (or `development_behavior_packs` / `development_resource_packs`), enable **Beta APIs** / experiments as required by `BP/manifest.json`, and exercise flows manually. See `docs/development/testing/TESTING_CHECKLIST.md` when present.
+There is no headless runner. Install the packs in a Bedrock world (or `development_behavior_packs` / `development_resource_packs`). On **1.26.2+**, **no world experiments** are required ([`WORLD_SETUP.md`](WORLD_SETUP.md)). Exercise flows manually. See `docs/development/testing/TESTING_CHECKLIST.md` when present.
 
 ## Common pitfalls
 

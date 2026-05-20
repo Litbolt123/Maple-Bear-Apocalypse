@@ -14,8 +14,8 @@
 		}
 	},
 	"header": {
-		"name": "M.B.A",
-		"description": "Beta v0.9.0-beta.3 — resource pack (release). Semver in BP/scripts/mb_buildConfig.js.",
+		"name": "The Maple Bear Apocalypse",
+		"description": "v0.9.0-beta.3 — The Maple Bear Apocalypse (resource pack, release).",
 		"min_engine_version": [
 			1,
 			26,
@@ -23,8 +23,8 @@
 		],
 		"uuid": "2a4d2f59-f46d-47fc-a3c1-7a26d46d2157",
 		"version": [
-			1,
 			0,
+			9,
 			0
 		]
 	},
@@ -33,8 +33,8 @@
 			"type": "resources",
 			"uuid": "773166f7-f06f-40b3-b44d-98d6ac5a6726",
 			"version": [
-				1,
 				0,
+				9,
 				0
 			]
 		}
@@ -43,8 +43,8 @@
 		{
 			"uuid": "064b6f9c-349b-4ab1-80d3-c95f732db577",
 			"version": [
-				1,
 				0,
+				9,
 				0
 			]
 		}
