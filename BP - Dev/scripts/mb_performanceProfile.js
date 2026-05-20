@@ -12,9 +12,13 @@
 import { system, world } from "@minecraft/server";
 import { getWorldProperty, setWorldProperty } from "./mb_dynamicPropertyHandler.js";
 import { getBearSnapshotsForDimensions } from "./mb_bearSnapshot.js";
+import { claimSpreadSlice, isSpreadThrottleActive } from "./mb_workSpread.js";
 
-/** 0 = default / auto-balanced (no journal bundle), 1 = a little, 2 = mid, 3 = laggy */
+/** 0 = full auto (advanced), 1 = a little, 2 = mid (recommended default), 3 = laggy */
 export const LAG_COMFORT_PROPERTY = "mb_lag_comfort";
+
+/** Journal "Mid" tier — used when the world has never set lag comfort (see ensureWorldLagComfortDefaults). */
+export const DEFAULT_LAG_COMFORT_LEVEL = 2;
 
 /** 1 = use spatial clusters for spawn scan budgets (default). 0 = treat as fully spread (max MP-style cost). */
 export const SPATIAL_SPAWN_TUNING_PROPERTY = "mb_spawn_spatial_tuning";
@@ -175,11 +179,14 @@ export function initializeAdaptivePerformanceWatch() {
         }, 1);
         system.runInterval(() => {
             try {
+                if (isSpreadThrottleActive()) {
+                    if (!claimSpreadSlice("perfMobSnap", 160)) return;
+                }
                 refreshExpensiveMobLoadCache();
             } catch {
                 /* ignore */
             }
-        }, 40);
+        }, 20);
     } catch {
         /* ignore */
     }
@@ -199,9 +206,10 @@ export function getAdaptivePerfDebugSnapshot() {
 
 export function getLagComfortLevel() {
     const raw = getWorldProperty(LAG_COMFORT_PROPERTY);
+    if (raw === undefined || raw === null || raw === "") return DEFAULT_LAG_COMFORT_LEVEL;
     const n = Number(raw);
     if (Number.isFinite(n) && n >= 0 && n <= 3) return Math.floor(n);
-    return 0;
+    return DEFAULT_LAG_COMFORT_LEVEL;
 }
 
 export function setLagComfortLevel(level) {

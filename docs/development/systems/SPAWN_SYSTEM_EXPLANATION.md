@@ -6,9 +6,11 @@ The spawning system is a sophisticated, performance-optimized system that finds 
 ## Main Components
 
 ### 1. **Main Spawn Interval Loop** (`system.runInterval`)
-- **Frequency**: Runs every 60 ticks (~3 seconds)
-- **Purpose**: Processes one player per tick to spread load and prevent lag spikes
-- **Rotation**: Cycles through dimensions and players to ensure fair processing
+- **Frequency**: Gated spawn interval (~60t base, scaled by load + dev speed)
+- **Purpose**: At most **one player** per controller tick per dimension (spread hash timing); no “force first player” MP fallback
+- **Rotation**: Cycles dimensions; spread groups use per-player tick slots (`getSpreadPlayerStaggerInterval`)
+- **Partial block scans**: `progressiveBlockScanCache` resumes XZ discovery across ticks when per-tick block budget is hit
+- **Chunk scans**: `chunkScanQueue` staggers new-chunk work; max **2** full chunk scans start per tick; deep queue shrinks block budget
 
 ### 2. **Player Grouping System**
 - **Purpose**: When multiple players are close together (within 96 blocks), they share a "group cache" of spawn tiles
@@ -16,7 +18,7 @@ The spawning system is a sophisticated, performance-optimized system that finds 
   - Reduces redundant block scanning
   - More efficient tile collection
   - Better spawn rates for multiplayer
-- **Group Cache**: Shared tile cache that updates when players move or cache expires
+- **Group Cache**: Shared tile cache; on rescan only **one group member** is tile-scanned per tick (rotating index), merged into the group cache
 
 ### 3. **Tile Collection System** (`getTilesForPlayer` → `collectDustedTiles` / `collectMiningSpawnTiles`)
 

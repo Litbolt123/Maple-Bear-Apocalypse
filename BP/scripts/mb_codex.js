@@ -45,6 +45,8 @@ import { DEV_SOUND_CATEGORIES } from "./mb_devSoundCatalog.js";
 import {
     setLagComfortLevel,
     getLagComfortLevel,
+    DEFAULT_LAG_COMFORT_LEVEL,
+    LAG_COMFORT_PROPERTY,
     setSpatialSpawnTuningEnabled,
     isSpatialSpawnTuningEnabled,
     setStormWorkMultiplierManual,
@@ -82,7 +84,18 @@ const JOURNAL_LAG_SCAN_KEYS = { 1: "multiplayerSpread", 2: "lowLag", 3: "minimal
 
 function journalLagComfortLabel(n) {
     const i = Math.max(0, Math.min(3, Math.floor(Number(n) || 0)));
-    return ["Auto-balanced", "A little", "Mid", "LAGGY!"][i];
+    return ["Full auto", "A little", "Default (Mid)", "LAGGY!"][i];
+}
+
+/** Apply Mid spawn/scan + lag tier once for worlds that never chose a lag level. */
+export function ensureWorldLagComfortDefaults() {
+    try {
+        const raw = getWorldProperty(LAG_COMFORT_PROPERTY);
+        if (raw !== undefined && raw !== null && raw !== "") return;
+        applyJournalLagComfortBundle(DEFAULT_LAG_COMFORT_LEVEL);
+    } catch {
+        /* ignore */
+    }
 }
 
 export function applyJournalLagComfortBundle(level) {
@@ -116,7 +129,7 @@ export function applyJournalLagComfortBundle(level) {
 export function openJournalLagComfortWizard(player, goBack) {
     const form1 = new ActionFormData()
         .title("§eHave lag?")
-        .body("§7Tune spawn scanning, dust storms, and mining AI for weaker devices or heavy modpacks.\n\n§8Default keeps automatic scaling with player count and groups.");
+        .body("§7Tune spawn scanning, dust storms, and mining AI.\n\n§8Default §7(recommended) uses the §6Mid§7 tier — lighter scans like most playtests. §7Full auto is for max scaling.");
     form1.button("§6How much? §8(choose level)");
     form1.button("§8Back");
     form1.show(player).then((res) => {
@@ -129,10 +142,10 @@ export function openJournalLagComfortWizard(player, goBack) {
         const cur = getLagComfortLevel();
         const form2 = new ActionFormData()
             .title("§eHow much lag?")
-            .body(`§7Current: §f${journalLagComfortLabel(cur)}\n\n§aDefault §7= full auto (clusters, 1–8 players).\n§eA little / Mid / LAGGY §7= stronger limits + slower storms/mining.`);
-        form2.button("§aDefault / Auto-balanced");
+            .body(`§7Current: §f${journalLagComfortLabel(cur)}\n\n§aDefault §7= Mid (recommended).\n§7Full auto §8= max scaling for strong devices.`);
+        form2.button("§aDefault §8(Mid — recommended)");
         form2.button("§eA little");
-        form2.button("§6Mid");
+        form2.button("§7Full auto §8(advanced)");
         form2.button("§cLAGGY!");
         form2.button("§8Back");
         form2.show(player).then((res2) => {
@@ -142,15 +155,16 @@ export function openJournalLagComfortWizard(player, goBack) {
                 openJournalLagComfortWizard(player, goBack);
                 return;
             }
-            const lvl = res2.selection;
+            const lvlByButton = [2, 1, 0, 3];
+            const lvl = lvlByButton[res2.selection] ?? DEFAULT_LAG_COMFORT_LEVEL;
             applyJournalLagComfortBundle(lvl);
             const names = [
-                "Default — auto performance (spawn + storms + mining scale with players).",
+                "Default (Mid) — low spawn preset + low-lag scan + slower storms/mining.",
                 "A little — lighter spawn scan, slower storm/mining work.",
-                "Mid — low spawn preset + low-lag scan + slower storms/mining.",
+                "Full auto — spawn + storms + mining scale freely with player count.",
                 "LAGGY! — ultra-low spawn + minimal scan + slowest storm/mining cadence."
             ];
-            player.sendMessage(CHAT_SUCCESS + names[lvl] ?? names[0]);
+            player.sendMessage(CHAT_SUCCESS + (names[res2.selection] ?? names[0]));
             goBack();
         }).catch(() => goBack());
     }).catch(() => goBack());
@@ -171,6 +185,12 @@ export function isDevPreviewAdminMainMenuEnabled() {
     } catch {
         return false;
     }
+}
+
+/** Dev pack: all players. Release: cheats tag or Litbolt123 only. */
+function hasJournalPowerToolsAccess(player) {
+    if (INCLUDE_FULL_DEVELOPER_TOOLS) return true;
+    return (player?.hasTag && player.hasTag("mb_cheats")) || player?.name === "Litbolt123";
 }
 
 function countItemInInventory(player, itemId) {
@@ -1821,8 +1841,7 @@ export function showCodexBook(player, context) {
         buttons.push("§aWhat's new");
         buttonActions.push(() => showJournalWhatsNew(player, () => openMain(), getPlayerSoundVolume(player)));
 
-        const hasPowerToolsAccess = (player.hasTag && player.hasTag("mb_cheats")) || player?.name === "Litbolt123";
-        if (hasPowerToolsAccess && (INCLUDE_ADMIN_TOOLS || INCLUDE_FULL_DEVELOPER_TOOLS)) {
+        if (hasJournalPowerToolsAccess(player) && (INCLUDE_ADMIN_TOOLS || INCLUDE_FULL_DEVELOPER_TOOLS)) {
             sanitizePinnedDevItems(player);
             const pinned = getPinnedDevItems(player);
             const LEGACY_PIN_IDS = { spawn_difficulty: "spawn_controller", spawn_type_toggles: "spawn_controller", force_spawn: "spawn_controller" };
@@ -9087,8 +9106,7 @@ export function showBasicJournalUI(player) {
         getCurrentDay,
         getDayDisplayInfo
     };
-    const hasPowerToolsAccess = (player.hasTag && player.hasTag("mb_cheats")) || player?.name === "Litbolt123";
-    if (hasPowerToolsAccess && INCLUDE_FULL_DEVELOPER_TOOLS) {
+    if (hasJournalPowerToolsAccess(player) && INCLUDE_FULL_DEVELOPER_TOOLS) {
         buttons.push("§bDebug Menu");
         buttonIcons.push(undefined);
         buttonActions.push(() => showCodexBook(player, { ...journalCtxBase, entry: "debug" }));
@@ -9096,7 +9114,7 @@ export function showBasicJournalUI(player) {
         buttonIcons.push(undefined);
         buttonActions.push(() => showCodexBook(player, { ...journalCtxBase, entry: "dev" }));
     }
-    if (hasPowerToolsAccess && INCLUDE_ADMIN_TOOLS && (!INCLUDE_FULL_DEVELOPER_TOOLS || isDevPreviewAdminMainMenuEnabled())) {
+    if (hasJournalPowerToolsAccess(player) && INCLUDE_ADMIN_TOOLS && (!INCLUDE_FULL_DEVELOPER_TOOLS || isDevPreviewAdminMainMenuEnabled())) {
         buttons.push(isReleaseAdminBuild() ? "§6Host tools" : "§6Admin tools");
         buttonIcons.push(undefined);
         buttonActions.push(() => showCodexBook(player, { ...journalCtxBase, entry: "admin" }));

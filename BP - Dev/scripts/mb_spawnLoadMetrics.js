@@ -7,6 +7,13 @@
 import { system, world } from "@minecraft/server";
 import { getWorldProperty, setWorldProperty } from "./mb_dynamicPropertyHandler.js";
 import { countBearsAcrossDimensions } from "./mb_bearSnapshot.js";
+import { getCurrentDay } from "./mb_dayTracker.js";
+import {
+    claimSpreadSlice,
+    isSpreadThrottleActive,
+    queryEntitiesOneSpreadSection,
+    SPREAD_CELL_COUNT
+} from "./mb_workSpread.js";
 
 /** 1 = apply auto scaling from world snapshot + probes (default). 0 = bias presets only. */
 export const SPAWN_LOAD_AUTO_PROPERTY = "mb_spawn_load_auto";
@@ -55,6 +62,9 @@ let lastBearRefreshTick = -999999;
 let lastItemRefreshTick = -999999;
 let cachedBearTotal = 0;
 let cachedItemTotal = 0;
+
+/** Incremental item sample while day 0–1 spread is active (one player cell per slice). */
+let itemSampleBuild = null;
 
 let cachedIntervalMult = 1;
 let cachedBlockScale = 1;
@@ -105,20 +115,102 @@ function countBearsAllDimensions(tick) {
     }
 }
 
+const ITEM_SAMPLE_RADIUS = 96;
+
+function countItemEntitiesNear(ow, anchor, seen, n) {
+    if (isSpreadThrottleActive()) {
+        const slice = queryEntitiesOneSpreadSection(ow, "spawnItems:ow", anchor, ITEM_SAMPLE_RADIUS, {
+            type: ITEM_ENTITY_TYPE
+        });
+        for (const item of slice) {
+            const id = item?.id;
+            if (!id || seen.has(id)) continue;
+            seen.add(id);
+            n++;
+            if (n >= 4000) return n;
+        }
+        return n;
+    }
+    try {
+        const items = ow.getEntities({
+            type: ITEM_ENTITY_TYPE,
+            location: anchor,
+            maxDistance: ITEM_SAMPLE_RADIUS
+        });
+        for (const item of items || []) {
+            const id = item?.id;
+            if (!id || seen.has(id)) continue;
+            seen.add(id);
+            n++;
+            if (n >= 4000) return n;
+        }
+    } catch {
+        /* ignore */
+    }
+    return n;
+}
+
 function countItemsOverworldThrottled(tick) {
-    if (tick - lastItemRefreshTick < 120) return;
+    const interval = isSpreadThrottleActive() ? 40 : 120;
+    if (tick - lastItemRefreshTick < interval) return;
+
+    if (isSpreadThrottleActive() && !claimSpreadSlice("spawnItems", 5)) return;
+
     lastItemRefreshTick = tick;
     try {
         const ow = world.getDimension("overworld");
         if (!ow) {
             cachedItemTotal = 0;
+            itemSampleBuild = null;
             return;
         }
-        const items = ow.getEntities({ type: ITEM_ENTITY_TYPE });
-        const n = items?.length || 0;
+        const players = world.getAllPlayers().filter(
+            (p) => p?.isValid && p.dimension?.id === ow.id && p.location
+        );
+        if (!players.length) {
+            cachedItemTotal = 0;
+            itemSampleBuild = null;
+            return;
+        }
+
+        if (isSpreadThrottleActive()) {
+            if (!itemSampleBuild?.building) {
+                itemSampleBuild = {
+                    building: true,
+                    seen: new Set(),
+                    n: 0,
+                    playerIdx: 0,
+                    sectionIdx: 0,
+                    anchors: players.map((p) => ({ x: p.location.x, y: p.location.y, z: p.location.z }))
+                };
+            }
+            const b = itemSampleBuild;
+            if (b.playerIdx < b.anchors.length) {
+                b.n = countItemEntitiesNear(ow, b.anchors[b.playerIdx], b.seen, b.n);
+                b.sectionIdx++;
+                if (b.sectionIdx >= SPREAD_CELL_COUNT) {
+                    b.sectionIdx = 0;
+                    b.playerIdx++;
+                }
+            }
+            if (b.playerIdx >= b.anchors.length) {
+                cachedItemTotal = Math.min(b.n, 4000);
+                itemSampleBuild = null;
+            }
+            return;
+        }
+
+        itemSampleBuild = null;
+        const seen = new Set();
+        let n = 0;
+        for (const player of players) {
+            n = countItemEntitiesNear(ow, player.location, seen, n);
+            if (n >= 4000) break;
+        }
         cachedItemTotal = Math.min(n, 4000);
     } catch {
         cachedItemTotal = 0;
+        itemSampleBuild = null;
     }
 }
 
@@ -162,6 +254,13 @@ function recomputeCachedMultipliers() {
  */
 export function refreshSpawnLoadMetrics(tick) {
     try {
+        const day = getCurrentDay();
+        if (day < 2) {
+            cachedBearTotal = 0;
+            cachedItemTotal = 0;
+            recomputeCachedMultipliers();
+            return;
+        }
         countBearsAllDimensions(tick);
         countItemsOverworldThrottled(tick);
         recomputeCachedMultipliers();
@@ -213,11 +312,13 @@ export function initializeSpawnLoadScalerWatch() {
         }, 4);
         system.runInterval(() => {
             try {
+                const base = isSpreadThrottleActive() ? 80 : 40;
+                if (!claimSpreadSlice("spawnLoadMetrics", base)) return;
                 refreshSpawnLoadMetrics(system.currentTick);
             } catch {
                 /* ignore */
             }
-        }, 40);
+        }, 10);
     } catch {
         /* ignore */
     }

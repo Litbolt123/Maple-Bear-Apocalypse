@@ -4,6 +4,7 @@ Run before tagging a beta. Record **addon version** (see `BP/scripts/mb_buildCon
 
 | Beta version | Date (YYYY-MM-DD) | Tester | Pass / fail | Notes |
 |--------------|-------------------|--------|-------------|-------|
+| v0.9.0-beta.4 | 2026-05-19 | | Pass | User playtest: lag, buff cap, death explosions |
 | v0.9.0-beta.3 | | | | |
 | v0.9.0-beta.2 | | | | |
 | v0.9.0-beta.1 | | | | |

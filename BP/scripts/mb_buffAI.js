@@ -6,6 +6,8 @@ import { isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
 import { getCachedPlayers } from "./mb_sharedCache.js";
 import { getBearsOfType } from "./mb_bearSnapshot.js";
 import { getAiIntervalStretch } from "./mb_performanceProfile.js";
+import { BUFF_CONVERSION_SPAWN_TAG } from "./mb_mainMobConversion.js";
+import { queryEntitiesSpread } from "./mb_workSpread.js";
 
 // Debug helper functions
 function getDebugGeneral() {
@@ -182,14 +184,23 @@ function handleTwoBlockPlant(dimension, checkX, topSolidY, checkZ, topSolidBlock
 }
 
 /**
- * Creates a white explosion effect, breaks blocks around the buff bear, AND sprays snow layers.
- * Similar to torpedo bear explosion but doesn't kill the bear.
+ * @param {import("@minecraft/server").Entity | { dimension: import("@minecraft/server").Dimension, location: { x: number, y: number, z: number }, excludeEntityId?: string, protectBearCollision?: boolean }} source
  */
-function createBuffExplosion(entity) {
-    const dimension = entity?.dimension;
-    if (!dimension || !entity?.isValid) return;
-    
-    const loc = entity.location;
+function createBuffExplosion(source) {
+    const dimension = source?.dimension;
+    if (!dimension) return;
+
+    const protectBearCollision = source.protectBearCollision !== false;
+    if (protectBearCollision) {
+        try {
+            if (!source.isValid) return;
+        } catch {
+            return;
+        }
+    }
+
+    const loc = source.location;
+    const excludeEntityId = source.excludeEntityId ?? source.id;
     const centerX = Math.floor(loc.x);
     const centerY = Math.floor(loc.y);
     const centerZ = Math.floor(loc.z);
@@ -242,17 +253,16 @@ function createBuffExplosion(entity) {
                     // Don't break blocks too low
                     if (targetY < MIN_STRUCTURE_Y) continue;
                     
-                    // Don't break blocks where the bear is standing (protect bear from damage)
-                    // Bear is 3.5 blocks tall, protect blocks from feet to head level
-                    const bearBlockX = Math.floor(loc.x);
-                    const bearBlockY = Math.floor(loc.y);
-                    const bearBlockZ = Math.floor(loc.z);
-                    const bearHeadY = Math.floor(loc.y + BUFF_BEAR_ACTUAL_HEIGHT);
-                    
-                    // Protect all blocks in the bear's collision box (feet to head)
-                    if (targetX === bearBlockX && targetZ === bearBlockZ) {
-                        if (targetY >= bearBlockY && targetY <= bearHeadY + 1) {
-                            continue; // Skip blocks in bear's space
+                    // Don't break blocks where a living bear is standing (stuck fuse only).
+                    if (protectBearCollision) {
+                        const bearBlockX = Math.floor(loc.x);
+                        const bearBlockY = Math.floor(loc.y);
+                        const bearBlockZ = Math.floor(loc.z);
+                        const bearHeadY = Math.floor(loc.y + BUFF_BEAR_ACTUAL_HEIGHT);
+                        if (targetX === bearBlockX && targetZ === bearBlockZ) {
+                            if (targetY >= bearBlockY && targetY <= bearHeadY + 1) {
+                                continue;
+                            }
                         }
                     }
                     
@@ -282,7 +292,8 @@ function createBuffExplosion(entity) {
         }
         
         if (getDebugBlockBreaking()) {
-            console.warn(`[BUFF AI] Entity ${entity.id.substring(0, 8)} created explosion at (${centerX}, ${centerY}, ${centerZ}), broke ${blocksBroken} blocks`);
+            const tag = excludeEntityId ? excludeEntityId.substring(0, 8) : "????";
+            console.warn(`[BUFF AI] Entity ${tag} created explosion at (${centerX}, ${centerY}, ${centerZ}), broke ${blocksBroken} blocks`);
         }
         
         // Launch players and mobs away from explosion (like knockback roar)
@@ -294,12 +305,13 @@ function createBuffExplosion(entity) {
             // Get all entities in knockback range
             const nearbyEntities = dimension.getEntities({
                 location: loc,
-                maxDistance: KNOCKBACK_RANGE
+                maxDistance: KNOCKBACK_RANGE,
+                families: ["player", "mob", "villager"]
             });
             
             for (const targetEntity of nearbyEntities) {
                 if (!targetEntity?.isValid) continue;
-                if (targetEntity.id === entity.id) continue; // Don't knockback self
+                if (excludeEntityId && targetEntity.id === excludeEntityId) continue;
                 
                 const targetLoc = targetEntity.location;
                 const dx = targetLoc.x - loc.x;
@@ -479,15 +491,19 @@ function createBuffExplosion(entity) {
         }
         
         if (getDebugBlockBreaking()) {
-            console.warn(`[BUFF AI] Entity ${entity.id.substring(0, 8)} sprayed snow layers after explosion`);
+            const tag = excludeEntityId ? excludeEntityId.substring(0, 8) : "????";
+            console.warn(`[BUFF AI] Entity ${tag} sprayed snow layers after explosion`);
         }
-        
-        // Reset stuck tracking after explosion
-        BUFF_POSITION_HISTORY.delete(entity.id);
-        BUFF_LAST_HURT_TICK.delete(entity.id);
+
+        if (excludeEntityId) {
+            BUFF_POSITION_HISTORY.delete(excludeEntityId);
+            BUFF_LAST_HURT_TICK.delete(excludeEntityId);
+            BUFF_SPAWN_TIME.delete(excludeEntityId);
+        }
     } catch (error) {
         if (getDebugGeneral()) {
-            console.warn(`[BUFF AI] Error creating explosion for entity ${entity.id.substring(0, 8)}:`, error);
+            const tag = excludeEntityId ? excludeEntityId.substring(0, 8) : "????";
+            console.warn(`[BUFF AI] Error creating explosion for entity ${tag}:`, error);
         }
     }
 }
@@ -764,8 +780,20 @@ function initializeBuffAI() {
                                 seenEntities.add(entityId);
                                 seen.add(entityId);
                                 
+                                let isFreshConversionSpawn = false;
+                                try {
+                                    if (entity.hasTag(BUFF_CONVERSION_SPAWN_TAG)) {
+                                        isFreshConversionSpawn = true;
+                                        entity.removeTag(BUFF_CONVERSION_SPAWN_TAG);
+                                        BUFF_SPAWN_TIME.set(entityId, currentTick);
+                                        BUFF_POSITION_HISTORY.delete(entityId);
+                                    }
+                                } catch {
+                                    /* ignore tag API */
+                                }
+
                                 if (!BUFF_SPAWN_TIME.has(entityId)) {
-                                    BUFF_SPAWN_TIME.set(entityId, currentTick - MIN_ALIVE_TIME_TICKS);
+                                    BUFF_SPAWN_TIME.set(entityId, currentTick);
                                 }
                                 const spawnTick = BUFF_SPAWN_TIME.get(entityId);
                                 const aliveTime = currentTick - spawnTick;
@@ -780,7 +808,7 @@ function initializeBuffAI() {
                                     }
                                 }
                                 
-                                if (aliveTime >= MIN_ALIVE_TIME_TICKS && currentTick % STUCK_CHECK_INTERVAL === 0) {
+                                if (!isFreshConversionSpawn && aliveTime >= MIN_ALIVE_TIME_TICKS && currentTick % STUCK_CHECK_INTERVAL === 0) {
                                     const history = BUFF_POSITION_HISTORY.get(entityId);
                                     if (history && history.stuckStartTick !== null && !loggedThisTick.has(entityId)) {
                                         const ticksStuck = currentTick - history.stuckStartTick;
@@ -864,10 +892,7 @@ export function getBuffBearCountdowns(player) {
         // Get all entities within 64 blocks, then filter to buff bears (type filter often empty for addon entities)
         let allEntities = [];
         try {
-            const raw = dimension.getEntities({
-                location: player.location,
-                maxDistance: 64
-            });
+            const raw = queryEntitiesSpread(dimension, "buffDebugScan", player.location, 64, {});
             for (const entity of raw) {
                 if (entity?.typeId && BUFF_BEAR_TYPE_IDS.has(entity.typeId)) allEntities.push(entity);
             }
@@ -936,6 +961,47 @@ export function getBuffBearCountdowns(player) {
     
     return results;
 }
+
+// Death: powder burst on any buff bear death (skip only fresh conversion spawns not yet seen by Buff AI).
+world.afterEvents.entityDie.subscribe((event) => {
+    const entity = event.deadEntity;
+    if (!entity?.typeId || !BUFF_BEAR_TYPE_IDS.has(entity.typeId)) return;
+    if (!isScriptEnabled(SCRIPT_IDS.buff)) return;
+
+    const entityId = entity.id;
+    try {
+        if (entity.hasTag(BUFF_CONVERSION_SPAWN_TAG)) return;
+    } catch {
+        /* ignore */
+    }
+    let snapshot;
+    try {
+        const loc = entity.location;
+        snapshot = {
+            dimension: entity.dimension,
+            location: { x: loc.x, y: loc.y, z: loc.z },
+            excludeEntityId: entityId,
+            protectBearCollision: false
+        };
+    } catch {
+        return;
+    }
+
+    BUFF_POSITION_HISTORY.delete(entityId);
+    BUFF_LAST_HURT_TICK.delete(entityId);
+    BUFF_SPAWN_TIME.delete(entityId);
+
+    system.run(() => {
+        try {
+            createBuffExplosion(snapshot);
+            if (getDebugGeneral()) {
+                console.warn(`[BUFF AI] Entity ${entityId.substring(0, 8)} death explosion`);
+            }
+        } catch {
+            /* ignore */
+        }
+    });
+});
 
 // Hurt: suppress horizontal knockback reset + advance stuck fuse when it is already running (hits speed up explosion).
 world.afterEvents.entityHurt.subscribe((event) => {

@@ -61,6 +61,8 @@ Also align **`PLAYER_CHANGELOG_VERSION`** in `mb_playerChangelog.js` and **`docs
 
 - **Players:** export from `BP/` + `RP/` only (after sync).
 - **Internal:** use `BP - Dev/` + `RP - Dev/`; manifest name ends with `(Dev)`.
+- **Bridge templates:** [`config/dev/bridge.json`](../../config/dev/bridge.json) and [`config/release/bridge.json`](../../config/release/bridge.json) — copy to root with `npm run bridge:config:dev` or `bridge:config:release` (see [`config/README.md`](../../config/README.md)). `sync:pack-metadata` does **not** change pack paths.
+- **Journal:** dev pack (`INCLUDE_FULL_DEVELOPER_TOOLS`) shows Developer Tools / Debug for any player; release uses Host tools with `mb_cheats` / Litbolt123 only.
 
 ## `.mcpack` filename
 

@@ -13,6 +13,7 @@ import { registerDustedDirtBlock, unregisterDustedDirtBlock, countNearbyDustedDi
 import { initializePropertyHandler, getPlayerProperty, setPlayerProperty, getWorldProperty, setWorldProperty, getAddonDifficultyState } from "./mb_dynamicPropertyHandler.js";
 import { initializeAdaptivePerformanceWatch, getPerfWallStress01, getPerfMobPressureForSpawn01, getPlayerThriftTier } from "./mb_performanceProfile.js";
 import { getBearSnapshotsForDimensions } from "./mb_bearSnapshot.js";
+import { claimSpreadSlice, isSpreadThrottleActive, spreadPlayersForWork } from "./mb_workSpread.js";
 import { getCachedBlockInfo } from "./mb_blockCache.js";
 import { registerSpawnLoadProbes, initializeSpawnLoadScalerWatch } from "./mb_spawnLoadMetrics.js";
 import { getActiveStormCount } from "./mb_snowStorm.js";
@@ -58,8 +59,14 @@ import {
     INFECTED_PIG_ID,
     INFECTED_COW_ID
 } from "./mb_spawnEntityIds.js";
-import { handleMobConversion, handleStormMobConversion } from "./mb_mainMobConversion.js";
+import {
+    handleMobConversion,
+    handleStormMobConversion,
+    resolveMapleBearKillerForConversion,
+    wasMapleBearInvolvedInKill
+} from "./mb_mainMobConversion.js";
 import { runWorldPropertyMigrations } from "./mb_propertyMigration.js";
+import { ensureWorldLagComfortDefaults } from "./mb_codex.js";
 import { registerBearTelemetryTick } from "./mb_bearTelemetry.js";
 import { initializeBearPopulationCull } from "./mb_bearPopulationCull.js";
 import { registerStormSecondsForSpawnPressure } from "./mb_exposureSpawnPressure.js";
@@ -171,6 +178,9 @@ const STORM_EXPOSURE_DECAY_SECONDS_PER_TICK = 1; // Every check when not in stor
 // Biome check optimization
 const BIOME_CHECK_COOLDOWN = 200; // 10 seconds in ticks (200 ticks = 10 seconds)
 const biomeCheckCache = new Map(); // playerId -> lastCheckTick
+/** Per-chunk cooldown for expensive findClosestBiome fallback (villages / new chunks). */
+const BIOME_CLOSEST_FALLBACK_COOLDOWN = 1200;
+const biomeClosestFallbackCache = new Map(); // "dimId,chunkX,chunkZ" -> lastTick
 
 // Debug flag for snow mechanics
 const DEBUG_SNOW_MECHANICS = false;
@@ -182,8 +192,20 @@ function getBiomeIdAt(dimension, location) {
         if (b && typeof b === "object" && b.id) return b.id;
         if (typeof b === "string") return b;
     } catch { }
+    if (isSpreadThrottleActive()) {
+        return null;
+    }
     try {
-        const loc = dimension.findClosestBiome(location, "mb:infected_biome", { boundingSize: { x: 48, y: 64, z: 48 } });
+        if (!dimension?.id || !location) return null;
+        const chunkX = Math.floor(location.x / 16);
+        const chunkZ = Math.floor(location.z / 16);
+        const fallbackKey = `${dimension.id},${chunkX},${chunkZ}`;
+        const now = system.currentTick;
+        if (now - (biomeClosestFallbackCache.get(fallbackKey) ?? -999999) < BIOME_CLOSEST_FALLBACK_COOLDOWN) {
+            return null;
+        }
+        biomeClosestFallbackCache.set(fallbackKey, now);
+        const loc = dimension.findClosestBiome(location, "mb:infected_biome", { boundingSize: { x: 16, y: 32, z: 16 } });
         if (loc) {
             const dx = Math.floor(loc.x) - Math.floor(location.x);
             const dz = Math.floor(loc.z) - Math.floor(location.z);
@@ -3259,14 +3281,15 @@ world.afterEvents.entityDie.subscribe((event) => {
         return; // Exit early for player deaths
     }
     
-    // Handle mob conversion when killed by Maple Bears
-    if (source && source.damagingEntity && !(entity instanceof Player)) {
-        handleMobConversion(entity, source.damagingEntity);
-    }
-    
-    // Handle mob conversion when storm-damaged mob dies (convert regardless of what kills it - storm exposure counts)
-    if (!(entity instanceof Player) && wasKilledByStorm(entity.id)) {
-        handleStormMobConversion(entity);
+    // Mob conversion: bear kill takes priority over storm (death often loses damagingEntity during storms).
+    if (!(entity instanceof Player)) {
+        const bearInvolved = wasMapleBearInvolvedInKill(entity, source?.damagingEntity);
+        const mapleKiller = resolveMapleBearKillerForConversion(entity, source?.damagingEntity);
+        if (mapleKiller) {
+            handleMobConversion(entity, mapleKiller);
+        } else if (!bearInvolved && wasKilledByStorm(entity.id)) {
+            handleStormMobConversion(entity);
+        }
     }
     
     // Handle Maple Bear kill tracking
@@ -4279,6 +4302,7 @@ system.runInterval(() => {
     // Unified infection system
     syncSimPlayerInfectionEntries();
     const infectionAudioEnabled = isScriptEnabled(SCRIPT_IDS.infectionAudio);
+    const playersById = new Map(world.getAllPlayers().map((p) => [p.id, p]));
     for (const [id, state] of playerInfection.entries()) {
         if (state.cured) continue;
         if (String(id).startsWith("sim:")) {
@@ -4286,7 +4310,7 @@ system.runInterval(() => {
             tickSimulatedPlayerInfection(id, state);
             continue;
         }
-        const player = world.getAllPlayers().find(p => p.id === id);
+        const player = playersById.get(id);
         if (!player) continue;
 
         const infectionType = state.infectionType || MAJOR_INFECTION_TYPE;
@@ -4753,16 +4777,20 @@ system.runInterval(() => {
         const _biomeAllPlayers = world.getAllPlayers();
         const _biomeThriftTier = getPlayerThriftTier();
         const _biomeLoopTick = Math.floor(currentTick / 40);
-        const _biomePlayers = (_biomeThriftTier >= 2 && _biomeAllPlayers.length > 1)
+        let _biomePlayers = (_biomeThriftTier >= 2 && _biomeAllPlayers.length > 1)
             ? [_biomeAllPlayers[_biomeLoopTick % _biomeAllPlayers.length]]
             : _biomeAllPlayers;
+        if (isSpreadThrottleActive()) {
+            _biomePlayers = spreadPlayersForWork(_biomeAllPlayers, "biomeDiscovery");
+        }
 
         for (const p of _biomePlayers) {
             if (!p) continue;
             try {
                 // Check cooldown to avoid expensive biome checks
                 const lastCheck = biomeCheckCache.get(p.id) || 0;
-                if (currentTick - lastCheck < BIOME_CHECK_COOLDOWN) {
+                const biomeCooldown = isSpreadThrottleActive() ? BIOME_CHECK_COOLDOWN * 3 : BIOME_CHECK_COOLDOWN;
+                if (currentTick - lastCheck < biomeCooldown) {
                     continue; // Skip this player, cooldown not expired
                 }
 
@@ -4849,16 +4877,20 @@ function isPlayerAirborne(player, wasOnInfectedGround = false) {
 // --- Ground Exposure Infection Pressure - Adaptive Checking System ---
 // Slow check loop: Detects state changes and tracks which players need frequent checking
 system.runInterval(() => {
+    if (!claimSpreadSlice("groundSlow", GROUND_CHECK_INTERVAL_OFF)) return;
     // Phase 3: Round-robin for 3+/5+ players. This loop does 2-3 `getBlock` reads per
     // player to detect state transitions onto infected ground. Once a player is tracked,
     // the fast path (20t) picks up timer progression, so staggering the slow path by
     // thrift tier just delays "start tracking"/"stop tracking" events a single cycle.
-    const _slowPlayers = world.getAllPlayers();
+    let _slowPlayers = world.getAllPlayers();
     const _slowThriftTier = getPlayerThriftTier();
     const _slowLoopTick = Math.floor(system.currentTick / GROUND_CHECK_INTERVAL_OFF);
-    const _slowLoopPlayers = (_slowThriftTier >= 2 && _slowPlayers.length > 1)
+    let _slowLoopPlayers = (_slowThriftTier >= 2 && _slowPlayers.length > 1)
         ? [_slowPlayers[_slowLoopTick % _slowPlayers.length]]
         : _slowPlayers;
+    if (isSpreadThrottleActive()) {
+        _slowLoopPlayers = spreadPlayersForWork(_slowPlayers, "groundSlow");
+    }
     for (const player of _slowLoopPlayers) {
         if (!player) continue;
         try {
@@ -4943,14 +4975,16 @@ system.runInterval(() => {
             }
         } catch { }
     }
-}, GROUND_CHECK_INTERVAL_OFF); // Slow check every 3 seconds
+}, 8); // Poll often; claimSpreadSlice gates real work (slower on day 0–1)
 
 // Fast check loop: Processes ground exposure for players on infected ground (more frequent)
 system.runInterval(() => {
+    if (!claimSpreadSlice("groundFast", GROUND_CHECK_INTERVAL_ON)) return;
     // Only check players who are on infected ground
     if (playersOnInfectedGround.size === 0) return;
-    
-    for (const player of world.getAllPlayers()) {
+
+    const _fastPlayers = spreadPlayersForWork(world.getAllPlayers(), "groundFast");
+    for (const player of _fastPlayers) {
         try {
             if (!playersOnInfectedGround.has(player.id)) continue;
             if (introInProgress.has(player.id)) continue;
@@ -5318,7 +5352,7 @@ system.runInterval(() => {
             }
         } catch { }
     }
-}, GROUND_CHECK_INTERVAL_ON); // Fast check every 1 second when on infected ground
+}, 4); // Poll often; claimSpreadSlice gates work (slower on day 0–1 when on infected ground)
 
 // Decay loop: Processes decay for players off infected ground (less frequent)
 system.runInterval(() => {
@@ -5581,6 +5615,7 @@ const SNOW_TRAIL_TYPES = new Set([
 
 system.runInterval(() => {
     try {
+        if (isSpreadThrottleActive() && !claimSpreadSlice("snowTrail", 80)) return;
         const nowTick = system.currentTick;
         // Iterate the shared MB-bear snapshot instead of world.getAllEntities(), which
         // scales with every loaded entity (items, XP orbs, villagers, etc.).
@@ -8240,12 +8275,21 @@ initializePropertyHandler();
 system.run(() => {
     try {
         runWorldPropertyMigrations();
+        ensureWorldLagComfortDefaults();
     } catch (e) {
         console.warn("[PropertyHandler] runWorldPropertyMigrations (deferred):", e);
     }
 });
-initializeAdaptivePerformanceWatch();
-initializeSpawnLoadScalerWatch();
+system.runTimeout(() => {
+    try {
+        initializeAdaptivePerformanceWatch();
+    } catch { /* ignore */ }
+}, 60);
+system.runTimeout(() => {
+    try {
+        initializeSpawnLoadScalerWatch();
+    } catch { /* ignore */ }
+}, 100);
 initializeInfectionDirectorWatch();
 registerSpawnLoadProbes({
     storm: getActiveStormCount,

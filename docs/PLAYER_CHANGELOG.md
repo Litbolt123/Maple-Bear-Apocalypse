@@ -3,6 +3,13 @@
 Short bullets for patch notes and in-game **What's new** (`BP/scripts/mb_playerChangelog.js`).  
 Bump **`PLAYER_CHANGELOG_VERSION`** in `mb_playerChangelog.js` when you ship a new beta.
 
+## v0.9.0-beta.4
+
+- Performance: day 0–1 and approaching villages should hitch less — heavy work is spread across ticks and uses smaller entity scans near players.
+- Buff bears: death powder explosion is back; kills convert by victim size (tiny / normal / large), not always the smallest bear.
+- Balance: buff bear count is capped on **all** spawn paths (including storms and conversions); extra conversions become infected bears for the current day.
+- Storms: fixed double conversion when a bear killed the mob; storm waves no longer flood buff bears past the cap.
+
 ## v0.9.0-beta.3
 
 - Storms: when no overworld player is within horizontal range of a storm center, that storm does less particles/snow/drift work (far storms still expire normally). Mob damage and major destruct remain gated by nearby players as before.

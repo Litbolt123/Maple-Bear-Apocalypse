@@ -4,11 +4,12 @@
  */
 
 import { getWorldProperty, setWorldProperty, saveAllProperties } from "./mb_dynamicPropertyHandler.js";
+import { ensureWorldLagComfortDefaults } from "./mb_codex.js";
 
 const SCHEMA_WORLD_KEY = "mb_addon_schema_version";
 
 /** Increment when you add a new migration block. */
-export const CURRENT_PROPERTY_SCHEMA = 1;
+export const CURRENT_PROPERTY_SCHEMA = 2;
 
 /**
  * Run after world/properties are loadable. Safe to call once per session (idempotent).
@@ -24,11 +25,9 @@ export function runWorldPropertyMigrations() {
 
         if (v >= CURRENT_PROPERTY_SCHEMA) return;
 
-        // Example for a future rename:
-        // if (v < 1) {
-        //   const oldVal = getWorldProperty("old_key");
-        //   if (oldVal !== undefined) setWorldProperty("new_key", oldVal);
-        // }
+        if (v < 2) {
+            ensureWorldLagComfortDefaults();
+        }
 
         setWorldProperty(SCHEMA_WORLD_KEY, CURRENT_PROPERTY_SCHEMA);
         try {

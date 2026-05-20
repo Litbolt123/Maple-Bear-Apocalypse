@@ -27,3 +27,7 @@ Older addon docs assumed the **Custom Biomes** experiment was required. That may
 ## Host tools
 
 Release pack: journal **Host tools** for `mb_cheats` / Litbolt123 only — not full Developer Tools. See [`AGENTS.md`](../../AGENTS.md).
+
+## Lag / tick stalls
+
+If the world **freezes** briefly (sounds continue, blocks stop, hits catch up), see [`PERFORMANCE_DEBUG.md`](PERFORMANCE_DEBUG.md) — especially **day 0–1** near villages and new chunks.

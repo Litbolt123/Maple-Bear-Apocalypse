@@ -6,6 +6,112 @@ Running log of **what changed and why** (gameplay, scripts, assets, docs). Used 
 
 ---
 
+**Date:** 2026-05-19 (release — v0.9.0-beta.4)
+
+- Shipped **beta.4** after user playtest (lag, buff cap, death explosions). **`ADDON_VERSION_PRERELEASE`** → **`beta.4`**; **`PLAYER_CHANGELOG_VERSION`** → **`0.9.0-beta.4`**; **`npm run sync:pack-metadata`**; **`docs/PLAYER_CHANGELOG.md`**, **`mb_playerChangelog.js`** (both packs), **`docs/development/releases/v0.9.0-beta.4.md`**, smoke checklist row. Tag **`v0.9.0-beta.4`** for GitHub Release (public **`BP/`** + **`RP/`**).
+
+---
+
+**Date:** 2026-05-19 (buff death explosion restored)
+
+- Death burst was gated on **`BUFF_SPAWN_TIME`** (only bears within 64 blocks of a player when AI ran). Removed that gate; still skip only **`mb_conversion_spawn`** tag (instant conversion pop, not real deaths). **`mb_buffAI.js`**. **`BP/`** + **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-05-19 (storm conversion buff cap — dimension-wide + pending fix)
+
+- Storm mass-convert still spawned unlimited **`mb:buff_mb_day20`**: pending slots released in **`finally`** before the next queued **`system.run`**, and cap only counted buffs within 64m. Fix: **dimension-wide** buff count, max from **players in that dimension**, pending held until **next tick** (`system.run` release). Solo world → at most **one** buff from conversions per storm wave; rest **infected**. **`mb_mainMobConversion.js`**.
+
+---
+
+**Date:** 2026-05-19 (conversion buff cap — single spawn gate)
+
+- **All** mob→bear conversions now spawn through **`spawnConversionEntity`** → **`clampSpawnTypeForBuffCap`** (bear kill, storm, any path). Cap uses full **`getEntities`** count (not spread-throttled), same 1/1/2/3 player rule as spawn, plus **pending** reservations so multiple kills same tick cannot stack buffs. Over cap → **infected** tier for current day. **`mb_mainMobConversion.js`**. **`BP/`** + **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-05-19 (storm kill: bear attribution on entityDie)
+
+- Buff bear + storm kills still ran **storm conversion** because `entityDie` often has **no `damagingEntity`** (storm flag set, bear gets credit on hurt only). Fix: **`LAST_MB_KILLER_BY_VICTIM`** on `entityHurt`, `resolveMapleBearKillerForConversion` / `wasMapleBearInvolvedInKill` — storm skipped when a bear hit the victim recently. Storm log now prints real **`typeId`** (not generic “Maple Bear”). **`BP/`** + **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-05-19 (storm + bear kill double conversion fix)
+
+- Iron golem (etc.) killed by a **buff bear in a storm** ran **both** `handleMobConversion` and `handleStormMobConversion` — storm path always rolled large→buff. Storm conversion now **skipped when killer is any Maple Bear type** (`isMapleBearKillerType`). **`main.js`**, **`mb_mainMobConversion.js`**. **`BP/`** + **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-05-19 (buff death explosion + conversion cap fixes)
+
+- **Death explosion:** only for buff bears Buff AI was already tracking; **not** fresh `mb_conversion_spawn` tags (mob conversions). Stuck fuse unchanged. Fixed backdated spawn time that let conversion spawns stuck-explode immediately. **`mb_buffAI.js`**
+- **Conversion buff cap:** `getMaxBuffBearsForNearbyPlayerCount` (same 1/1/2/3 as spawn); conversions **downgrade to infected** when capped instead of spawning more buffs. **`mb_balance.js`**, **`mb_mainMobConversion.js`**, **`mb_spawnController.js`**. **`BP/`** + **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-05-19 (buff bear death explosion + buff-kill conversion)
+
+- **Buff bears** explode on death (same powder/block burst as stuck fuse; requires Buff AI script toggle). **`mb_buffAI.js`**
+- **Buff bear mob kills** use **`resolveSizedMobKillConversion`** (victim tiny → tiny MB, large → buff, normal → infected for current day) — not flat `mb:mb_day00`. **`mb_mainMobConversion.js`**. **`BP/`** + **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-05-19 (entity queries — 3×3 sections around players)
+
+- **`mb_workSpread.js`:** `queryEntitiesOneSpreadSection` / `SPREAD_CELL_RADIUS` (32) + 9-cell XZ grid around each anchor. **Mob cache:** one player × one cell per tick on day 0–1 (not one 128-block sphere). **Bear snapshot:** spread refresh = 3 types × one cell near players per call; day 2+ uses player-anchored 96-block queries (no full-dimension sweep when players present). **Mob conversion** / **buff debug scan** use spread helper. **Item metrics** incremental cells when spread active (day 2+ path). **`BP/`** + **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-05-19 (day 0–1 work spread — `mb_workSpread.js`)
+
+- First village / fast chunk load spikes: new **`mb_workSpread.js`** (8× intervals on day 0–1). Staggered: mob cache one player anchor per tick (MP), bear snapshot one dimension per call + 240t empty TTL, no `findClosestBiome`, snow trail/biome/ground/dim-adapt/metrics/HUD spread, deferred perf/spawn-load init. **`BP/`** + **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-05-19 (village lag — round 2)
+
+- Still spiking at villages after round 1: fixed **spawn controller** `getEntityCountsForPlayer` / batch (was `getEntities` all types in ~45–200 block radius → villagers/items). Now **`countMbBearsNearPosition`** via bear snapshot. **Mob cache** excludes item/xp_orb/etc. **Bear snapshot** empty TTL 40t. **Item metrics** near players only. **Mining pathfind** entity lookup scoped. **Biome** `findClosestBiome` cooldown 1200t, smaller box. **`BP/`** + **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-05-19 (village lag — dimension adaptation + mob cache)
+
+- **`mb_dimensionAdaptation.js`:** main loop uses **`getBearSnapshotsForDimensions`** instead of `dimension.getEntities()` (no full-world entity sweep). **`mb_sharedCache.js`:** mob cache refresh = one **`getEntities({ families, location, maxDistance: 128 })`** per player in dimension (deduped); empty when no players. Mining AI coordination cleanup uses player anchors (not 0,0 / 1000). Mirrored **`BP/`** + **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-05-19 (village / new-chunk lag — code audit)
+
+- User repro: spike reaching a **village** after **new terrain** (pre–Mid-default pack). Audit: spawn main loop **off** `day < 2`; likely addon + vanilla chunk/entity load. Top suspects: **`mb_dimensionAdaptation.js`** `dimension.getEntities()` unfiltered every 100t × 3 dims; **`mb_sharedCache.js`** `families: mob,villager` full-dimension refresh every 2t when mining AI runs; **`main.js`** `findClosestBiome` fallback per chunk; **`mb_biomeAmbience.js`** `getBiome` every 60t; day 2+ **`mb_spawnController`** chunk/block scans. See chat / `docs/development/PERFORMANCE_DEBUG.md`.
+
+---
+
+**Date:** 2026-05-19 (default lag tier = Mid)
+
+- **Journal lag default** is now **Mid** (level 2): `DEFAULT_LAG_COMFORT_LEVEL`, `ensureWorldLagComfortDefaults()` on world load/migration when never set. Wizard **Default** button applies Mid; **Full auto** is advanced. Base scan settings = `lowLag` preset; spawn auto-combo tiers favor `low` + `lowLag`. Mirrored **`BP/`** + **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-05-19 (spawn + chunk scan — spread work over time)
+
+- **`mb_spawnController.js` (`BP/` + `BP - Dev/`):** Wired **`progressiveBlockScanCache`** so discovery resumes across ticks instead of one-shot 6k queries. MP: removed “always process player 0” fallback; max **1** spawn player per controller tick; tight groups scan **one member per tick** (rotating). Chunk queue depth lowers per-tick block budget; cleanup stale partial scans. Docs: **`SPAWN_SYSTEM_EXPLANATION.md`**, **`PERFORMANCE_DEBUG.md`**.
+
+---
+
+**Date:** 2026-05-19 (config templates + day 0–1 perf mitigations)
+
+- **Bridge config:** [`config/dev/bridge.json`](../../config/dev/bridge.json), [`config/release/bridge.json`](../../config/release/bridge.json), [`config/README.md`](../../config/README.md); [`tools/copyBridgeConfig.js`](../../tools/copyBridgeConfig.js) + `npm run bridge:config:dev|release` (optional `:sync` names from `mb_buildConfig.js`). Root `config.json` unchanged unless you run a script.
+- **Lag playbook:** [`docs/development/PERFORMANCE_DEBUG.md`](development/PERFORMANCE_DEBUG.md).
+- **Scripts (`BP/` + `BP - Dev/`):** spawn load metrics skip bear/item `getEntities` sweeps when `getCurrentDay() < 2`; `getBiomeIdAt` throttles/shrinks `findClosestBiome`; spawn scan perf HUD uses 40t cache only; chunk scan queue caps **2** full scans/tick + defers when queue deep; infection loop uses one `playersById` map per tick.
+
+---
+
+**Date:** 2026-05-19 (journal dev access — scripts only)
+
+- **`mb_codex.js` (`BP - Dev/` + `BP/`):** `hasJournalPowerToolsAccess()` — when `INCLUDE_FULL_DEVELOPER_TOOLS` is true (dev pack), **Developer Tools** / **Debug** show for any player without `mb_cheats`. Release build unchanged: Host tools still need `mb_cheats` or Litbolt123. Bridge `config.json` left to user; `sync:pack-metadata` does not rewrite pack paths.
+
+---
+
 **Date:** 2026-05-17 (world setup — no experiments on 1.26.2+)
 
 - **Playtest:** Infected custom biomes work on **Bedrock 1.26.2** with **no world experiments** (Custom Biomes off). **`docs/development/WORLD_SETUP.md`** is canonical; README, TODO, Patreon/Discord prompts, ADDON_SYSTEMS, PROJECT_STATUS, DEVELOPER_ONBOARDING updated. Old “enable Custom Biomes” guidance retired for 1.26.2+.

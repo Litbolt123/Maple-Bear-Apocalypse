@@ -13,9 +13,27 @@
 
 import { system, world } from "@minecraft/server";
 import { isEntityValid } from "./mb_sharedCache.js";
+import {
+    getPlayerAnchorsInDimension,
+    getSpreadBearSnapshotEmptyTtl,
+    getSpreadSectionLocation,
+    isSpreadThrottleActive,
+    SPREAD_CELL_COUNT,
+    SPREAD_CELL_RADIUS
+} from "./mb_workSpread.js";
 
-/** How long a snapshot stays fresh. 4 ticks ≈ 200 ms — below every AI's working cadence. */
+/** How long a snapshot stays fresh when bears exist. 4 ticks ≈ 200 ms — below every AI's working cadence. */
 const SNAPSHOT_TTL_TICKS = 4;
+/** When no bears are loaded, refresh less often (see getSpreadBearSnapshotEmptyTtl on day 0–1). */
+const SNAPSHOT_TTL_EMPTY_TICKS = 40;
+
+let spreadDimRefreshRotate = 0;
+
+/** Bear types queried per spread refresh slice (day 0–1). */
+const BEAR_TYPES_PER_SPREAD_SLICE = 3;
+
+/** @type {Map<string, { tick: number, all: import("@minecraft/server").Entity[], byType: Map<string, import("@minecraft/server").Entity[]>, typeIdx: number, anchorIdx: number, sectionIdx: number, anchors: { x: number, y: number, z: number }[] }>} */
+const spreadPartialByDimension = new Map();
 
 /** All addon bear / infected mobs. Kept in sync with mb_spawnLoadMetrics.ALL_MB_MOB_TYPES. */
 export const ALL_MB_BEAR_TYPES = [
@@ -65,29 +83,7 @@ function emptySnapshot(tick) {
     return { tick, all: [], byType: new Map(), familyQueryOk: false };
 }
 
-function refreshDimension(dimension, currentTick) {
-    if (!dimension) return emptySnapshot(currentTick);
-
-    // Always aggregate per typeId. A single `families: [infected]` call can miss
-    // variant files that omit `minecraft:type_family` in JSON (e.g. torpedo) and
-    // would never appear in the snapshot. Also, `getEntities` returning `[]` is
-    // truthy, so the old `if (!all) { fallback }` path never ran when the family
-    // list was empty — the snapshot was permanently empty. Per-type is the same
-    // 21 calls per dim per refresh, but it is still **one** shared pass for every
-    // script (not per-AI N²).
-    const all = [];
-    for (const typeId of ALL_MB_BEAR_TYPES) {
-        try {
-            const part = dimension.getEntities({ type: typeId });
-            if (part && part.length) {
-                for (const e of part) all.push(e);
-            }
-        } catch {
-            /* ignore one type, keep going */
-        }
-    }
-    const familyQueryOk = all.length > 0; // legacy: non-empty aggregate
-
+function bucketEntitiesIntoSnapshot(all, currentTick) {
     const byType = new Map();
     const validAll = [];
     for (const entity of all) {
@@ -99,9 +95,7 @@ function refreshDimension(dimension, currentTick) {
         } catch {
             continue;
         }
-        if (!typeId) continue;
-        // Family "infected" is addon-scoped (no vanilla mob uses it), but clamp anyway.
-        if (!ALL_MB_BEAR_TYPES_SET.has(typeId)) continue;
+        if (!typeId || !ALL_MB_BEAR_TYPES_SET.has(typeId)) continue;
         validAll.push(entity);
         let bucket = byType.get(typeId);
         if (!bucket) {
@@ -110,8 +104,110 @@ function refreshDimension(dimension, currentTick) {
         }
         bucket.push(entity);
     }
+    return { tick: currentTick, all: validAll, byType, familyQueryOk: validAll.length > 0 };
+}
 
-    return { tick: currentTick, all: validAll, byType, familyQueryOk };
+function mergeIntoPartialList(partialAll, entities) {
+    const seen = new Set(partialAll.map((e) => e.id));
+    for (const entity of entities || []) {
+        if (!entity?.id || seen.has(entity.id)) continue;
+        seen.add(entity.id);
+        partialAll.push(entity);
+    }
+}
+
+function refreshDimensionNearPlayers(dimension, currentTick, anchors, queryRadius) {
+    const all = [];
+    for (const typeId of ALL_MB_BEAR_TYPES) {
+        for (const anchor of anchors) {
+            try {
+                const part = dimension.getEntities({
+                    type: typeId,
+                    location: anchor,
+                    maxDistance: queryRadius
+                });
+                if (part?.length) mergeIntoPartialList(all, part);
+            } catch {
+                /* ignore one query */
+            }
+        }
+    }
+    return bucketEntitiesIntoSnapshot(all, currentTick);
+}
+
+function refreshDimensionSpread(dimension, currentTick) {
+    const key = normalizeDimensionId(dimension.id);
+    const anchors = getPlayerAnchorsInDimension(dimension);
+    if (!anchors.length) return emptySnapshot(currentTick);
+
+    let partial = spreadPartialByDimension.get(key);
+    if (!partial) {
+        partial = {
+            tick: currentTick,
+            all: [],
+            byType: new Map(),
+            typeIdx: 0,
+            anchorIdx: 0,
+            sectionIdx: 0,
+            anchors
+        };
+        spreadPartialByDimension.set(key, partial);
+    }
+
+    const anchor = anchors[partial.anchorIdx % anchors.length];
+    const loc = getSpreadSectionLocation(anchor, partial.sectionIdx);
+    for (let i = 0; i < BEAR_TYPES_PER_SPREAD_SLICE; i++) {
+        const typeId = ALL_MB_BEAR_TYPES[(partial.typeIdx + i) % ALL_MB_BEAR_TYPES.length];
+        try {
+            const part = dimension.getEntities({
+                type: typeId,
+                location: loc,
+                maxDistance: SPREAD_CELL_RADIUS
+            });
+            if (part?.length) mergeIntoPartialList(partial.all, part);
+        } catch {
+            /* ignore */
+        }
+    }
+    partial.typeIdx = (partial.typeIdx + BEAR_TYPES_PER_SPREAD_SLICE) % ALL_MB_BEAR_TYPES.length;
+    partial.sectionIdx = (partial.sectionIdx + 1) % SPREAD_CELL_COUNT;
+    if (partial.sectionIdx === 0) {
+        partial.anchorIdx = (partial.anchorIdx + 1) % anchors.length;
+        if (partial.anchorIdx === 0 && partial.typeIdx === 0) {
+            const snap = bucketEntitiesIntoSnapshot(partial.all, currentTick);
+            snapshotsByDimension.set(key, snap);
+            spreadPartialByDimension.delete(key);
+            return snap;
+        }
+    }
+
+    const stale = snapshotsByDimension.get(key);
+    if (stale) return stale;
+    return bucketEntitiesIntoSnapshot(partial.all, partial.tick);
+}
+
+function refreshDimension(dimension, currentTick) {
+    if (!dimension) return emptySnapshot(currentTick);
+
+    const anchors = getPlayerAnchorsInDimension(dimension);
+    if (isSpreadThrottleActive()) {
+        return refreshDimensionSpread(dimension, currentTick);
+    }
+    if (anchors.length) {
+        return refreshDimensionNearPlayers(dimension, currentTick, anchors, 96);
+    }
+
+    // No players in dimension: rare; one unscoped pass per type.
+    const all = [];
+    for (const typeId of ALL_MB_BEAR_TYPES) {
+        try {
+            const part = dimension.getEntities({ type: typeId });
+            if (part?.length) mergeIntoPartialList(all, part);
+        } catch {
+            /* ignore */
+        }
+    }
+    return bucketEntitiesIntoSnapshot(all, currentTick);
 }
 
 function getOrRefresh(dimension) {
@@ -120,8 +216,16 @@ function getOrRefresh(dimension) {
     if (!key) return emptySnapshot(currentTick);
 
     const cached = snapshotsByDimension.get(key);
-    if (cached && (currentTick - cached.tick) < SNAPSHOT_TTL_TICKS) {
-        return cached;
+    if (cached) {
+        const emptyTtl = getSpreadBearSnapshotEmptyTtl();
+        const ttl = cached.all.length > 0 ? SNAPSHOT_TTL_TICKS : emptyTtl;
+        if (currentTick - cached.tick < ttl) {
+            return cached;
+        }
+    }
+
+    if (isSpreadThrottleActive()) {
+        spreadPartialByDimension.delete(key);
     }
 
     const fresh = refreshDimension(dimension, currentTick);
@@ -221,10 +325,39 @@ export function getAllBears(dim, center = null, maxDistance = Infinity) {
  */
 export function getBearSnapshotsForDimensions(dimensionIds) {
     const out = new Map();
+    const currentTick = system.currentTick;
+
+    if (isSpreadThrottleActive() && dimensionIds.length > 1) {
+        const refreshId = dimensionIds[spreadDimRefreshRotate % dimensionIds.length];
+        spreadDimRefreshRotate++;
+
+        for (const id of dimensionIds) {
+            const dimension = resolveDimension(id);
+            const key = normalizeDimensionId(id);
+            if (!dimension || !key) {
+                out.set(id, emptySnapshot(currentTick));
+                continue;
+            }
+            if (id === refreshId) {
+                out.set(id, getOrRefresh(dimension));
+            } else {
+                const cached = snapshotsByDimension.get(key);
+                const emptyTtl = getSpreadBearSnapshotEmptyTtl();
+                const ttl = cached?.all?.length > 0 ? SNAPSHOT_TTL_TICKS : emptyTtl;
+                if (cached && currentTick - cached.tick < ttl) {
+                    out.set(id, cached);
+                } else {
+                    out.set(id, cached ?? emptySnapshot(currentTick));
+                }
+            }
+        }
+        return out;
+    }
+
     for (const id of dimensionIds) {
         const dimension = resolveDimension(id);
         if (!dimension) {
-            out.set(id, emptySnapshot(system.currentTick));
+            out.set(id, emptySnapshot(currentTick));
             continue;
         }
         out.set(id, getOrRefresh(dimension));
@@ -259,6 +392,7 @@ export function countBearsAcrossDimensions(dimensionIds, onlyTypes = null) {
 /** Force-refresh all snapshots next call (testing / telemetry). */
 export function invalidateBearSnapshots() {
     snapshotsByDimension.clear();
+    spreadPartialByDimension.clear();
 }
 
 /** Debug: snapshot state for dev tools. */

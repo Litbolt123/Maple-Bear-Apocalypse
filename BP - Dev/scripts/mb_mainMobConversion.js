@@ -9,10 +9,11 @@ import {
     MB_CONVERSION_WORLD_PRESSURE_START,
     MB_CONVERSION_WORLD_PRESSURE_END,
     MB_CONVERSION_WORLD_MULT_MIN,
-    MB_CONVERSION_BUFF_NEAR_CAP,
-    getInfectionRate
+    getInfectionRate,
+    getMaxBuffBearsForNearbyPlayerCount
 } from "./mb_balance.js";
 import { refreshSpawnLoadMetrics, getSpawnLoadDebugSnapshot } from "./mb_spawnLoadMetrics.js";
+import { queryEntitiesSpread } from "./mb_workSpread.js";
 import {
     MAPLE_BEAR_ID,
     MAPLE_BEAR_DAY4_ID,
@@ -39,6 +40,228 @@ import {
 
 const SNOW_LAYER_BLOCK = "minecraft:snow_layer";
 
+/** Buff AI skips death burst + stuck fuse until this tag is cleared (first AI tick). */
+export const BUFF_CONVERSION_SPAWN_TAG = "mb_conversion_spawn";
+
+const BUFF_BEAR_TYPE_IDS = new Set([BUFF_BEAR_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID]);
+
+/** Killers that use handleMobConversion (storm conversion must not duplicate these). */
+const MAPLE_BEAR_KILLER_TYPE_IDS = new Set([
+    MAPLE_BEAR_ID, MAPLE_BEAR_DAY4_ID, MAPLE_BEAR_DAY8_ID, MAPLE_BEAR_DAY13_ID, MAPLE_BEAR_DAY20_ID,
+    INFECTED_BEAR_ID, INFECTED_BEAR_DAY8_ID, INFECTED_BEAR_DAY13_ID, INFECTED_BEAR_DAY20_ID,
+    BUFF_BEAR_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID,
+    FLYING_BEAR_ID, FLYING_BEAR_DAY15_ID, FLYING_BEAR_DAY20_ID,
+    MINING_BEAR_ID, MINING_BEAR_DAY20_ID,
+    TORPEDO_BEAR_ID, TORPEDO_BEAR_DAY20_ID,
+    INFECTED_PIG_ID, INFECTED_COW_ID
+]);
+
+/** @param {string | undefined} typeId */
+export function isMapleBearKillerType(typeId) {
+    return !!typeId && MAPLE_BEAR_KILLER_TYPE_IDS.has(typeId);
+}
+
+/** Death events often omit damagingEntity; track recent bear hits (storm kills in particular). */
+const LAST_MB_KILLER_BY_VICTIM = new Map();
+const LAST_MB_KILLER_TTL_TICKS = 200;
+
+function recordMapleBearDamageToVictim(victim, killer) {
+    if (!victim?.id || !killer?.id || !isMapleBearKillerType(killer.typeId)) return;
+    LAST_MB_KILLER_BY_VICTIM.set(victim.id, { killerId: killer.id, tick: system.currentTick });
+}
+
+function clearMapleBearDamageRecord(victimId) {
+    if (victimId) LAST_MB_KILLER_BY_VICTIM.delete(victimId);
+}
+
+/** Call before resolveMapleBearKillerForConversion (reads map without clearing). */
+export function wasMapleBearInvolvedInKill(victim, damageSourceEntity) {
+    if (damageSourceEntity?.typeId && isMapleBearKillerType(damageSourceEntity.typeId)) {
+        return true;
+    }
+    if (!victim?.id) return false;
+    const rec = LAST_MB_KILLER_BY_VICTIM.get(victim.id);
+    if (!rec) return false;
+    return system.currentTick - rec.tick <= LAST_MB_KILLER_TTL_TICKS;
+}
+
+/**
+ * @returns {import("@minecraft/server").Entity | null}
+ */
+export function resolveMapleBearKillerForConversion(victim, damageSourceEntity) {
+    if (!victim?.id) return null;
+
+    if (damageSourceEntity?.isValid && isMapleBearKillerType(damageSourceEntity.typeId)) {
+        clearMapleBearDamageRecord(victim.id);
+        return damageSourceEntity;
+    }
+
+    const rec = LAST_MB_KILLER_BY_VICTIM.get(victim.id);
+    clearMapleBearDamageRecord(victim.id);
+    if (!rec || system.currentTick - rec.tick > LAST_MB_KILLER_TTL_TICKS) {
+        return null;
+    }
+
+    try {
+        const killer = world.getEntity(rec.killerId);
+        if (killer?.isValid && isMapleBearKillerType(killer.typeId)) {
+            return killer;
+        }
+    } catch {
+        /* ignore */
+    }
+    return null;
+}
+
+let mobConversionHurtTrackingStarted = false;
+function ensureMobConversionHurtTracking() {
+    if (mobConversionHurtTrackingStarted) return;
+    mobConversionHurtTrackingStarted = true;
+    world.afterEvents.entityHurt.subscribe((event) => {
+        try {
+            recordMapleBearDamageToVictim(event.hurtEntity, event.damageSource?.damagingEntity);
+        } catch {
+            /* ignore */
+        }
+    });
+}
+ensureMobConversionHurtTracking();
+
+function isBuffBearTypeId(typeId) {
+    return BUFF_BEAR_TYPE_IDS.has(typeId);
+}
+
+function infectedBearTypeForDay(currentDay) {
+    if (currentDay >= 20) return INFECTED_BEAR_DAY20_ID;
+    if (currentDay >= 13) return INFECTED_BEAR_DAY13_ID;
+    if (currentDay >= 8) return INFECTED_BEAR_DAY8_ID;
+    return INFECTED_BEAR_ID;
+}
+
+/** Conversions reserved this tick (not yet visible to getEntities). Per dimension. */
+const pendingBuffConversionByDimension = new Map();
+
+function normalizeDimensionId(id) {
+    if (!id) return "";
+    return id.replace(/^minecraft:/, "");
+}
+
+/** Dimension-wide buff count for conversion cap (matches spawn player-count limit). */
+function countBuffBearsInDimension(dimension) {
+    if (!dimension) return 0;
+    let n = 0;
+    for (const typeId of BUFF_BEAR_TYPE_IDS) {
+        try {
+            const list = dimension.getEntities({ type: typeId });
+            n += list?.length ?? 0;
+        } catch {
+            /* ignore one type */
+        }
+    }
+    return n;
+}
+
+function getPlayerCountForBuffCap(dimension) {
+    try {
+        const dimId = dimension?.id;
+        let n = 0;
+        for (const player of world.getAllPlayers()) {
+            if (player?.isValid && player.dimension?.id === dimId) n++;
+        }
+        return Math.max(1, n);
+    } catch {
+        return 1;
+    }
+}
+
+function getEffectiveBuffCountForCap(dimension) {
+    const dimKey = normalizeDimensionId(dimension?.id);
+    const live = countBuffBearsInDimension(dimension);
+    const pending = pendingBuffConversionByDimension.get(dimKey) ?? 0;
+    return live + pending;
+}
+
+function reserveBuffConversionSlot(dimension) {
+    const dimKey = normalizeDimensionId(dimension?.id);
+    pendingBuffConversionByDimension.set(dimKey, (pendingBuffConversionByDimension.get(dimKey) ?? 0) + 1);
+}
+
+function releaseBuffConversionSlot(dimension) {
+    const dimKey = normalizeDimensionId(dimension?.id);
+    const pending = pendingBuffConversionByDimension.get(dimKey) ?? 0;
+    if (pending <= 1) pendingBuffConversionByDimension.delete(dimKey);
+    else pendingBuffConversionByDimension.set(dimKey, pending - 1);
+}
+
+/**
+ * Single gate for every conversion spawn: never buff if at/above the spawn-controller buff cap.
+ * @returns {string} typeId to spawn (buff or infected fallback)
+ */
+function clampSpawnTypeForBuffCap(dimension, location, proposedTypeId) {
+    if (!isBuffBearTypeId(proposedTypeId)) return proposedTypeId;
+
+    const currentDay = getCurrentDay();
+    const maxBuff = getMaxBuffBearsForNearbyPlayerCount(getPlayerCountForBuffCap(dimension));
+    if (getEffectiveBuffCountForCap(dimension) >= maxBuff) {
+        return infectedBearTypeForDay(currentDay);
+    }
+
+    reserveBuffConversionSlot(dimension);
+    return proposedTypeId;
+}
+
+function placeConversionSnowAndVfx(dimension, location) {
+    dimension.spawnParticle("mb:white_dust_particle", location);
+    try {
+        const spawnY = Math.floor(location.y - 1);
+        const snowLoc = { x: Math.floor(location.x), y: spawnY, z: Math.floor(location.z) };
+        const snowBlock = dimension.getBlock(snowLoc);
+        const aboveBlock = dimension.getBlock({ x: snowLoc.x, y: spawnY + 1, z: snowLoc.z });
+        const belowType = snowBlock?.typeId;
+        if (belowType === "minecraft:snow_layer") {
+            try { snowBlock.setType("mb:snow_layer"); } catch { snowBlock.setType(SNOW_LAYER_BLOCK); }
+        } else if (belowType !== "mb:snow_layer" && snowBlock && aboveBlock &&
+            snowBlock.isAir !== undefined && !snowBlock.isAir &&
+            snowBlock.isLiquid !== undefined && !snowBlock.isLiquid &&
+            aboveBlock.isAir !== undefined && aboveBlock.isAir) {
+            try { aboveBlock.setType("mb:snow_layer"); } catch { aboveBlock.setType(SNOW_LAYER_BLOCK); }
+        }
+    } catch {
+        /* ignore snow */
+    }
+}
+
+/**
+ * All mob→bear conversion spawns go through here so the buff cap cannot be bypassed.
+ * @returns {import("@minecraft/server").Entity | null}
+ */
+function spawnConversionEntity(dimension, location, targetEntityId) {
+    if (!dimension || !location) return null;
+
+    const spawnTypeId = clampSpawnTypeForBuffCap(dimension, location, targetEntityId);
+    const reservedBuff = isBuffBearTypeId(spawnTypeId);
+
+    try {
+        const newEntity = dimension.spawnEntity(spawnTypeId, location);
+        if (newEntity?.isValid && isBuffBearTypeId(spawnTypeId)) {
+            try {
+                newEntity.addTag(BUFF_CONVERSION_SPAWN_TAG);
+            } catch {
+                /* ignore */
+            }
+        }
+        placeConversionSnowAndVfx(dimension, location);
+        if (reservedBuff) {
+            // Keep reservation through this tick so batched storm/bear conversions see prior spawns.
+            system.run(() => releaseBuffConversionSlot(dimension));
+        }
+        return newEntity;
+    } catch {
+        if (reservedBuff) releaseBuffConversionSlot(dimension);
+        return null;
+    }
+}
+
 function convertEntity(deadEntity, killer, targetEntityId, conversionName) {
     if (!deadEntity || !deadEntity.isValid) {
         return null;
@@ -60,26 +283,7 @@ function convertEntity(deadEntity, killer, targetEntityId, conversionName) {
         return null;
     }
 
-    const newEntity = dimension.spawnEntity(targetEntityId, location);
-
-    dimension.spawnParticle("mb:white_dust_particle", location);
-
-    try {
-        const spawnY = Math.floor(location.y - 1);
-        const snowLoc = { x: Math.floor(location.x), y: spawnY, z: Math.floor(location.z) };
-        const snowBlock = dimension.getBlock(snowLoc);
-        const aboveBlock = dimension.getBlock({ x: snowLoc.x, y: spawnY + 1, z: snowLoc.z });
-        const belowType = snowBlock?.typeId;
-        if (belowType === "minecraft:snow_layer") {
-            try { snowBlock.setType("mb:snow_layer"); } catch { snowBlock.setType(SNOW_LAYER_BLOCK); }
-        } else if (belowType !== "mb:snow_layer" && snowBlock && aboveBlock && snowBlock.isAir !== undefined && !snowBlock.isAir && snowBlock.isLiquid !== undefined && !snowBlock.isLiquid && aboveBlock.isAir !== undefined && aboveBlock.isAir) {
-            try { aboveBlock.setType("mb:snow_layer"); } catch { aboveBlock.setType(SNOW_LAYER_BLOCK); }
-        }
-    } catch {
-        // Ignore snow placement errors
-    }
-
-    return newEntity;
+    return spawnConversionEntity(dimension, location, targetEntityId);
 }
 
 function convertEntityAtLocation(deadEntityOrLoc, killer, targetEntityId, conversionName) {
@@ -94,23 +298,7 @@ function convertEntityAtLocation(deadEntityOrLoc, killer, targetEntityId, conver
         return null;
     }
 
-    const newEntity = dimension.spawnEntity(targetEntityId, location);
-    dimension.spawnParticle("mb:white_dust_particle", location);
-
-    try {
-        const spawnY = Math.floor(location.y - 1);
-        const snowLoc = { x: Math.floor(location.x), y: spawnY, z: Math.floor(location.z) };
-        const snowBlock = dimension.getBlock(snowLoc);
-        const aboveBlock = dimension.getBlock({ x: snowLoc.x, y: spawnY + 1, z: snowLoc.z });
-        const belowType = snowBlock?.typeId;
-        if (belowType === "minecraft:snow_layer") {
-            try { snowBlock.setType("mb:snow_layer"); } catch { snowBlock.setType(SNOW_LAYER_BLOCK); }
-        } else if (belowType !== "mb:snow_layer" && snowBlock && aboveBlock && !snowBlock.isAir && !snowBlock.isLiquid && aboveBlock.isAir) {
-            try { aboveBlock.setType("mb:snow_layer"); } catch { aboveBlock.setType(SNOW_LAYER_BLOCK); }
-        }
-    } catch { }
-
-    return newEntity;
+    return spawnConversionEntity(dimension, location, targetEntityId);
 }
 
 function convertPigToInfectedPig(deadPig, killer) {
@@ -140,129 +328,60 @@ function convertMobToMapleBear(deadMob, killer) {
             return;
         }
 
-        try {
-            const { buff: buffBearCount } = countNearbyAddonBears(deadMob.dimension, deadMob.location, 64);
-            if (buffBearCount >= MB_CONVERSION_BUFF_NEAR_CAP) {
-                const willBeBuff = (mobType.includes('warden') || mobType.includes('ravager') ||
-                                  mobType.includes('iron_golem') || mobType.includes('wither') ||
-                                  mobType.includes('ender_dragon') || mobType.includes('giant') ||
-                                  mobType.includes('shulker') || mobType.includes('elder_guardian'));
-                if (willBeBuff) {
-                    return;
-                }
-            }
-        } catch { /* ignore */ }
-
         const killerType = killer.typeId;
         const currentDay = getCurrentDay();
 
         let newBearType;
-        let bearSize = "normal";
 
-        if (killerType === BUFF_BEAR_ID || killerType === BUFF_BEAR_DAY13_ID || killerType === BUFF_BEAR_DAY20_ID) {
+        const isBuffKiller = killerType === BUFF_BEAR_ID || killerType === BUFF_BEAR_DAY13_ID || killerType === BUFF_BEAR_DAY20_ID;
+        const isTinyMapleKiller = killerType === MAPLE_BEAR_ID || killerType === MAPLE_BEAR_DAY4_ID ||
+            killerType === MAPLE_BEAR_DAY8_ID || killerType === MAPLE_BEAR_DAY13_ID || killerType === MAPLE_BEAR_DAY20_ID;
+
+        if (isBuffKiller) {
+            ({ newBearType } = resolveSizedMobKillConversion(mobType, currentDay));
+        } else if (isTinyMapleKiller && currentDay < 4) {
             newBearType = MAPLE_BEAR_ID;
-            bearSize = "normal";
-        } else if (killerType === MAPLE_BEAR_ID || killerType === MAPLE_BEAR_DAY4_ID || killerType === MAPLE_BEAR_DAY8_ID || killerType === MAPLE_BEAR_DAY13_ID || killerType === MAPLE_BEAR_DAY20_ID) {
-            if (currentDay < 4) {
-                newBearType = MAPLE_BEAR_ID;
-                bearSize = "tiny";
-            } else if (currentDay >= 4 && currentDay < 8) {
-                const mobSize = getMobSize(mobType);
-                if (mobSize === "tiny") {
-                    newBearType = MAPLE_BEAR_DAY4_ID;
-                    bearSize = "tiny";
-                } else if (mobSize === "large") {
-                    newBearType = INFECTED_BEAR_ID;
-                    bearSize = "normal";
-                } else {
-                    newBearType = INFECTED_BEAR_ID;
-                    bearSize = "normal";
-                }
-            } else if (currentDay < 13) {
-                const mobSize = getMobSize(mobType);
-                if (mobSize === "tiny") {
-                    newBearType = MAPLE_BEAR_DAY8_ID;
-                    bearSize = "tiny";
-                } else if (mobSize === "large") {
-                    newBearType = BUFF_BEAR_ID;
-                    bearSize = "buff";
-                } else {
-                    newBearType = INFECTED_BEAR_DAY8_ID;
-                    bearSize = "normal";
-                }
-            } else if (currentDay < 20) {
-                const mobSize = getMobSize(mobType);
-                if (mobSize === "tiny") {
-                    newBearType = MAPLE_BEAR_DAY13_ID;
-                    bearSize = "tiny";
-                } else if (mobSize === "large") {
-                    newBearType = BUFF_BEAR_DAY13_ID;
-                    bearSize = "buff";
-                } else {
-                    newBearType = INFECTED_BEAR_DAY13_ID;
-                    bearSize = "normal";
-                }
-            } else {
-                const mobSize = getMobSize(mobType);
-                if (mobSize === "tiny") {
-                    newBearType = MAPLE_BEAR_DAY20_ID;
-                    bearSize = "tiny";
-                } else if (mobSize === "large") {
-                    newBearType = BUFF_BEAR_DAY20_ID;
-                    bearSize = "buff";
-                } else {
-                    newBearType = INFECTED_BEAR_DAY20_ID;
-                    bearSize = "normal";
-                }
-            }
+        } else if (isTinyMapleKiller) {
+            ({ newBearType } = resolveSizedMobKillConversion(mobType, currentDay));
         } else {
-            const mobSize = getMobSize(mobType);
-
-            if (mobSize === "tiny") {
-                if (currentDay >= 20) {
-                    newBearType = MAPLE_BEAR_DAY20_ID;
-                } else if (currentDay >= 13) {
-                    newBearType = MAPLE_BEAR_DAY13_ID;
-                } else if (currentDay >= 8) {
-                    newBearType = MAPLE_BEAR_DAY8_ID;
-                } else if (currentDay >= 4) {
-                    newBearType = MAPLE_BEAR_DAY4_ID;
-                } else {
-                    newBearType = MAPLE_BEAR_ID;
-                }
-                bearSize = "tiny";
-            } else if (mobSize === "large") {
-                if (currentDay >= 20) {
-                    newBearType = BUFF_BEAR_DAY20_ID;
-                    bearSize = "buff";
-                } else if (currentDay >= 13) {
-                    newBearType = BUFF_BEAR_DAY13_ID;
-                    bearSize = "buff";
-                } else if (currentDay >= 8) {
-                    newBearType = BUFF_BEAR_ID;
-                    bearSize = "buff";
-                } else {
-                    newBearType = INFECTED_BEAR_ID;
-                    bearSize = "normal";
-                }
-            } else {
-                if (currentDay >= 20) {
-                    newBearType = INFECTED_BEAR_DAY20_ID;
-                } else if (currentDay >= 13) {
-                    newBearType = INFECTED_BEAR_DAY13_ID;
-                } else if (currentDay >= 8) {
-                    newBearType = INFECTED_BEAR_DAY8_ID;
-                } else {
-                    newBearType = INFECTED_BEAR_ID;
-                }
-                bearSize = "normal";
-            }
+            ({ newBearType } = resolveSizedMobKillConversion(mobType, currentDay));
         }
 
         convertEntity(deadMob, killer, newBearType, "MOB CONVERSION");
     } catch {
         // ignore
     }
+}
+
+/**
+ * Victim size + world day → converted bear (tiny / infected / buff tier).
+ * Used for buff kills and other Maple Bear mob conversions (day 4+).
+ * @returns {{ newBearType: string, bearSize: string }}
+ */
+function resolveSizedMobKillConversion(mobType, currentDay) {
+    const mobSize = getMobSize(mobType);
+
+    if (currentDay < 4) {
+        if (mobSize === "tiny") return { newBearType: MAPLE_BEAR_ID, bearSize: "tiny" };
+        return { newBearType: INFECTED_BEAR_ID, bearSize: "normal" };
+    }
+    if (currentDay < 8) {
+        if (mobSize === "tiny") return { newBearType: MAPLE_BEAR_DAY4_ID, bearSize: "tiny" };
+        return { newBearType: INFECTED_BEAR_ID, bearSize: "normal" };
+    }
+    if (currentDay < 13) {
+        if (mobSize === "tiny") return { newBearType: MAPLE_BEAR_DAY8_ID, bearSize: "tiny" };
+        if (mobSize === "large") return { newBearType: BUFF_BEAR_ID, bearSize: "buff" };
+        return { newBearType: INFECTED_BEAR_DAY8_ID, bearSize: "normal" };
+    }
+    if (currentDay < 20) {
+        if (mobSize === "tiny") return { newBearType: MAPLE_BEAR_DAY13_ID, bearSize: "tiny" };
+        if (mobSize === "large") return { newBearType: BUFF_BEAR_DAY13_ID, bearSize: "buff" };
+        return { newBearType: INFECTED_BEAR_DAY13_ID, bearSize: "normal" };
+    }
+    if (mobSize === "tiny") return { newBearType: MAPLE_BEAR_DAY20_ID, bearSize: "tiny" };
+    if (mobSize === "large") return { newBearType: BUFF_BEAR_DAY20_ID, bearSize: "buff" };
+    return { newBearType: INFECTED_BEAR_DAY20_ID, bearSize: "normal" };
 }
 
 function getMobSize(mobType) {
@@ -291,7 +410,8 @@ function getMobSize(mobType) {
         "minecraft:blaze", "minecraft:magma_cube", "minecraft:slime", "minecraft:phantom",
         "minecraft:enderman", "minecraft:villager", "minecraft:villager_v2", "minecraft:wandering_trader",
         "minecraft:zombie_pigman", "minecraft:zombie_horse", "minecraft:skeleton_horse","minecraft:glow_squid", , "minecraft:turtle",
-        "minecraft:strider", "minecraft:guardian", "minecraft:wolf", "minecraft:panda", "minecraft:polar_bear", "minecraft:shulker"
+        "minecraft:strider", "minecraft:guardian", "minecraft:wolf", "minecraft:panda", "minecraft:polar_bear", "minecraft:shulker",
+        "minecraft:snow_golem"
     ];
 
     if (tinyMobs.includes(mobType)) {
@@ -313,9 +433,7 @@ function countNearbyAddonBears(dimension, location, maxDistance = 64) {
     let total = 0;
     let buff = 0;
     try {
-        const nearbyEntities = dimension.getEntities({
-            location,
-            maxDistance,
+        const nearbyEntities = queryEntitiesSpread(dimension, "mobConvert", location, maxDistance, {
             families: ["maple_bear", "infected"]
         });
         for (const nearby of nearbyEntities) {
@@ -393,7 +511,8 @@ function convertMobToMapleBearFromStormAtLocation(location, dimension, mobType) 
             else newBearType = INFECTED_BEAR_ID;
         }
 
-        return convertEntityAtLocation({ location, dimension }, null, newBearType, "STORM MOB CONVERSION");
+        const spawned = spawnConversionEntity(dimension, location, newBearType);
+        return { entity: spawned, typeId: spawned?.typeId ?? newBearType };
     } catch (err) {
         console.warn("[STORM CONVERSION] Mob conversion error:", err);
         return null;
@@ -426,19 +545,9 @@ export function handleStormMobConversion(entity) {
     }
 
     let totalBearCount = 0;
-    let buffBearCount = 0;
     try {
-        const nb = countNearbyAddonBears(entity.dimension, entity.location, 64);
-        totalBearCount = nb.total;
-        buffBearCount = nb.buff;
+        totalBearCount = countNearbyAddonBears(entity.dimension, entity.location, 64).total;
     } catch { /* ignore */ }
-
-    if (buffBearCount >= MB_CONVERSION_BUFF_NEAR_CAP) {
-        const willBeBuff = (entityType.includes('warden') || entityType.includes('ravager') ||
-            entityType.includes('iron_golem') || entityType.includes('wither') ||
-            entityType.includes('ender_dragon') || entityType.includes('giant'));
-        if (willBeBuff) return;
-    }
 
     const nearbyMult = getConversionNearbyPressureMultiplier(totalBearCount);
     const worldMult = getConversionWorldBearPressureMultiplier();
@@ -462,7 +571,9 @@ export function handleStormMobConversion(entity) {
                 if (r) console.warn(`[SNOW STORM] Conversion: cow -> infected_cow at (${Math.floor(loc.x)}, ${Math.floor(loc.y)}, ${Math.floor(loc.z)})`);
             } else {
                 const r = convertMobToMapleBearFromStormAtLocation(loc, dim, entType);
-                if (r) console.warn(`[SNOW STORM] Conversion: ${entType} -> Maple Bear at (${Math.floor(loc.x)}, ${Math.floor(loc.y)}, ${Math.floor(loc.z)})`);
+                if (r?.entity) {
+                    console.warn(`[SNOW STORM] Conversion: ${entType} -> ${r.typeId} at (${Math.floor(loc.x)}, ${Math.floor(loc.y)}, ${Math.floor(loc.z)})`);
+                }
             }
         } catch (err) {
             console.warn("[STORM CONVERSION] Error:", err);
@@ -486,17 +597,7 @@ export function handleMobConversion(entity, killer) {
     const currentDay = getCurrentDay();
     const conversionRate = getInfectionRate(currentDay);
 
-    const mapleBearKillerTypes = [
-        MAPLE_BEAR_ID, MAPLE_BEAR_DAY4_ID, MAPLE_BEAR_DAY8_ID, MAPLE_BEAR_DAY13_ID, MAPLE_BEAR_DAY20_ID,
-        INFECTED_BEAR_ID, INFECTED_BEAR_DAY8_ID, INFECTED_BEAR_DAY13_ID, INFECTED_BEAR_DAY20_ID,
-        BUFF_BEAR_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID,
-        FLYING_BEAR_ID, FLYING_BEAR_DAY15_ID, FLYING_BEAR_DAY20_ID,
-        MINING_BEAR_ID, MINING_BEAR_DAY20_ID,
-        TORPEDO_BEAR_ID, TORPEDO_BEAR_DAY20_ID,
-        INFECTED_PIG_ID, INFECTED_COW_ID
-    ];
-
-    if (mapleBearKillerTypes.includes(killerType)) {
+    if (isMapleBearKillerType(killerType)) {
 
         const allMapleBearTypes = [
             MAPLE_BEAR_ID, MAPLE_BEAR_DAY4_ID, MAPLE_BEAR_DAY8_ID, MAPLE_BEAR_DAY13_ID, MAPLE_BEAR_DAY20_ID,
@@ -514,21 +615,9 @@ export function handleMobConversion(entity, killer) {
         }
 
         let totalBearCount = 0;
-        let buffBearCount = 0;
         try {
-            const nb = countNearbyAddonBears(entity.dimension, entity.location, 64);
-            totalBearCount = nb.total;
-            buffBearCount = nb.buff;
+            totalBearCount = countNearbyAddonBears(entity.dimension, entity.location, 64).total;
         } catch { /* ignore */ }
-
-        if (buffBearCount >= MB_CONVERSION_BUFF_NEAR_CAP) {
-            const willBeBuff = (entityType.includes('warden') || entityType.includes('ravager') ||
-                entityType.includes('iron_golem') || entityType.includes('wither') ||
-                entityType.includes('ender_dragon') || entityType.includes('giant'));
-            if (willBeBuff) {
-                return;
-            }
-        }
 
         const nearbyMult = getConversionNearbyPressureMultiplier(totalBearCount);
         const worldMult = getConversionWorldBearPressureMultiplier();

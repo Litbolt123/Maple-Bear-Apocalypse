@@ -11,6 +11,7 @@ import { getCurrentDay } from "./mb_dayTracker.js";
 import { getPlayerSoundVolume, isDebugEnabled } from "./mb_codex.js";
 import { isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
 import { isInsideEmulsifierNoSpawnZone } from "./mb_spawnController.js";
+import { claimSpreadSlice, isSpreadThrottleActive, spreadPlayersForWork } from "./mb_workSpread.js";
 
 // Track active biome ambience per player
 // Map: playerId -> { soundId: string, biomeId: string, lastCheckTick: number, biomeSize: string }
@@ -243,16 +244,20 @@ function checkBiomeAmbienceForPlayer(player, currentDay) {
 system.runInterval(() => {
     if (!isScriptEnabled(SCRIPT_IDS.biomeAmbience)) return;
     try {
+        const sliceBase = isSpreadThrottleActive() ? BIOME_CHECK_INTERVAL_OUT * 2 : BIOME_CHECK_INTERVAL_OUT;
+        if (!claimSpreadSlice("biomeAmbience", sliceBase)) return;
+
         const allPlayers = world.getAllPlayers();
         if (allPlayers.length === 0) return;
         
         const currentDay = getCurrentDay();
+        const toCheck = spreadPlayersForWork(allPlayers, "biomeAmbience");
         
         if (isDebugEnabled("biome_ambience", "loop_status")) {
             console.warn(`[BIOME AMBIENCE DEBUG] Main loop: ${allPlayers.length} players, day ${currentDay}, ${activeBiomeAmbience.size} active ambience entries, tick ${system.currentTick}`);
         }
         
-        for (const player of allPlayers) {
+        for (const player of toCheck) {
             checkBiomeAmbienceForPlayer(player, currentDay);
         }
         

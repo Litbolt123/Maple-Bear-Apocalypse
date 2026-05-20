@@ -9,7 +9,12 @@
 // ============================================================================
 
 import { system, world } from "@minecraft/server";
+import { getBearSnapshotsForDimensions } from "./mb_bearSnapshot.js";
+import { isEntityValid } from "./mb_sharedCache.js";
 import { isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
+import { claimSpreadSlice, isSpreadThrottleActive } from "./mb_workSpread.js";
+
+const ADAPTATION_DIMENSION_IDS = ["overworld", "nether", "the_end"];
 
 // ============================================================================
 // CONSTANTS
@@ -131,7 +136,7 @@ function setNetherTime(entity, ticks) {
  */
 function applyFireResistance(entity, level, isTemporary = false) {
     try {
-        if (!entity.isValid()) return;
+        if (!isEntityValid(entity)) return;
         const duration = isTemporary ? FIRE_RESISTANCE_DURATION_TEMPORARY : FIRE_RESISTANCE_DURATION_PERMANENT;
         entity.addEffect("fire_resistance", duration, {
             amplifier: level - 1, // Level 1 = amplifier 0, Level 3 = amplifier 2
@@ -147,7 +152,7 @@ function applyFireResistance(entity, level, isTemporary = false) {
  */
 function removeFireResistance(entity) {
     try {
-        if (!entity.isValid()) return;
+        if (!isEntityValid(entity)) return;
         entity.removeEffect("fire_resistance");
     } catch {
         // Entity may be invalid, ignore
@@ -161,19 +166,19 @@ function removeFireResistance(entity) {
 system.runInterval(() => {
     try {
         if (!isScriptEnabled(SCRIPT_IDS.dimensionAdaptation)) return;
+        if (isSpreadThrottleActive() && !claimSpreadSlice("dimAdapt", ADAPTATION_CHECK_INTERVAL)) return;
 
-        // Check all dimensions for bears
-        const dimensions = ["minecraft:overworld", "minecraft:nether", "minecraft:the_end"];
-        
-        for (const dimId of dimensions) {
-            try {
-                const dimension = world.getDimension(dimId);
-                const entities = dimension.getEntities();
-                
-                for (const entity of entities) {
-                    if (!isMapleBear(entity)) continue;
-                    if (!entity.isValid()) continue;
-                    
+        // Shared bear snapshot (typed queries) — never dimension.getEntities() (village/load spikes).
+        const snaps = getBearSnapshotsForDimensions(ADAPTATION_DIMENSION_IDS);
+
+        for (const [dimKey, snap] of snaps) {
+            const dimId = dimKey.startsWith("minecraft:") ? dimKey : `minecraft:${dimKey}`;
+
+            for (const entity of snap.all) {
+                if (!isEntityValid(entity)) continue;
+                if (!isMapleBear(entity)) continue;
+
+                try {
                     const currentDimensionId = entity.dimension?.id || dimId;
                     const entityTypeId = entity.typeId;
                     
@@ -202,10 +207,9 @@ system.runInterval(() => {
                         removeFireResistance(entity);
                         setNetherTime(entity, 0); // Reset time when leaving Nether
                     }
+                } catch {
+                    /* skip one bear */
                 }
-            } catch (error) {
-                // Dimension may not exist or error accessing entities, continue
-                continue;
             }
         }
     } catch (error) {
@@ -238,7 +242,7 @@ world.afterEvents.entitySpawn.subscribe((event) => {
                 // Day 20+ variants: Immediately apply permanent fire resistance
                 system.runTimeout(() => {
                     try {
-                        if (entity.isValid() && entity.dimension?.id === "minecraft:nether") {
+                        if (isEntityValid(entity) && entity.dimension?.id === "minecraft:nether") {
                             applyFireResistance(entity, resistanceLevel, false);
                         }
                     } catch {

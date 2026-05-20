@@ -13,7 +13,11 @@
     "test:scripts:release": "node tools/testAllScripts.js --release-only",
     "validate": "npm run validate:json && npm run validate:syntax",
     "check": "npm run validate && npm run lint",
-    "sync:pack-metadata": "node tools/syncPackMetadata.js"
+    "sync:pack-metadata": "node tools/syncPackMetadata.js",
+    "bridge:config:dev": "node tools/copyBridgeConfig.js dev",
+    "bridge:config:release": "node tools/copyBridgeConfig.js release",
+    "bridge:config:dev:sync": "node tools/copyBridgeConfig.js dev --sync-names",
+    "bridge:config:release:sync": "node tools/copyBridgeConfig.js release --sync-names"
   },
   "repository": {
     "type": "git",

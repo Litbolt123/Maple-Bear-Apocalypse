@@ -13,6 +13,7 @@ import { getCachedPlayers, getCachedPlayerPositions, getCachedMobs, isEntityVali
 import { getMiningWorkMultiplier, getAiIntervalStretch } from "./mb_performanceProfile.js";
 import { DIMENSION_IDS, MINING_BEAR_TYPES, PATHFINDING_ENTITY_TYPES, AIR_BLOCKS } from "./mb_miningConstants.js";
 import { getBearSnapshot, getBearSnapshotsForDimensions } from "./mb_bearSnapshot.js";
+import { claimSpreadSlice, isSpreadThrottleActive } from "./mb_workSpread.js";
 
 // Basic debug to verify script is loaded
 // console.warn("[MINING AI] Script loaded successfully");
@@ -1934,23 +1935,32 @@ function processPathfindingChunk(entityId) {
         return;
     }
     
-    // Get entity to verify it still exists - use stored type to avoid 8× getEntities per chunk
+    // Resolve entity near path start (never scan whole dimension by type).
     let entity = null;
+    const anchor = state.start || { x: 0, y: 64, z: 0 };
+    const PATHFIND_ENTITY_LOOKUP_RADIUS = 20;
     try {
         const typeId = state.entityTypeId || "mb:mining_mb";
-        const entities = dimension.getEntities({ type: typeId });
+        const entities = dimension.getEntities({
+            type: typeId,
+            location: anchor,
+            maxDistance: PATHFIND_ENTITY_LOOKUP_RADIUS
+        });
         for (const e of entities) {
             if (e.id === entityId) {
                 entity = e;
                 break;
             }
         }
-        // Fallback: entity type may have changed (e.g. transform), try other pathfinding types
         if (!entity) {
             for (const fallbackId of PATHFINDING_ENTITY_TYPES) {
                 if (fallbackId === typeId) continue;
-                const entities = dimension.getEntities({ type: fallbackId });
-                for (const e of entities) {
+                const fallbackEnts = dimension.getEntities({
+                    type: fallbackId,
+                    location: anchor,
+                    maxDistance: PATHFIND_ENTITY_LOOKUP_RADIUS
+                });
+                for (const e of fallbackEnts) {
                     if (e.id === entityId) {
                         entity = e;
                         state.entityTypeId = fallbackId;
@@ -10291,18 +10301,20 @@ function initializeMiningAI() {
             const ticksSinceStart = tick - aiLoopStartTick;
             const isStartupPhase = ticksSinceStart <= STARTUP_DEBUG_TICKS;
             
-            // Count total mining bears across all dimensions via the shared snapshot
-            // (one entity query per dimension, shared with every other AI + spawn metrics).
-            let totalBearsThisTick = 0;
-            try {
-                const snaps = getBearSnapshotsForDimensions(DIMENSION_IDS);
-                for (const snap of snaps.values()) {
-                    for (const config of MINING_BEAR_TYPES) {
-                        const bucket = snap.byType.get(config.id);
-                        if (bucket?.length) totalBearsThisTick += bucket.length;
+            // Count total mining bears via shared snapshot (throttled on day 0–1).
+            let totalBearsThisTick = lastMiningAIState?.bearCount ?? 0;
+            if (!isSpreadThrottleActive() || claimSpreadSlice("miningBearCount", 24)) {
+                totalBearsThisTick = 0;
+                try {
+                    const snaps = getBearSnapshotsForDimensions(DIMENSION_IDS);
+                    for (const snap of snaps.values()) {
+                        for (const config of MINING_BEAR_TYPES) {
+                            const bucket = snap.byType.get(config.id);
+                            if (bucket?.length) totalBearsThisTick += bucket.length;
+                        }
                     }
-                }
-            } catch { }
+                } catch { }
+            }
             const playerCount = (getCachedPlayers() || []).length;
             // Factor in player count: more players = more areas to check, more entities in range
             const effectiveLoad = totalBearsThisTick + Math.max(0, (playerCount - 1) * PLAYER_LOAD_FACTOR);
@@ -10855,15 +10867,16 @@ function initializeMiningAI() {
                                 activeTargetIds.add(player.id);
                             }
                         }
-                        const dimension = world.getDimension("overworld");
-                        if (dimension) {
-                            const mobs = getCachedMobs(dimension, { x: 0, y: 0, z: 0 }, 1000);
-                            for (const mob of mobs) {
-                                const mobIsValid = typeof mob.isValid === "function" ? mob.isValid() : Boolean(mob.isValid);
-                                if (mobIsValid) {
-                                    activeTargetIds.add(mob.id);
+                        for (const player of allPlayers) {
+                            try {
+                                const dim = player.dimension;
+                                if (!dim) continue;
+                                const mobs = getCachedMobs(dim, player.location, 128);
+                                for (const mob of mobs) {
+                                    const mobIsValid = typeof mob.isValid === "function" ? mob.isValid() : Boolean(mob.isValid);
+                                    if (mobIsValid) activeTargetIds.add(mob.id);
                                 }
-                            }
+                            } catch { /* ignore */ }
                         }
                     } catch { }
                 }

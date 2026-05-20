@@ -15,7 +15,7 @@ You are helping **Litbolt123** and **Compoohter** set up an official **Discord s
 - **Archived — do not use in new copy:** "Maple Bear Takeover" / "MapleBear TakeOver" (old title only)
 - **Creators:** Litbolt123 & Compoohter
 - **Platform:** Minecraft **Bedrock Edition** only (not Java)
-- **Current beta label:** v0.9.0-beta.3
+- **Current beta label:** v0.9.0-beta.4
 - **Tagline (use sparingly, one line max in welcome):** *Don't do drugs kids…* — tone marker, not a lecture
 
 ### What the addon is (one paragraph for your context)
@@ -86,7 +86,7 @@ Use markdown headings. For each channel, give: **#channel-name** | topic line | 
 - [ ] Set server icon & banner from `RP/pack_icon.png` or screenshot
 - [ ] Create roles before opening public invite
 - [ ] Pin rules + download message in #rules or #start-here
-- [ ] Wire announcement webhook or post first "v0.9.0-beta.3" welcome
+- [ ] Wire announcement webhook or post first "v0.9.0-beta.4" welcome
 - [ ] Paste `[DISCORD_LINK]` into Patreon draft when invite is stable
 - [ ] Enable verification level / automod per Comet suggestions
 - [ ] Test one LFG post format in #lfg-bedrock

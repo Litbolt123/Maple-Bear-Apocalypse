@@ -34,8 +34,19 @@ export const MB_CONVERSION_WORLD_PRESSURE_START = 60;
 export const MB_CONVERSION_WORLD_PRESSURE_END = 300;
 export const MB_CONVERSION_WORLD_MULT_MIN = 0.025;
 
-/** Block boss→buff conversions when this many buff bears already within 64m. */
+/** Absolute safety ceiling: block boss→buff conversions when this many buff bears already within 64m. */
 export const MB_CONVERSION_BUFF_NEAR_CAP = 5;
+
+/**
+ * Same buff cap as natural spawn (`mb_spawnController` attemptSpawnType).
+ * @param {number} nearbyPlayerCount players near the conversion / spawn site
+ */
+export function getMaxBuffBearsForNearbyPlayerCount(nearbyPlayerCount) {
+    const n = Math.max(1, nearbyPlayerCount);
+    if (n <= 2) return 1;
+    if (n <= 4) return 2;
+    return 3;
+}
 
 // --- Global bear population cull (mb_bearPopulationCull.js): trim distant tiny + infected when world totals run high ---
 /** Total MB addon bears (overworld+nether+end) at or above this → eligible for cull passes (only tiny/infected types are removed). */

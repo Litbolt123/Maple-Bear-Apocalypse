@@ -1,0 +1,38 @@
+{
+	"type": "minecraftBedrock",
+	"name": "M.B.A",
+	"namespace": "bridge",
+	"authors": [
+		"Litbolt123 and Compoohter"
+	],
+	"targetVersion": "1.21.130",
+	"description": "The Maple Bear Apocalypse — release export. Ship BP + RP only to players.",
+	"experimentalGameplay": {},
+	"bdsProject": false,
+	"packs": {
+		"behaviorPack": "./BP",
+		"resourcePack": "./RP"
+	},
+	"worlds": [
+		"./worlds/*"
+	],
+	"compiler": {
+		"plugins": [
+			"generatorScripts",
+			"typeScript",
+			"entityIdentifierAlias",
+			"customEntityComponents",
+			"customItemComponents",
+			"customBlockComponents",
+			"customCommands",
+			"moLang",
+			"formatVersionCorrection",
+			[
+				"simpleRewrite",
+				{
+					"packName": "The Maple Bear Apocalypse"
+				}
+			]
+		]
+	}
+}
