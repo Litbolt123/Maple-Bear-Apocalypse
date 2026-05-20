@@ -6,6 +6,32 @@ Running log of **what changed and why** (gameplay, scripts, assets, docs). Used 
 
 ---
 
+**Date:** 2026-05-17 (Patreon — dread section + Comet archive)
+
+- **`docs/marketing/PATREON_FIRST_POST_DRAFT.md`:** Added **The feeling of dread** section (slow-burn / ambient horror, no jumpscares; time pressure, false safety, world watches back, powder, co-op blame, death persists). Archived Comet browser export verbatim with diff table; note Comet used **Maple Bear Apocalypse** vs repo **Takeover**.
+
+---
+
+**Date:** 2026-05-17 (Patreon — first post draft)
+
+- **`docs/marketing/PATREON_FIRST_POST_DRAFT.md`:** Player-facing welcome + vision/roadmap teaser + beta honesty (v0.9.0-beta.3), co-op/journal highlights, light Patreon ask; Comet placeholders for media/links/tiers. Includes About blurb, social teaser, five tags.
+
+---
+
+**Date:** 2026-05-17 (GitHub releases guide — near-term backlog)
+
+- **`docs/development/github-versioning-releases-agent-guide.md`:** Kept as the canonical **agent/human playbook** for SemVer, `v*` tags, Actions, and Releases (written for MSBuild/.NET; **implementation deferred** — adapt guardrails to **`mb_buildConfig.js` / manifests**).
+- **Tracked for implementation:** new **Near-term — GitHub versioning & releases** section + checkbox in root **`TODO.md`**; **`docs/development/PROJECT_STATUS.md`** near-term bullet; index row in **`docs/README.md`**.
+
+---
+
+**Date:** 2026-05-16 (release sync check — Compoohter / MrPoohter commits)
+
+- Verified **MrPoohter** (`dascompoohterzucker90@gmail.com`) last **four** commits on `main`: **`9833cd4`** (larger `pack_icon.png` in all four pack roots), **`7374e41`** (root **`package.json`** / **`package-lock.json`** rename only), **`085775e`** (all four **`manifest.json`** — addon rename / authors), **`fbb03f8`** (first `pack_icon` refresh). Each commit that touched packs already updated **`BP/`** + **`RP/`** alongside **`BP - Dev/`** + **`RP - Dev/`** — no extra copy step needed for release trees for that work.
+- Spot-check: **`BP/pack_icon.png`** ≡ **`BP - Dev/pack_icon.png`** and **`RP/pack_icon.png`** ≡ **`RP - Dev/pack_icon.png`** (SHA256 match). Public manifests correctly keep release naming (**`M.B.A`**) vs dev (**`M.B.A (Dev)`**).
+
+---
+
 **Date:** 2026-04-29 (release label — v0.9.0-beta.3)
 
 - **`ADDON_VERSION_PRERELEASE`** → **`beta.3`** (stay on **0.9.0**); **`PLAYER_CHANGELOG_VERSION`** → **`0.9.0-beta.3`**; all four **`manifest.json`** descriptions and **`docs/PLAYER_CHANGELOG.md`** + **`mb_playerChangelog.js`** (both **`BP/`** and **`BP - Dev/`**) aligned. Smoke checklist row added for beta.3.

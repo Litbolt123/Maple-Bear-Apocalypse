@@ -2,7 +2,7 @@
 
 Snapshot of **where the addon stands** and **what to tackle next**. For task-level checkboxes see root [`TODO.md`](../../TODO.md). For code-level history see [`tracking/CHANGELOG.md`](tracking/CHANGELOG.md).
 
-**Last updated:** 2026-03-20
+**Last updated:** 2026-05-17
 
 ---
 
@@ -33,6 +33,12 @@ Snapshot of **where the addon stands** and **what to tackle next**. For task-lev
 - **Mining block list tool**: `tools/updateMiningBlocks.js` expects `minecraft:break_blocks` on mining entities — verify entity JSON if regenerating lists.
 - **ESLint**: Many pre-existing `no-unused-vars` warnings; not a signal of runtime bugs.
 - **Custom biomes**: Experimental; mixed old/new chunks can show seams — document for players.
+
+---
+
+## Near-term (repo / releases)
+
+- **GitHub versioning & Actions:** When automating tagged releases, follow [`github-versioning-releases-agent-guide.md`](github-versioning-releases-agent-guide.md) for terminology and CI guardrails; map “Version” to addon **`mb_buildConfig.js` + manifests** (see root [`TODO.md`](../../TODO.md) checkbox).
 
 ---
 
