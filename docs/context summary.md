@@ -6,9 +6,13 @@ Running log of **what changed and why** (gameplay, scripts, assets, docs). Used 
 
 ---
 
+**Date:** 2026-05-20 (Releases: BP+RP only; dev build config guard)
+
+- **`tools/packageRelease.js`**: GitHub Releases attach **`BP/`** + **`RP/`** zips only (no dev assets). **`tools/verifyBuildConfig.js`** + **`npm run verify:build-config`**; dev **`mb_buildConfig.js`** runtime misconfig log. **`BP - Dev`**: `INCLUDE_FULL_DEVELOPER_TOOLS = true` enforced.
+
 **Date:** 2026-05-19 (GitHub Releases CI — pack folder zips, Bridge for .mcpack)
 
-- Tag **`v*`** → **`.github/workflows/release.yml`**: validate, **`tools/packageRelease.js`** zips **`BP/`**, **`RP/`**, **`BP - Dev/`**, **`RP - Dev/`** (no CI `.mcpack` — Bridge export on maintainer machine). **`docs/RELEASE_BODY.md`**, **`docs/releasing.md`**, **`tools/getVersion.js`**.
+- Tag **`v*`** → **`.github/workflows/release.yml`**: validate, package, **`docs/RELEASE_BODY.md`**, **`docs/releasing.md`**, **`tools/getVersion.js`**.
 
 **Date:** 2026-05-19 (GitHub Releases CI — initial .mcpack attempt, superseded)
 

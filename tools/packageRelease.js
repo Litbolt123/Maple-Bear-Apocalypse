@@ -1,5 +1,6 @@
 /**
- * Zip pack folders for GitHub Releases (source trees — export .mcpack in Bridge locally).
+ * Zip public BP/ and RP/ for GitHub Releases (dev packs stay in the repo only).
+ * Export .mcpack in Bridge locally.
  *
  *   node tools/packageRelease.js
  *   node tools/packageRelease.js --out dist
@@ -18,12 +19,10 @@ const versionJson = execFileSync(process.execPath, [join(root, "tools/getVersion
 });
 const { version, assetBase } = JSON.parse(versionJson.trim());
 
-/** @type {{ dir: string, label: string }[]} */
+/** GitHub Releases: public packs only. Dev folders are not attached. */
 const packs = [
     { dir: "BP", label: "BP" },
-    { dir: "RP", label: "RP" },
-    { dir: "BP - Dev", label: "BP-Dev" },
-    { dir: "RP - Dev", label: "RP-Dev" }
+    { dir: "RP", label: "RP" }
 ];
 
 for (const { dir } of packs) {
@@ -38,12 +37,7 @@ if (existsSync(outDir)) {
 }
 mkdirSync(outDir, { recursive: true });
 
-/**
- * @param {string} srcDirName folder at repo root (e.g. "BP")
- * @param {string} label short asset label (e.g. "BP-Dev")
- * @param {string} outFile
- */
-function zipFolder(srcDirName, label, outFile) {
+function zipFolder(srcDirName, outFile) {
     const srcDir = join(root, srcDirName);
     const absOut = resolve(outFile);
     if (process.platform === "win32") {
@@ -62,11 +56,11 @@ function zipFolder(srcDirName, label, outFile) {
 const outputs = [];
 for (const { dir, label } of packs) {
     const out = join(outDir, `${assetBase}-${label}.zip`);
-    zipFolder(dir, label, out);
+    zipFolder(dir, out);
     outputs.push(out);
 }
 
-console.log(`\nRelease assets (${version}) — unzip, then open in Bridge or copy into a Bedrock project:`);
+console.log(`\nRelease assets (${version}) — public BP + RP only:`);
 for (const p of outputs) {
     console.log(`  ${p}`);
 }

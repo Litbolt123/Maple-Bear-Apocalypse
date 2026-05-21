@@ -4,15 +4,10 @@ Performance pass for **day 0–1** and **village / new-chunk** load, plus **buff
 
 ### Download & install
 
-This release ships **pack source folders** as `.zip` files (`BP`, `RP`, and optional `BP-Dev` / `RP-Dev` for playtesting).
+This release ships **public pack folders** only — download **`…-BP.zip`** and **`…-RP.zip`**, unzip so you have `BP/` and `RP/` folders.
 
-**Players (release packs):**
-
-1. Download **`…-BP.zip`** and **`…-RP.zip`**, unzip so you have `BP/` and `RP/` folders.
-2. Open the project in **Bridge**, or export `.mcpack` from Bridge and import into Minecraft.
-3. Enable **The Maple Bear Apocalypse** on both behavior and resource sides of your world.
-
-**Developers:** use **`…-BP-Dev.zip`** + **`…-RP-Dev.zip`** in Bridge (full Developer Tools). Do not ship dev packs to players.
+1. Open in **Bridge**, or export `.mcpack` and import into Minecraft.
+2. Enable **The Maple Bear Apocalypse** on both behavior and resource sides of your world.
 
 If upgrading from an older beta, remove the previous pack from the world before applying the new build.
 

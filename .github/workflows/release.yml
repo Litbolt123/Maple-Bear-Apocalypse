@@ -1,4 +1,4 @@
-# Tag-triggered release: validate, zip BP/RP (+ Dev twins), publish GitHub Release.
+# Tag-triggered release: validate, zip BP/RP only, publish GitHub Release.
 # Version source: BP/scripts/mb_buildConfig.js — tag must be v + that semver.
 # Export .mcpack in Bridge locally; CI ships source pack folders as .zip.
 
@@ -54,6 +54,9 @@ jobs:
             exit 1
           fi
 
+      - name: Verify dev vs release build config
+        run: node tools/verifyBuildConfig.js
+
       - name: Sync pack metadata (manifest descriptions)
         run: node tools/syncPackMetadata.js
 
@@ -65,7 +68,7 @@ jobs:
       - name: Lint release + tools
         run: npm run lint
 
-      - name: Zip pack folders (BP, RP, BP - Dev, RP - Dev)
+      - name: Zip public pack folders (BP, RP only)
         run: node tools/packageRelease.js --out dist
 
       - name: Upload build artifact

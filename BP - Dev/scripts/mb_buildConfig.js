@@ -13,6 +13,12 @@ export const BUILD_FLAVOR = "dev";
 /** MUST stay `true` in `BP - Dev/`. Full Developer Tools + Debug + spawn/storm dev hubs. */
 export const INCLUDE_FULL_DEVELOPER_TOOLS = true;
 
+if (BUILD_FLAVOR === "dev" && !INCLUDE_FULL_DEVELOPER_TOOLS) {
+    console.error(
+        "[MBA] DEV PACK MISCONFIG: INCLUDE_FULL_DEVELOPER_TOOLS is false — journal will show Host tools only. Restore BP - Dev/scripts/mb_buildConfig.js."
+    );
+}
+
 /** Dev build also has public-style Host tools preview toggle (optional); full dev is always on. */
 export const INCLUDE_ADMIN_TOOLS = true;
 

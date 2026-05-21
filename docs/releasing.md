@@ -22,7 +22,7 @@ Maintainer
 
 GitHub Actions (.github/workflows/release.yml)
   → sync manifests, validate JSON + BP/scripts syntax, lint
-  → zip BP/, RP/, BP - Dev/, RP - Dev/ → dist/*.zip
+  → zip BP/, RP/ only → dist/*.zip (dev packs stay in repo, not on Releases)
   → upload-artifact (always)
   → softprops/action-gh-release (tag pushes only)
        attaches .zip pack folders, body from docs/RELEASE_BODY.md
@@ -82,7 +82,7 @@ node tools/getVersion.js --json
 4. **Verify tag matches version** (tag builds only)
 5. `node tools/syncPackMetadata.js`
 6. `npm run validate:json` + `node tools/testAllScripts.js --release-only` + `npm run lint`
-7. `node tools/packageRelease.js` → four zips: `*-BP.zip`, `*-RP.zip`, `*-BP-Dev.zip`, `*-RP-Dev.zip`
+7. `node tools/packageRelease.js` → `*-BP.zip`, `*-RP.zip` only
 8. Upload artifact (always)
 9. Verify `docs/RELEASE_BODY.md` exists and ≥ 80 chars (tag builds only)
 10. Publish GitHub Release (tag builds only)
@@ -111,11 +111,11 @@ From `tools/packageRelease.js` + `PACK_DISPLAY_NAME`:
 ```
 The_Maple_Bear_Apocalypse_v0.9.0-beta.4-BP.zip
 The_Maple_Bear_Apocalypse_v0.9.0-beta.4-RP.zip
-The_Maple_Bear_Apocalypse_v0.9.0-beta.4-BP-Dev.zip
-The_Maple_Bear_Apocalypse_v0.9.0-beta.4-RP-Dev.zip
 ```
 
-Each zip contains the folder at repo root (e.g. unzip → `BP/manifest.json`). **Players** use BP + RP only; **dev** zips are for Bridge playtests.
+Each zip contains the folder at repo root (e.g. unzip → `BP/manifest.json`). **GitHub Releases attach these two only.**
+
+**Dev packs** (`BP - Dev/`, `RP - Dev/`) remain in the **git repo** for maintainers and Bridge — they are **not** published as release download assets.
 
 ---
 
@@ -140,7 +140,7 @@ npm run check
 git add -A && git commit -m "Release 0.9.0-beta.5" && git push origin main
 git tag v0.9.0-beta.5
 git push origin v0.9.0-beta.5
-# 3. GitHub → Actions → run for v0.9.0-beta.5 → green → Releases has four .zip pack folders
+# 3. GitHub → Actions → run for v0.9.0-beta.5 → green → Releases has BP + RP zips only
 ```
 
 **Rule of thumb:** tag = `v` + `mb_buildConfig` semver → push tag → wait for green **tag** workflow → verify assets on Releases.
@@ -167,7 +167,8 @@ git push origin v0.9.0-beta.5
 | `docs/RELEASE_BODY.md` | GitHub release body |
 | `.github/workflows/release.yml` | Build + publish |
 | `tools/getVersion.js` | Read semver for scripts/CI |
-| `tools/packageRelease.js` | Zip `BP/`, `RP/`, dev twins → `.zip` |
+| `tools/packageRelease.js` | Zip `BP/`, `RP/` for Releases (not dev) |
+| `tools/verifyBuildConfig.js` | Dev `INCLUDE_FULL_DEVELOPER_TOOLS` must be true |
 | `tools/syncPackMetadata.js` | Manifest / Bridge name sync |
 | `docs/development/BRIDGE_EXPORT_AND_VERSIONING.md` | Bridge export details |
 | `docs/development/github-versioning-releases-agent-guide.md` | Generic patterns (other repos) |
