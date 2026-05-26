@@ -12,6 +12,19 @@ This file tracks all features added, removed, and changes made to the addon.
 
 ## [Unreleased]
 
+### Added (draft for next beta — see `docs/development/releases/UNRELEASED_DRAFT.md`)
+
+- **Performance:** chunk-edge defer + work spread (day 0–1, villages); spawn load auto-scaling; spawn chunk queue / progressive scans; script interval tuning (`PERFORMANCE_OPTIMIZATION_ROADMAP.md`).
+- **Buff bears:** dual cap (near-player + dimension-wide) + overflow cull (`mb_buffCap.js`).
+- **Torpedo bears:** 5% dud spawn (`mb_torpedo_dud`).
+- **Mining bears:** stair-blocked movement fix; more snow on trail/break (`mb_snowPlacement.js`).
+- **Dev:** biome checker + registry sync; journal pinnable menu refresh; biome HUD action-bar slot.
+
+### Fixed (draft)
+
+- Buff bears exceeding intended count after area leave/return or repeated death/respawn.
+- Mining bears stalling on stairs with `step not ready` / `hasClearedSpace=false`.
+
 ### Added
 - **Documentation**: `docs/development/ADDON_SYSTEMS_AND_FEATURES.md` (script modules, systems, feature checklist); `docs/development/PROJECT_STATUS.md` (status snapshot and next steps). Root `README.md` and `TODO.md` refreshed; `docs/README.md` quick links fixed and updated.
 - **Dynamic Property Handler**: Implemented cached dynamic property system (`mb_dynamicPropertyHandler.js`) with lazy loading, batch saving, and chunking support for large properties. All scripts migrated to use new handler functions.

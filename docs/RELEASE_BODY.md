@@ -1,3 +1,5 @@
+<!-- UNRELEASED DRAFT: see docs/development/releases/UNRELEASED_DRAFT.md — do not publish until next tag -->
+
 ## The Maple Bear Apocalypse — v0.9.0-beta.4
 
 Performance pass for **day 0–1** and **village / new-chunk** load, plus **buff bear** conversion and death fixes.

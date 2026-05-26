@@ -3,6 +3,33 @@
 Short bullets for patch notes and in-game **What's new** (`BP/scripts/mb_playerChangelog.js`).  
 Bump **`PLAYER_CHANGELOG_VERSION`** in `mb_playerChangelog.js` when you ship a new beta.
 
+## Unreleased (draft — next beta)
+
+**Copy from here when releasing.** Full draft + dev bullets: [`docs/development/releases/UNRELEASED_DRAFT.md`](development/releases/UNRELEASED_DRAFT.md).  
+**Do not bump version** until release day.
+
+### Performance
+
+- Villages and **revisiting chunks** you already passed: less hitch — work spreads across ticks and **defers briefly** when you cross a chunk border.
+- **Day 0–1:** lighter background scans until infection ramps.
+- **Heavy worlds:** spawn system **auto-throttles** scan/spawn when bear counts, items, storms, or lag stress rise.
+
+### Buff bears
+
+- **Fix:** buff bears no longer **stack past the limit** when you leave, die/respawn elsewhere, or return — **near-you** cap (tight) plus a higher **dimension** cap; extras far from players trim down over time.
+- Solo reference: **1** buff near you, up to **3** in the dimension (loaded).
+
+### Torpedo bears
+
+- **~5% duds** — no death explosion; quieter death, no powder ring.
+
+### Mining bears
+
+- **Stair stall fix** — less freezing on blocked stairs; keeps mining headroom or pushing forward.
+- **More snow** while digging (trails + blocks broken).
+
+---
+
 ## v0.9.0-beta.4
 
 - Performance: day 0–1 and approaching villages should hitch less — heavy work is spread across ticks and uses smaller entity scans near players.

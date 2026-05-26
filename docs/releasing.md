@@ -12,13 +12,14 @@ This repo ships like **What Am I Doing**: push a **`v*`** Git tag → GitHub Act
 
 ```
 Maintainer
-  1. Bump ADDON_VERSION_* in BP/scripts/mb_buildConfig.js (+ PLAYER_CHANGELOG, docs/PLAYER_CHANGELOG.md)
-  2. npm run sync:pack-metadata
-  3. Edit docs/RELEASE_BODY.md (user-facing — required for tag builds)
-  4. npm run check
-  5. Commit & push to main
-  6. git tag v<semver>     (e.g. v0.9.0-beta.4 when config says 0.9.0-beta.4)
-  7. git push origin v0.9.0-beta.4
+  1. Copy draft bullets from docs/development/releases/UNRELEASED_DRAFT.md → docs/PLAYER_CHANGELOG.md (new ## v… section), mb_playerChangelog.js, docs/RELEASE_BODY.md
+  2. Bump ADDON_VERSION_* in BP/scripts/mb_buildConfig.js (+ PLAYER_CHANGELOG_VERSION)
+  3. npm run sync:pack-metadata
+  4. Edit docs/RELEASE_BODY.md (user-facing — required for tag builds)
+  5. npm run check
+  6. Commit & push to main
+  7. git tag v<semver>     (e.g. v0.9.0-beta.4 when config says 0.9.0-beta.4)
+  8. git push origin v0.9.0-beta.4
 
 GitHub Actions (.github/workflows/release.yml)
   → sync manifests, validate JSON + BP/scripts syntax, lint

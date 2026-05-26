@@ -1,6 +1,13 @@
 /**
  * Player-facing "what changed" text (journal + docs/PLAYER_CHANGELOG.md).
  * Bump PLAYER_CHANGELOG_VERSION when you edit bullets for a new beta.
+ *
+ * DRAFT (next beta — do not ship until version bump):
+ * See docs/PLAYER_CHANGELOG.md § Unreleased and docs/development/releases/UNRELEASED_DRAFT.md
+ * - Performance: villages, chunk re-pass, day 0–1 spread, spawn auto-throttle
+ * - Buff bears: near + dimension dual cap; no more stacking after leave/return
+ * - Torpedo: ~5% duds (no death explosion)
+ * - Mining: stair stall fix; more snow while digging
  */
 
 import { getAddonVersionDisplayString } from "./mb_buildConfig.js";

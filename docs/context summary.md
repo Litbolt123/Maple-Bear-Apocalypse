@@ -6,6 +6,14 @@ Running log of **what changed and why** (gameplay, scripts, assets, docs). Used 
 
 ---
 
+**Date:** 2026-05-19 (Release bullets drafted — next beta)
+
+- **`docs/development/releases/UNRELEASED_DRAFT.md`** — full player + dev + ship checklist for next beta (perf, buff dual-cap, torpedo duds, mining fixes).
+- **`docs/PLAYER_CHANGELOG.md`** — **§ Unreleased (draft)** at top (no version bump).
+- **`docs/development/tracking/CHANGELOG.md`** — unreleased summary; **`mb_playerChangelog.js`** file comment points at draft. Ship when user says release.
+
+---
+
 **Date:** 2026-05-19 (Playtest — village route, day 0, no lag)
 
 - **User report (dev pack):** Fresh world, **day 0**, **render distance 44**, **three separate villages**. Walked back through one village to reach the next — **no noticeable lag** on that route.
