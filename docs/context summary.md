@@ -6,6 +6,108 @@ Running log of **what changed and why** (gameplay, scripts, assets, docs). Used 
 
 ---
 
+**Date:** 2026-05-19 (Playtest — village route, day 0, no lag)
+
+- **User report (dev pack):** Fresh world, **day 0**, **render distance 44**, **three separate villages**. Walked back through one village to reach the next — **no noticeable lag** on that route.
+- **Caveats:** Day 0 is before many systems ramp (spawn pressure, infection loops, buff bears, storms, etc.); needs **more testing** on later days and repeat passes through the same villages (prior spikes were reported around **day 20+** and heavy death/respawn loops).
+- **Context:** Follows perf work (chunk-edge defer, spawn load scaling, biome checker, buff dual-cap, journal/pin menus). Treat as an early positive signal, not a full perf sign-off.
+
+---
+
+**Date:** 2026-05-19 (Buff bear cap — near + dimension, both required)
+
+- **Dual caps** in **`mb_balance.js`**: **near player** (1 / 2 / 3 by player count) and **dimension-wide** higher ceiling (3 / 5 / 6). **`isBuffBearSpawnBlocked`** requires both — spawn uses `entityCounts` for near + snapshot for dimension; conversions use 64-block near + dimension + pending slots.
+- **Overflow cull** trims only to the **dimension** cap (farthest first). **`BP/`** + **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-05-19 (Pinnable dev tools — menu refresh)
+
+- **`mb_codex.js`:** Pinnable shortcuts reorganized to match **Developer Tools** categories (Performance, Systems, World, Bears, Storm, Infection, Codex, Debug). Added pins: **Spawn AUTO**, **Spawn HUD & spatial**, **Emulsifier**, **Biome checker**, **Force spawn**, **Bears hub**, **Developer Tools hub**. Pin UI is **category menus** instead of one flat list. **`force_spawn`** no longer migrates to spawn controller. Release **host/admin** pins (`storm`, `list bears`) work again via `pinInReleaseAdmin`. **`BP/`** + **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-05-19 (Biome checker — red Nether/End + action-bar HUD)
+
+- **Nether/End** menu button is **§c** (red); list title **§cNether / End**; HUD status **§cNDIM** in Nether/End or for other-dim catalog ids.
+- **Per-player biome HUD** on merged action bar (`ACTION_BAR_SLOT.BIOME_CHECKER`): live biome + LIST/SAFE/NDIM/GAP. Toggle in **Biome checker**, **Developer Tools → Systems**, and **HUD & action bar**. `initializeBiomeCheckerHudWatch()` in **`main.js`**. `formatBiomeCheckHudSegment` in sync template.
+
+---
+
+**Date:** 2026-05-19 (Dev menu — force spawn under Bears)
+
+- **Journal → Developer Tools → Bears:** **Force spawn bears** moved here from **Spawn controller** hub (same category/target/distance/quantity flow; Back returns to Bears). **`BP/`** + **`BP - Dev/`** `mb_codex.js`.
+
+---
+
+**Date:** 2026-05-19 (Biome checker — safe-by-design vs Nether/End gaps)
+
+- User confirmed overworld gaps (**mushroom island**, **mega taiga**, **ice mountains**, **redwood taiga** variants, etc.) are **intentional safe zones**, not omissions. Nether/End catalog ids were never added to **`mb_infected_biome_*.json`** (by design for now).
+- **`tools/syncBiomeReplaceRegistry.cjs`**: **`INTENTIONAL_SAFE_OVERWORLD_BIOMES`**, **`OTHER_DIMENSION_CATALOG_IDS`**, **`getCatalogGapsOverworld()`**, **`isIntentionalSafeOverworld()`**; at-feet status **Safe by design** / **Other-dim id**.
+- **`mb_biomeCheckerDev.js`**: hub shows three counts; menus **Safe by design**, **Review gaps**, **Nether/End**; sample grid **§bSAFE** tag. Regenerated **`mb_biomeReplaceRegistry.js`** in **`BP/`** + **`BP - Dev/`**.
+- **`docs/design/SAFE_BIOMES.md`**: explicit safe-by-design table + Nether/End note.
+
+---
+
+**Date:** 2026-05-25 (MBA items plan — purify Mining Maple Bear Claw)
+
+- **`docs/design/MBA_ITEMS_MASTER_PLAN.md`** v0.3: **Mining Maple Bear Claw** is purifiable (golden apple → **`mb:mining_maple_bear_claw_purified`**). Unpurified claw can rarely place **`mb:snow_layer` when mining**; purified claw **never** places snow on break. Repair purified with **Purified Dense "Snow"**. Journal purification page + claw entry append; codex **`miningMapleBearClawPurifiedSeen`**. Planning only.
+
+---
+
+**Date:** 2026-05-25 (MBA items & loot — master plan doc)
+
+- **Planning only** (no BP/RP/scripts yet): custom gear and loot expansion spec **`docs/design/MBA_ITEMS_MASTER_PLAN.md`** (v0.2). Indexed in **`docs/README.md`**.
+- **Gear:** Buff Bear Arm (1200 dur, extra knockback, random snow-on-hit; golden apple → purified arm, repair with Purified Dense "Snow"); Mining Maple Bear Claw (diamond mine speed except `UNBREAKABLE_BLOCKS`, iron-tier combat, anti-MB); Torpedo Spine (5 throws, blast damages **all** mobs in radius, dust; golden apple → cured, no dust); wing membrane → slow-fall brewing.
+- **Materials:** snow block / dense snow / purified dense snow / dense snow block (TBD) chain — **no maple fuzz**. Tiny bears: no new drops; infected: low dense snow only.
+- **Codex:** `mapleBearGearPurificationKnown` + per-item journal entries with purification appendices; torpedo dud spine drop rates tied to existing **`mb_torpedo_dud`** (5%); fizzle sound **`mb.torpedo_dud.fizzle`** TBD from maintainer.
+
+---
+
+**Date:** 2026-05-25 (Mining bears — more snow while digging)
+
+- Mining bears leave snow more often: trail chance **0.28 / 0.38** (was 0.1 / 0.15), trail cooldown **15t** (was 40t). Each broken block also rolls **32% / 42%** to place `mb:snow_layer` on the floor column (`tryPlaceSnowLayerNearBreak` in **`mb_snowPlacement.js`**). Shared trail helper extracted from **`main.js`**. **`BP/`** + **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-05-25 (Torpedo duds — 5% + dev force spawn)
+
+- **5%** of torpedo bears (`mb:torpedo_mb`, `mb:torpedo_mb_day20`) spawn as **duds** (`mb_torpedo_dud` dynamic property), rolled once on **`world.afterEvents.entitySpawn`** in **`mb_torpedoAI.js`** (covers natural spawn, conversion, eggs, dev summon).
+- Dud deaths skip explosion particles, explode sound, and snow ring in **`main.js`**; play **`torpedo_mb.death`** only. Block-budget exhaustion kills duds quietly (no blast) in **`checkTorpedoExhaustion`**. **`TORPEDO_DUD_CHANCE = 0.05`**; exports **`isTorpedoDud`**, **`isTorpedoBearTypeId`**, **`markTorpedoAsDud`**.
+- **Dev:** Journal → Force spawn → **Torpedo bears** → **Torpedo (dud)** / **Torpedo (day 20, dud)**; **`force_spawn`** accepts trailing **`dud`** arg. **`BP/`** + **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-05-20 (mining bear stair stall fix)
+
+- Logs `Skipped movement after stairs - step not ready` with `hasClearedSpace=false`, `cleared=0`: movement branch did nothing when step blocked + mining budget throttled. **`mb_miningAI.js`:** else path now mines headroom/forward blocks when budget allows and **always** applies forward/up nudge (`dy>1.2`). Mirrored **`BP/`**.
+
+---
+
+**Date:** 2026-05-20 (dev Biome checker UI)
+
+- **`mb_biomeReplaceRegistry.js`** (from `tools/syncBiomeReplaceRegistry.cjs` reading infected biome JSON) + **`mb_biomeCheckerDev.js`**. Journal → Developer Tools → Systems → **Biome checker**: at-feet status, missing vanilla ids (13 vs catalog: mushroom, mega_taiga, nether/end, etc.), browse replace groups, NSEW sample, Content Log dumps. `npm run sync:biome-registry`.
+
+---
+
+**Date:** 2026-05-20 (spawn feel balance for staggered chunk scans)
+
+- User: slower scans must **compensate** so bear spawn feel matches before. **`mb_spawnController.js`:** player-chunk queue **priority 100** + sooner schedule; **16-block** quick tile scan with extra budget when full scan deferred; progressive quadrants start **under player**; **`THROTTLED_SCAN_SPAWN_*`** (82% initial, 3s ramp) + tile-density chance/attempt boost when `isChunkScanThrottledForSpawn`; fixed erroneous `return shouldSkipScan` from tile collector. Mirrored **`BP/`**.
+
+---
+
+**Date:** 2026-05-20 (village / chunk-edge performance pass)
+
+- User repro: **solo village entry** lag with pack on, smooth with pack off. **`mb_workSpread.js`:** `tickPlayerChunkEdgeWatch`, **120t** defer after 16-block chunk cross, days **2–3** **4×** entity spread, defer bumps spread to **4×** during edge window. **`mb_spawnController.js`:** solo **chunk queue** + progressive quadrants on new visit; slower stagger (`getVillageScanStaggerTicks`), **1** scan/enqueue per tick, lower `queryLimit` on new/defer chunks. **`main.js`**, **`mb_biomeAmbience.js`**, **`mb_sharedCache.js`**, **`mb_bearSnapshot.js`**, **`mb_spawnLoadMetrics.js`** honor defer/spread. Mirrored **`BP/`**; **`PERFORMANCE_DEBUG.md`** updated.
+
+---
+
+**Date:** 2026-05-20 (script performance roadmap — phases A–E)
+
+- **`docs/development/PERFORMANCE_OPTIMIZATION_ROADMAP.md`**, **`CURSOR_SDK.md`**, doc index links. **`main.js`:** infection 40t only; inventory discovery 120t + single-pass scan + skip when codex complete; biome discovery separate interval + cached underfoot block. **`mb_spawnController.js`:** tile `getBlock` cache, emulsifier fast exit, chunk queue enqueue cap (3/tick). **`mb_workSpread.js`:** soft metrics spread day 2+; **`mb_spawnLoadMetrics.js`** + **`mb_performanceProfile.js`** load-linked AI stretch. Mirrored **`BP/`** ↔ **`BP - Dev/`** (except `mb_buildConfig.js`). **`node tools/testAllScripts.js`** 94 OK.
+
+---
+
 **Date:** 2026-05-20 (Releases: BP+RP only; dev build config guard)
 
 - **`tools/packageRelease.js`**: GitHub Releases attach **`BP/`** + **`RP/`** zips only (no dev assets). **`tools/verifyBuildConfig.js`** + **`npm run verify:build-config`**; dev **`mb_buildConfig.js`** runtime misconfig log. **`BP - Dev`**: `INCLUDE_FULL_DEVELOPER_TOOLS = true` enforced.

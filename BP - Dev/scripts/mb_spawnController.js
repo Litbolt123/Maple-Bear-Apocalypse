@@ -43,7 +43,12 @@ import { getStormTouchSpawnChanceMult } from "./mb_exposureSpawnPressure.js";
 import { getInfectionDirectorSpawnModifiers } from "./mb_infectionDirector.js";
 import { getBearSnapshot } from "./mb_bearSnapshot.js";
 import { isEntityValid } from "./mb_sharedCache.js";
-import { claimSpreadSlice, isSpreadThrottleActive } from "./mb_workSpread.js";
+import {
+    CHUNK_EDGE_DEFER_TICKS,
+    claimSpreadSlice,
+    isAnyChunkEdgeDeferActive,
+    isSpreadThrottleActive
+} from "./mb_workSpread.js";
 import {
     TINY_TYPE,
     INFECTED_TYPE,
@@ -52,8 +57,8 @@ import {
     TORPEDO_TYPE,
     ENTITY_TYPE_CAPS,
     NATURAL_BUFF_SPAWN_COOLDOWN_TICKS,
-    getMaxBuffBearsForNearbyPlayerCount
 } from "./mb_balance.js";
+import { isBuffBearSpawnBlocked } from "./mb_buffCap.js";
 import {
     TINY_BEAR_ID,
     DAY4_BEAR_ID,
@@ -990,6 +995,14 @@ function getScanStaggerTicks() {
 function getChunkLoadDelayTicks(isTightGroup = false) {
     const base = getScanSetting("chunkLoadDelay");
     return isTightGroup ? Math.max(base, base + 3) : base;
+}
+
+/** Stagger chunk tile scans — slower for solo and right after chunk-edge crossings. */
+function getVillageScanStaggerTicks(totalPlayerCount = 1) {
+    let t = getScanStaggerTicks();
+    if (totalPlayerCount <= 1) t = Math.ceil(t * 2);
+    if (isAnyChunkEdgeDeferActive()) t = Math.ceil(t * 1.5);
+    return t;
 }
 
 /** Clear in-memory zone cache so next load reads from world (for debug). */
@@ -2151,6 +2164,30 @@ function getBlockSafe(dimension, x, y, z) {
     }
 }
 
+const tileBlockCache = new Map();
+/** ~2× default scan interval (60t); defined before SCAN_INTERVAL constant. */
+const TILE_BLOCK_CACHE_TTL = 120;
+let tileBlockCachePruneTick = -999999;
+
+function getTileBlockCached(dimension, x, y, z) {
+    const dimId = dimension?.id ?? "?";
+    const key = `${dimId}:${x}:${y}:${z}`;
+    const now = system.currentTick;
+    const hit = tileBlockCache.get(key);
+    if (hit && now - hit.tick < TILE_BLOCK_CACHE_TTL) {
+        return hit.block;
+    }
+    const block = getBlockSafe(dimension, x, y, z);
+    tileBlockCache.set(key, { block, tick: now });
+    if (now - tileBlockCachePruneTick > 600 && tileBlockCache.size > 8000) {
+        tileBlockCachePruneTick = now;
+        for (const [k, v] of tileBlockCache.entries()) {
+            if (now - v.tick > TILE_BLOCK_CACHE_TTL * 4) tileBlockCache.delete(k);
+        }
+    }
+    return block;
+}
+
 /** Ghost sims can orbit outside simulation distance; `getBlock` fails for unloaded chunks. */
 function isSimulatedSpawnAnchorChunkLoaded(dimension, location) {
     if (!dimension || !location) return false;
@@ -2532,7 +2569,7 @@ function getMiningSpawnLocation(settings, dimension, tile) {
     // Check if the tile position has a valid block (dusted_dirt or stone/deepslate in caves)
     let tileBlock;
     try {
-        tileBlock = dimension.getBlock({ x: baseX, y: tile.y, z: baseZ });
+        tileBlock = getTileBlockCached(dimension, baseX, tile.y, baseZ);
     } catch {
         return null;
     }
@@ -2554,15 +2591,15 @@ function getMiningSpawnLocation(settings, dimension, tile) {
                 for (let dz = -2; dz <= 2 && !foundValidBlock; dz++) {
                     if (dx === 0 && dz === 0) continue;
                     try {
-                        const nearbyBlock = dimension.getBlock({ x: baseX + dx, y: tile.y, z: baseZ + dz });
+                        const nearbyBlock = getTileBlockCached(dimension, baseX + dx, tile.y, baseZ + dz);
                         if (nearbyBlock && (isValidTargetBlock(nearbyBlock.typeId, dimensionId) || isValidMiningSpawnBlock(nearbyBlock.typeId))) {
                             // Check if it's in a cave (for stone/deepslate)
                             if (!isValidTargetBlock(nearbyBlock.typeId, dimensionId) && !hasRoof(dimension, baseX + dx, baseZ + dz, clearanceTop + 1, settings.roofProbe, settings.requiredRoofBlocks)) {
                                 continue; // Not in cave, skip
                             }
                             // Found valid block nearby - adjust spawn position
-                            const nearbyAbove = dimension.getBlock({ x: baseX + dx, y: tile.y + 1, z: baseZ + dz });
-                            const nearbyTwoAbove = dimension.getBlock({ x: baseX + dx, y: tile.y + 2, z: baseZ + dz });
+                            const nearbyAbove = getTileBlockCached(dimension, baseX + dx, tile.y + 1, baseZ + dz);
+                            const nearbyTwoAbove = getTileBlockCached(dimension, baseX + dx, tile.y + 2, baseZ + dz);
                             if (nearbyAbove && isAirOrWater(nearbyAbove) && nearbyTwoAbove && isAirOrWater(nearbyTwoAbove)) {
                                 baseX = baseX + dx;
                                 baseZ = baseZ + dz;
@@ -3321,15 +3358,113 @@ const areaFirstEntered = new Map();
 const PROGRESSIVE_SPAWN_RAMP_START = 5 * 20; // 5 seconds (100 ticks) - start ramping after this
 const PROGRESSIVE_SPAWN_RAMP_DURATION = 10 * 20; // 10 seconds (200 ticks) - ramp duration
 const PROGRESSIVE_SPAWN_INITIAL_RATE = 0.5; // Start at 50% spawn rate
+/** When tile scans are staggered: keep spawn pressure closer to pre-throttle feel. */
+const THROTTLED_SCAN_SPAWN_INITIAL_RATE = 0.82;
+const THROTTLED_SCAN_SPAWN_RAMP_START = 3 * 20;
+const THROTTLED_SCAN_SPAWN_RAMP_DURATION = 6 * 20;
+/** Reserved getBlock budget for feet-adjacent tiles while full chunk scan is queued. */
+const NEAR_PLAYER_QUICK_SCAN_RADIUS = 16;
+const NEAR_PLAYER_QUICK_SCAN_EXTRA_BUDGET = 32;
 
 // Chunk scan queue: Stagger scans across multiple ticks to prevent simultaneous scans
 // key: "chunkX,chunkZ" -> { scheduledTick, playerIds: Set, scanInProgress, priority, playerPositions: Map<playerId, {x, z, chunkKey}> }
 const chunkScanQueue = new Map();
 /** Max full chunk tile scans that may start in a single game tick (day 2+ spawn path). */
-const MAX_CHUNK_FULL_SCANS_PER_TICK = 2;
-const CHUNK_SCAN_QUEUE_DEFER_DEPTH = 8;
+const MAX_CHUNK_FULL_SCANS_PER_TICK = 1;
+const CHUNK_SCAN_QUEUE_DEFER_DEPTH = 12;
+/** Limit how many new chunk scans may be queued in one tick (day 2+). */
+const MAX_CHUNK_QUEUE_ENQUEUES_PER_TICK = 1;
+let chunkQueueEnqueuesTick = -1;
+let chunkQueueEnqueuesCount = 0;
 let chunkFullScansStartedTick = -1;
 let chunkFullScansStartedCount = 0;
+
+function tryAcquireChunkQueueEnqueueSlot(isPlayerCenterChunk = false) {
+    const now = system.currentTick;
+    if (now !== chunkQueueEnqueuesTick) {
+        chunkQueueEnqueuesTick = now;
+        chunkQueueEnqueuesCount = 0;
+    }
+    const cap = isPlayerCenterChunk ? Math.min(2, MAX_CHUNK_QUEUE_ENQUEUES_PER_TICK + 1) : MAX_CHUNK_QUEUE_ENQUEUES_PER_TICK;
+    if (chunkQueueEnqueuesCount >= cap) return false;
+    chunkQueueEnqueuesCount++;
+    return true;
+}
+
+function getChunkCenterWorld(chunkKey) {
+    const parts = chunkKey.split(",");
+    const chunkX = Number(parts[0]) || 0;
+    const chunkZ = Number(parts[1]) || 0;
+    return { x: chunkX * CHUNK_SIZE + CHUNK_SIZE * 0.5, z: chunkZ * CHUNK_SIZE + CHUNK_SIZE * 0.5 };
+}
+
+function distanceSqToChunkCenter(worldX, worldZ, chunkKey) {
+    const c = getChunkCenterWorld(chunkKey);
+    const dx = worldX - c.x;
+    const dz = worldZ - c.z;
+    return dx * dx + dz * dz;
+}
+
+/** Higher = scan sooner when multiple chunks are queued. Player's current 128-block region wins. */
+function computeChunkQueuePriority(center, centerChunkKey, totalPlayerCount) {
+    const playerChunk = getChunkKey(center.x, center.z);
+    if (playerChunk === centerChunkKey) return 100;
+    const distSq = distanceSqToChunkCenter(center.x, center.z, centerChunkKey);
+    if (distSq < 32 * 32) return 78;
+    if (distSq < 64 * 64) return 48;
+    if (distSq < 96 * 96) return 24;
+    return Math.max(1, 18 - Math.floor(Math.sqrt(distSq) / 56));
+}
+
+function getPlayerQuadrantScanCycle(center, xStart, xEnd, zStart, zEnd) {
+    const xMid = Math.floor((xStart + xEnd) / 2);
+    const zMid = Math.floor((zStart + zEnd) / 2);
+    const px = Math.floor(center.x);
+    const pz = Math.floor(center.z);
+    if (px <= xMid && pz <= zMid) return 0;
+    if (px > xMid && pz <= zMid) return 1;
+    if (px <= xMid && pz > zMid) return 2;
+    return 3;
+}
+
+function applyDiscoveryQuadrantBounds(scanCycle, xStart, xEnd, zStart, zEnd) {
+    const xMid = Math.floor((xStart + xEnd) / 2);
+    const zMid = Math.floor((zStart + zEnd) / 2);
+    let xs = xStart;
+    let xe = xEnd;
+    let zs = zStart;
+    let ze = zEnd;
+    if (scanCycle === 0) {
+        xe = xMid;
+        ze = zMid;
+    } else if (scanCycle === 1) {
+        xs = xMid + 1;
+        ze = zMid;
+    } else if (scanCycle === 2) {
+        xe = xMid;
+        zs = zMid + 1;
+    } else {
+        xs = xMid + 1;
+        zs = zMid + 1;
+    }
+    return { xStart: xs, xEnd: xe, zStart: zs, zEnd: ze };
+}
+
+function isChunkScanThrottledForSpawn(playerPos, totalPlayerCount = 1) {
+    try {
+        const key = getChunkKey(playerPos.x, playerPos.z);
+        const now = system.currentTick;
+        const firstVisit = chunkFirstVisit.get(key);
+        if (firstVisit) {
+            let delay = getChunkLoadDelayTicks(false);
+            if (totalPlayerCount <= 1) delay += 10;
+            if ((now - firstVisit) < delay) return true;
+        }
+        const queued = chunkScanQueue.get(key);
+        if (queued && (queued.scanInProgress || now < queued.scheduledTick)) return true;
+    } catch { /* ignore */ }
+    return false;
+}
 
 function tryAcquireChunkFullScanSlot() {
     const now = system.currentTick;
@@ -3719,7 +3854,10 @@ function getReachableCorruptedBlocks(dimension, cx, cy, cz, maxRadius, maxAirVis
 
 function processEmulsifierZones() {
     const zones = loadEmulsifierZones();
-    if (!emulsifierMachineVisualBootstrapped && Array.isArray(zones) && zones.length > 0) {
+    if (!Array.isArray(zones) || zones.length === 0) {
+        return;
+    }
+    if (!emulsifierMachineVisualBootstrapped && zones.length > 0) {
         emulsifierMachineVisualBootstrapped = true;
         for (const z of zones) {
             if (!z?.dimension) continue;
@@ -3727,10 +3865,6 @@ function processEmulsifierZones() {
         }
     }
     const dbg = (cat, ...args) => { if (typeof isDebugEnabled === "function" && isDebugEnabled("emulsifier", cat)) console.warn("[EMULSIFIER DEBUG]", cat, ...args); };
-    if (!Array.isArray(zones) || zones.length === 0) {
-        dbg("general", "processEmulsifierZones: no zones, exit. zones=", zones?.length, "cache=", emulsifierZoneCache?.length);
-        return;
-    }
     let changed = false;
     const now = system.currentTick;
     const baseRadius = getEmulsifierDetoxBaseRadius();
@@ -4283,6 +4417,67 @@ function collectMiningSpawnTiles(dimension, center, minDistance, maxDistance, li
     return candidates.slice(0, limit);
 }
 
+/**
+ * Scan dusted_dirt in a ring around the player (runs even when full chunk scan is deferred).
+ * @returns {number} updated blockQueryCount
+ */
+function runNearPlayerQuickTileScan(dimension, center, cy, dimYMax, cx, cz, candidates, seen, blockQueryCount, queryLimit, limit, useExpanded) {
+    if (!useExpanded) return blockQueryCount;
+    const quickRadius = NEAR_PLAYER_QUICK_SCAN_RADIUS;
+    const budgetCap = queryLimit + NEAR_PLAYER_QUICK_SCAN_EXTRA_BUDGET;
+    const quickCheckRadiusSq = quickRadius * quickRadius;
+    const quickXStart = Math.max(cx - quickRadius, Math.floor(center.x - quickRadius));
+    const quickXEnd = Math.min(cx + quickRadius, Math.floor(center.x + quickRadius));
+    const quickZStart = Math.max(cz - quickRadius, Math.floor(center.z - quickRadius));
+    const quickZEnd = Math.min(cz + quickRadius, Math.floor(center.z + quickRadius));
+
+    for (let qx = quickXStart; qx <= quickXEnd && candidates.length < limit && blockQueryCount < budgetCap; qx++) {
+        for (let qz = quickZStart; qz <= quickZEnd && candidates.length < limit && blockQueryCount < budgetCap; qz++) {
+            const qdx = qx + 0.5 - center.x;
+            const qdz = qz + 0.5 - center.z;
+            if (qdx * qdx + qdz * qdz > quickCheckRadiusSq) continue;
+
+            const quickYStart = Math.min(cy + 12, dimYMax);
+            const quickYEnd = Math.max(cy - 12, -64);
+            for (let qy = quickYStart; qy >= quickYEnd && blockQueryCount < budgetCap; qy--) {
+                let block;
+                try {
+                    block = dimension.getBlock({ x: qx, y: qy, z: qz });
+                    blockQueryCount++;
+                } catch {
+                    continue;
+                }
+                if (!block) continue;
+
+                const dimensionId = dimension.id;
+                if (isValidTargetBlock(block.typeId, dimensionId)) {
+                    const blockAbove = dimension.getBlock({ x: qx, y: qy + 1, z: qz });
+                    blockQueryCount++;
+                    if (blockQueryCount < budgetCap) {
+                        const blockTwoAbove = dimension.getBlock({ x: qx, y: qy + 2, z: qz });
+                        blockQueryCount++;
+                        if (isAirOrWater(blockAbove) && isAirOrWater(blockTwoAbove)) {
+                            const key = `${qx},${qy},${qz}`;
+                            if (!seen.has(key)) {
+                                seen.add(key);
+                                candidates.push({ x: qx, y: qy, z: qz });
+                                registerDustedDirtBlock(qx, qy, qz, dimension);
+                                if (candidates.length >= limit) break;
+                            }
+                        }
+                    }
+                    break;
+                }
+                if (!isAir(block)) {
+                    if (isAirOrWater(block)) continue;
+                    break;
+                }
+            }
+        }
+    }
+    return blockQueryCount;
+}
+
 function collectDustedTiles(dimension, center, minDistance, maxDistance, limit = MAX_CANDIDATES_PER_SCAN, isSinglePlayer = false, totalPlayerCount = 1, isTightGroup = false, isIsolated = false, scanLoadCount = null, spatialClusterIndex = 0, chunkFairnessClusterCount = 1, mobilityQueryMult = 1, scanSessionId = "") {
     const discoveryPc = getDiscoveryBudgetPlayerCount(totalPlayerCount, scanLoadCount);
     const queryPc = getQueryBudgetPlayerCount(totalPlayerCount, scanLoadCount);
@@ -4644,9 +4839,18 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
     const centerChunkKey = getChunkKey(cx, cz);
     const chunkFirstVisitTick = chunkFirstVisit.get(centerChunkKey);
     // Adaptive chunk load delay from dev tuning.
-    const chunkLoadDelay = getChunkLoadDelayTicks(isTightGroup);
+    let chunkLoadDelay = getChunkLoadDelayTicks(isTightGroup);
+    if (totalPlayerCount <= 1) chunkLoadDelay += 10;
+    if (isAnyChunkEdgeDeferActive()) chunkLoadDelay += CHUNK_EDGE_DEFER_TICKS;
     const isNewChunk = chunkFirstVisitTick && (now - chunkFirstVisitTick) < chunkLoadDelay;
-    
+    if (isNewChunk) {
+        const soloNewMult = totalPlayerCount <= 1 ? 0.5 : 0.72;
+        queryLimit = Math.max(MOBILITY_BLOCK_QUERY_FLOOR, Math.floor(queryLimit * soloNewMult));
+    }
+    if (isAnyChunkEdgeDeferActive()) {
+        queryLimit = Math.max(MOBILITY_BLOCK_QUERY_FLOOR, Math.floor(queryLimit * 0.6));
+    }
+
     // Progressive spawn rate: Track when area was first entered
     if (!areaFirstEntered.has(centerChunkKey)) {
         areaFirstEntered.set(centerChunkKey, now);
@@ -4687,7 +4891,7 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
                     if (tryAcquireChunkFullScanSlot()) {
                         queuedScan.scanInProgress = true;
                     } else {
-                        queuedScan.scheduledTick = now + getScanStaggerTicks();
+                        queuedScan.scheduledTick = now + getVillageScanStaggerTicks(totalPlayerCount);
                         shouldSkipScan = true;
                     }
                     if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
@@ -4698,7 +4902,7 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
                     if (tryAcquireChunkFullScanSlot()) {
                         queuedScan.scanInProgress = true;
                     } else {
-                        queuedScan.scheduledTick = now + getScanStaggerTicks();
+                        queuedScan.scheduledTick = now + getVillageScanStaggerTicks(totalPlayerCount);
                         shouldSkipScan = true;
                     }
                 }
@@ -4707,22 +4911,37 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
                 if (tryAcquireChunkFullScanSlot()) {
                     queuedScan.scanInProgress = true;
                 } else {
-                    queuedScan.scheduledTick = now + getScanStaggerTicks();
+                    queuedScan.scheduledTick = now + getVillageScanStaggerTicks(totalPlayerCount);
                     shouldSkipScan = true;
                 }
             }
         }
-    } else if (isNewChunk && totalPlayerCount > 1) {
+    } else if (isNewChunk) {
+        const isPlayerCenterChunk = centerChunkKey === getChunkKey(center.x, center.z);
+        if (!tryAcquireChunkQueueEnqueueSlot(isPlayerCenterChunk)) {
+            shouldSkipScan = true;
+            if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
+                console.warn(`[SPAWN DEBUG] Chunk ${centerChunkKey} queue enqueue deferred (per-tick cap)`);
+            }
+        } else {
         // Schedule scan for this chunk (stagger based on how many players already queued)
         let staggerOffset = Array.from(chunkScanQueue.values()).filter(q => q.scheduledTick > now).length;
         if (chunkScanQueue.size >= CHUNK_SCAN_QUEUE_DEFER_DEPTH) {
             staggerOffset += 2;
         }
-        const staggerTicks = getScanStaggerTicks();
+        const staggerTicks = getVillageScanStaggerTicks(totalPlayerCount);
         const nFair = Math.max(1, chunkFairnessClusterCount);
         const st = Math.max(1, staggerTicks);
         const fairnessWiggle = ((spatialClusterIndex + Math.floor(now / st)) % nFair) * Math.min(8, Math.max(2, Math.floor(st / 4)));
-        const scheduledTick = now + (staggerOffset * staggerTicks) + fairnessWiggle;
+        let scheduledTick;
+        if (isPlayerCenterChunk) {
+            scheduledTick = now + Math.max(4, Math.floor(staggerTicks * 0.35)) + fairnessWiggle;
+        } else {
+            scheduledTick = now + (staggerOffset * staggerTicks) + fairnessWiggle;
+            if (isAnyChunkEdgeDeferActive()) {
+                scheduledTick += CHUNK_EDGE_DEFER_TICKS;
+            }
+        }
         
         // Track player position for adaptive stagger
         const playerPositions = new Map();
@@ -4732,7 +4951,7 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
             scheduledTick: scheduledTick,
             playerIds: new Set(),
             scanInProgress: false,
-            priority: 1, // Start with priority 1 (will increase if more players queue for same chunk)
+            priority: computeChunkQueuePriority(center, centerChunkKey, totalPlayerCount),
             playerPositions: playerPositions,
             clusterIndex: spatialClusterIndex
         });
@@ -4740,10 +4959,11 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
         if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
             console.warn(`[SPAWN DEBUG] Chunk ${centerChunkKey} scheduled for scan at tick ${scheduledTick} (stagger offset: ${staggerOffset})`);
         }
+        }
     }
     
     // Cleanup old completed scans from queue
-    const staggerTicks = getScanStaggerTicks();
+    const staggerTicks = getVillageScanStaggerTicks(totalPlayerCount);
     // Use staggerTicks * 4 to ensure we don't remove scans before they execute
     // Also cleanup cancelled scans (where all players moved away)
     for (const [chunkKey, scanInfo] of chunkScanQueue.entries()) {
@@ -4765,6 +4985,9 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
         .sort((a, b) => {
             const pr = (b[1].priority || 1) - (a[1].priority || 1);
             if (pr !== 0) return pr;
+            const da = distanceSqToChunkCenter(center.x, center.z, a[0]);
+            const db = distanceSqToChunkCenter(center.x, center.z, b[0]);
+            if (da !== db) return da - db;
             const ca = a[1].clusterIndex ?? 0;
             const cb = b[1].clusterIndex ?? 0;
             const ra = (ca + fairnessRotate) % 997;
@@ -4790,7 +5013,7 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
         // If we have some cached tiles, prefer using cache over scanning new chunk immediately
         // For tight groups, require more cached tiles (5 instead of 3)
         const minCachedTiles = isTightGroup ? 5 : (discoveryPc >= 4 ? 5 : 3);
-        if (cachedTiles.length >= minCachedTiles || shouldSkipScan) {
+        if (!shouldSkipScan && cachedTiles.length >= minCachedTiles) {
             if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
                 console.warn(`[SPAWN DEBUG] New chunk: Using cache (${cachedTiles.length} tiles) instead of immediate scan`);
             }
@@ -4808,11 +5031,13 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
         }
     }
     
-    // Skip scan if chunk is queued for later
+    // Skip full scan if chunk is queued — still probe tiles near the player for spawn candidates
     if (shouldSkipScan) {
+        blockQueryCount = runNearPlayerQuickTileScan(
+            dimension, center, cy, dimYMax, cx, cz, candidates, seen, blockQueryCount, queryLimit, limit, true
+        );
         maxDistance = effectiveMaxDistance;
         const effectiveMaxSq = effectiveMaxDistance * effectiveMaxDistance;
-        // Filter by spawn range (minDistance to effectiveMaxDistance)
         const filteredCandidates = candidates.filter(tile => {
             const dx = tile.x + 0.5 - center.x;
             const dz = tile.z + 0.5 - center.z;
@@ -4839,72 +5064,11 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
     // Track how many blocks we found before the full scan (to detect if scan found 0 new blocks)
     const candidatesBeforeScan = candidates.length;
 
-    // Quick check: Scan blocks immediately around player first (within 10 blocks)
-    // This ensures we find blocks right next to the player even if the full scan hits budget limits
     if (candidates.length < limit && blockQueryCount < queryLimit) {
-        const quickCheckRadius = 10;
-        const quickCheckRadiusSq = quickCheckRadius * quickCheckRadius;
-        const quickXStart = Math.max(cx - quickCheckRadius, Math.floor(center.x - quickCheckRadius));
-        const quickXEnd = Math.min(cx + quickCheckRadius, Math.floor(center.x + quickCheckRadius));
-        const quickZStart = Math.max(cz - quickCheckRadius, Math.floor(center.z - quickCheckRadius));
-        const quickZEnd = Math.min(cz + quickCheckRadius, Math.floor(center.z + quickCheckRadius));
-        
-        for (let qx = quickXStart; qx <= quickXEnd && candidates.length < limit && blockQueryCount < queryLimit; qx++) {
-            for (let qz = quickZStart; qz <= quickZEnd && candidates.length < limit && blockQueryCount < queryLimit; qz++) {
-                const qdx = qx + 0.5 - center.x;
-                const qdz = qz + 0.5 - center.z;
-                const qdistSq = qdx * qdx + qdz * qdz;
-                if (qdistSq > quickCheckRadiusSq) continue;
-                
-                // Check Y range around player
-                const quickYStart = Math.min(cy + 10, dimYMax);
-                const quickYEnd = Math.max(cy - 10, -64);
-                
-                for (let qy = quickYStart; qy >= quickYEnd && blockQueryCount < queryLimit; qy--) {
-                    if (blockQueryCount >= queryLimit) break;
-                    
-                    let block;
-                    try {
-                        block = dimension.getBlock({ x: qx, y: qy, z: qz });
-                        blockQueryCount++;
-                    } catch {
-                        continue;
-                    }
-                    if (!block) continue;
-                    
-                    const dimensionId = dimension.id;
-                    if (isValidTargetBlock(block.typeId, dimensionId)) {
-                        const blockAbove = dimension.getBlock({ x: qx, y: qy + 1, z: qz });
-                        blockQueryCount++;
-                        if (blockQueryCount < queryLimit) {
-                            const blockTwoAbove = dimension.getBlock({ x: qx, y: qy + 2, z: qz });
-                            blockQueryCount++;
-                            if (isAirOrWater(blockAbove) && isAirOrWater(blockTwoAbove)) {
-                                const key = `${qx},${qy},${qz}`;
-                                if (!seen.has(key)) {
-                                    seen.add(key);
-                                    candidates.push({ x: qx, y: qy, z: qz });
-                                    registerDustedDirtBlock(qx, qy, qz, dimension);
-                                    
-                                    if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
-                                        console.warn(`[SPAWN DEBUG] Quick check found dusted_dirt at (${qx}, ${qy}, ${qz}), dist: ${Math.sqrt(qdistSq).toFixed(1)} blocks from player`);
-                                    }
-                                    
-                                    if (candidates.length >= limit) break;
-                                }
-                            }
-                        }
-                        break; // Found solid block at this Y, move to next XZ
-                    }
-                    
-                    if (!isAir(block)) {
-                        // Don't break on water - continue scanning down to find dusted dirt on ocean floor
-                        if (isAirOrWater(block)) continue;
-                        break; // Hit solid non-target block (stone, gravel, etc.), move to next XZ
-                    }
-                }
-            }
-        }
+        blockQueryCount = runNearPlayerQuickTileScan(
+            dimension, center, cy, dimYMax, cx, cz, candidates, seen, blockQueryCount, queryLimit, limit,
+            isNewChunk || candidates.length < Math.min(limit, 12)
+        );
     }
 
     // Two-phase scanning system:
@@ -4934,52 +5098,36 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
     // Only do progressive discovery if cache has some tiles (not completely empty)
     // Uses DISCOVERY_RADIUS to spread discovery over larger area
     // Isolated players skip progressive scanning (scan full area once, not in quadrants)
-    if (!isNetherOrEnd && !isIsolated && cachedTiles.length > 0 && totalPlayerCount > 1) {
+    const useProgressiveDiscovery = !isNetherOrEnd && cachedTiles.length > 0 &&
+        ((totalPlayerCount > 1 && !isIsolated) || (totalPlayerCount <= 1 && isNewChunk));
+    if (useProgressiveDiscovery) {
         const chunkKey = getChunkKey(cx, cz);
         const progressiveInfo = progressiveScanCache.get(chunkKey);
         const now = system.currentTick;
-        
-        if (progressiveInfo && (now - progressiveInfo.lastScanTick) < SCAN_INTERVAL * 4) {
-            // Continue progressive scan - divide area into 4 quadrants
-            const scanCycle = progressiveInfo.scanCycle;
-            const xMid = Math.floor((xStart + xEnd) / 2);
-            const zMid = Math.floor((zStart + zEnd) / 2);
-            
-            // Cycle 0: Top-left quadrant (x <= mid, z <= mid)
-            // Cycle 1: Top-right quadrant (x > mid, z <= mid)
-            // Cycle 2: Bottom-left quadrant (x <= mid, z > mid)
-            // Cycle 3: Bottom-right quadrant (x > mid, z > mid)
-            if (scanCycle === 0) {
-                xEnd = xMid;
-                zEnd = zMid;
-            } else if (scanCycle === 1) {
-                xStart = xMid + 1;
-                zEnd = zMid;
-            } else if (scanCycle === 2) {
-                xEnd = xMid;
-                zStart = zMid + 1;
-            } else { // scanCycle === 3
-                xStart = xMid + 1;
-                zStart = zMid + 1;
-            }
-            
-            // Update progressive scan cache for next cycle
+        const progressiveCadence = (totalPlayerCount <= 1 && isNewChunk) ? SCAN_INTERVAL * 8 : SCAN_INTERVAL * 4;
+
+        if (progressiveInfo && (now - progressiveInfo.lastScanTick) < progressiveCadence) {
+            const scanCycle = progressiveInfo.scanCycle % PROGRESSIVE_SCAN_CYCLES;
+            const bounds = applyDiscoveryQuadrantBounds(scanCycle, xStart, xEnd, zStart, zEnd);
+            xStart = bounds.xStart;
+            xEnd = bounds.xEnd;
+            zStart = bounds.zStart;
+            zEnd = bounds.zEnd;
             const nextCycle = (scanCycle + 1) % PROGRESSIVE_SCAN_CYCLES;
             progressiveScanCache.set(chunkKey, { scanCycle: nextCycle, lastScanTick: now });
-            
             if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
                 console.warn(`[SPAWN DEBUG] Progressive discovery: Scanning quadrant ${scanCycle + 1}/4 (X[${xStart} to ${xEnd}], Z[${zStart} to ${zEnd}])`);
             }
         } else {
-            // Start new progressive scan cycle - first cycle: scan top-left quadrant
-            const xMid = Math.floor((xStart + xEnd) / 2);
-            const zMid = Math.floor((zStart + zEnd) / 2);
-            xEnd = xMid;
-            zEnd = zMid;
-            progressiveScanCache.set(chunkKey, { scanCycle: 1, lastScanTick: now });
-            
+            const startCycle = getPlayerQuadrantScanCycle(center, xStart, xEnd, zStart, zEnd);
+            const bounds = applyDiscoveryQuadrantBounds(startCycle, xStart, xEnd, zStart, zEnd);
+            xStart = bounds.xStart;
+            xEnd = bounds.xEnd;
+            zStart = bounds.zStart;
+            zEnd = bounds.zEnd;
+            progressiveScanCache.set(chunkKey, { scanCycle: (startCycle + 1) % PROGRESSIVE_SCAN_CYCLES, lastScanTick: now });
             if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
-                console.warn(`[SPAWN DEBUG] Progressive discovery: Starting cycle 1/4 (X[${xStart} to ${xEnd}], Z[${zStart} to ${zEnd}])`);
+                console.warn(`[SPAWN DEBUG] Progressive discovery: Starting at player quadrant ${startCycle + 1}/4`);
             }
         }
     }
@@ -6955,14 +7103,9 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
             return false;
         }
 
-        const buffBearCount = (entityCounts[BUFF_BEAR_ID] || 0) +
-                             (entityCounts[BUFF_BEAR_DAY13_ID] || 0) +
-                             (entityCounts[BUFF_BEAR_DAY20_ID] || 0);
-        
-        const maxBuffBears = getMaxBuffBearsForNearbyPlayerCount(nearbyPlayerCount);
-
-        if (buffBearCount >= maxBuffBears) {
-            return false; // Too many buff bears for this player count - stop spawning
+        // Near-player cap (entityCounts) + higher dimension-wide cap (both required).
+        if (isBuffBearSpawnBlocked({ dimension, entityCounts, nearbyPlayerCount })) {
+            return false;
         }
     }
     
@@ -7091,22 +7234,22 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
         maxAttemptsPerTick = Math.max(1, Math.floor(maxAttemptsPerTick * idealSpawnPress));
     }
 
-    // Progressive spawn rate: Start at 50% in new areas, ramp to 100% over 10-15 seconds
+    const scanThrottled = isChunkScanThrottledForSpawn(playerPos, totalPlayerCountInDimension);
     let progressiveSpawnMultiplier = 1.0;
     try {
         const playerChunkKey = getChunkKey(playerPos.x, playerPos.z);
         const firstEnteredTick = areaFirstEntered.get(playerChunkKey);
         if (firstEnteredTick) {
             const timeSinceEntry = system.currentTick - firstEnteredTick;
-            if (timeSinceEntry < PROGRESSIVE_SPAWN_RAMP_START) {
-                // First 5 seconds: 50% spawn rate
-                progressiveSpawnMultiplier = PROGRESSIVE_SPAWN_INITIAL_RATE;
-            } else if (timeSinceEntry < (PROGRESSIVE_SPAWN_RAMP_START + PROGRESSIVE_SPAWN_RAMP_DURATION)) {
-                // Ramp from 50% to 100% over 10 seconds
-                const rampProgress = (timeSinceEntry - PROGRESSIVE_SPAWN_RAMP_START) / PROGRESSIVE_SPAWN_RAMP_DURATION;
-                progressiveSpawnMultiplier = PROGRESSIVE_SPAWN_INITIAL_RATE + (rampProgress * (1.0 - PROGRESSIVE_SPAWN_INITIAL_RATE));
+            const initialRate = scanThrottled ? THROTTLED_SCAN_SPAWN_INITIAL_RATE : PROGRESSIVE_SPAWN_INITIAL_RATE;
+            const rampStart = scanThrottled ? THROTTLED_SCAN_SPAWN_RAMP_START : PROGRESSIVE_SPAWN_RAMP_START;
+            const rampDuration = scanThrottled ? THROTTLED_SCAN_SPAWN_RAMP_DURATION : PROGRESSIVE_SPAWN_RAMP_DURATION;
+            if (timeSinceEntry < rampStart) {
+                progressiveSpawnMultiplier = initialRate;
+            } else if (timeSinceEntry < (rampStart + rampDuration)) {
+                const rampProgress = (timeSinceEntry - rampStart) / rampDuration;
+                progressiveSpawnMultiplier = initialRate + (rampProgress * (1.0 - initialRate));
             }
-            // After 15 seconds: 100% spawn rate (multiplier = 1.0)
         }
     } catch (error) {
         // On error, use full spawn rate
@@ -7114,7 +7257,10 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
     
     // Reduce attempts to spread across ticks, then apply progressive spawn multiplier
     const attemptsThisTick = Math.min(attempts, maxAttemptsPerTick);
-    const finalAttemptsThisTick = Math.max(1, Math.floor(attemptsThisTick * progressiveSpawnMultiplier));
+    let finalAttemptsThisTick = Math.max(1, Math.floor(attemptsThisTick * progressiveSpawnMultiplier));
+    if (scanThrottled) {
+        finalAttemptsThisTick = Math.max(finalAttemptsThisTick, Math.ceil(attemptsThisTick * 0.72));
+    }
 
     let chance = config.baseChance + (config.chancePerDay ?? 0) * Math.max(0, currentDay - config.startDay);
     chance *= late.chanceMultiplier;
@@ -7144,11 +7290,15 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
         chance *= 0.95;
     }
     
-    // Additional compensation for multiplayer when tiles are reduced
-    if (tileDensityRatio < 1.0 && totalPlayerCountInDimension > 1) {
-        // Boost spawn chance when we have fewer tiles than expected (compensate for reduced scanning)
-        const compensationMultiplier = 1.0 + (1.0 - tileDensityRatio) * 0.5; // Up to 1.5x boost
-        chance *= Math.min(compensationMultiplier, 1.5); // Cap at 1.5x
+    // Fewer discovered tiles (staggered scans) → higher spawn chance / attempts to preserve feel
+    if (tileDensityRatio < 1.0) {
+        const boostStrength = scanThrottled ? 0.65 : (totalPlayerCountInDimension > 1 ? 0.5 : 0.4);
+        const compensationMultiplier = 1.0 + (1.0 - tileDensityRatio) * boostStrength;
+        const cap = scanThrottled ? 1.65 : 1.5;
+        chance *= Math.min(compensationMultiplier, cap);
+        if (scanThrottled && availableTiles < 25) {
+            finalAttemptsThisTick = Math.max(finalAttemptsThisTick, Math.ceil(finalAttemptsThisTick * 1.2));
+        }
     }
 
     const idealChancePress = (modifiers.idealBearPressureChanceMult != null && Number.isFinite(modifiers.idealBearPressureChanceMult) && modifiers.idealBearPressureChanceMult > 0)

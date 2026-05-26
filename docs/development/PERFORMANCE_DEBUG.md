@@ -6,6 +6,14 @@ Symptoms like **entities still making sound, blocks frozen, hits catching up aft
 
 **Work spread (`mb_workSpread.js`):** On day 0–1, most periodic systems run at **8×** nominal spacing (one player / one dimension / one anchor per slice). Entity queries use a **3×3 grid of 32-block cells** around each player instead of one large radius per tick (mob cache, bear snapshot, conversion counts). Mob cache builds over multiple ticks; `findClosestBiome` is off; world init is staggered. Re-test villages after pack reload.
 
+**Day 2+ soft spread:** When spawn-load metrics report a heavy world (`load01 ≥ 0.45`), item entity sampling uses **2×** interval spacing (not the full 8× day-0–1 throttle). AI `getAiIntervalStretch()` also nudges up slightly.
+
+**`main.js` intervals (2026-05):** Infection timers stay on **40t**; inventory codex discovery moved to **120t** with one pass per slot batch and skip when all flags are set; biome discovery on its own **40t** slice with block-cache underfoot check.
+
+**Village / chunk-edge pass (2026-05-20):** Crossing a **16-block** chunk boundary starts a **~6s defer** (`shouldDeferVillageBurst`) for biome ambience, mob cache builds, item metrics, bear snapshot refresh, and inventory discovery. **Days 2–3** use **4×** entity spread (not just day 0–1). **Solo** new-chunk tile scans are **queued and staggered** (same idea as MP), **quadrant progressive** discovery on first visit, **1** full chunk scan and **1** enqueue per tick max. Chunk scans get **lower block budgets** while the area is “new” — completeness builds as you **stay in the area**.
+
+**Spawn feel balance:** Full scans may wait, but the **chunk you stand in** is scheduled first, a **16-block** ring around the player is still probed for dusted dirt, progressive discovery starts in the **player’s quadrant**, and spawn **attempts/chance** ramp higher when tiles are still sparse (`THROTTLED_SCAN_SPAWN_*`). Re-test: bears near feet within ~3–6s of entering a village, distant tiles filling in over ~15–30s.
+
 The spawn controller **main loop does not run** when `getCurrentDay() < 2` (no dusted-dirt chunk tile scans from that loop). Early-day spikes are more often:
 
 - Vanilla chunk load + village entity AI
@@ -66,3 +74,5 @@ Journal → **Developer Tools** → **Debug** / script toggles:
 | `mb_biomeAmbience.js` | In-biome checks |
 
 After changes: `npm run check` on PC; in-game **Script self-test** (dev) is supplementary.
+
+**Roadmap (tiers + phases):** [PERFORMANCE_OPTIMIZATION_ROADMAP.md](PERFORMANCE_OPTIMIZATION_ROADMAP.md).

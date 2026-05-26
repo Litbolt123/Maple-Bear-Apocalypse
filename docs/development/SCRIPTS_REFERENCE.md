@@ -4,7 +4,7 @@
 
 One-line (or short) descriptions of each JavaScript module in the behavior pack. **`BP - Dev/scripts/`** mirrors these files for internal builds; **`mb_buildConfig.js`** differs (full developer tools on in dev).
 
-**Related:** testing and commands → [`testing/SCRIPT_TEST_MAP.md`](testing/SCRIPT_TEST_MAP.md).
+**Related:** testing and commands → [`testing/SCRIPT_TEST_MAP.md`](testing/SCRIPT_TEST_MAP.md). Performance tiers and phases → [`PERFORMANCE_OPTIMIZATION_ROADMAP.md`](PERFORMANCE_OPTIMIZATION_ROADMAP.md).
 
 ---
 

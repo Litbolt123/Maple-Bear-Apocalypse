@@ -38,14 +38,31 @@ export const MB_CONVERSION_WORLD_MULT_MIN = 0.025;
 export const MB_CONVERSION_BUFF_NEAR_CAP = 5;
 
 /**
- * Same buff cap as natural spawn (`mb_spawnController` attemptSpawnType).
- * @param {number} nearbyPlayerCount players near the conversion / spawn site
+ * Max buff bears near a player / spawn site (loaded, within scan radius).
+ * @param {number} playerCount players in dimension (or near the site)
  */
-export function getMaxBuffBearsForNearbyPlayerCount(nearbyPlayerCount) {
-    const n = Math.max(1, nearbyPlayerCount);
+export function getMaxBuffBearsNearPlayerCount(playerCount) {
+    const n = Math.max(1, playerCount);
     if (n <= 2) return 1;
     if (n <= 4) return 2;
     return 3;
+}
+
+/**
+ * Max buff bears in the whole dimension (loaded) — higher than near-player cap.
+ * Both caps apply (`mb_buffCap.js`).
+ * @param {number} playerCount players in the dimension
+ */
+export function getMaxBuffBearsDimensionWideCount(playerCount) {
+    const n = Math.max(1, playerCount);
+    if (n <= 2) return 3;
+    if (n <= 4) return 5;
+    return 6;
+}
+
+/** @deprecated Use getMaxBuffBearsNearPlayerCount */
+export function getMaxBuffBearsForNearbyPlayerCount(nearbyPlayerCount) {
+    return getMaxBuffBearsNearPlayerCount(nearbyPlayerCount);
 }
 
 // --- Global bear population cull (mb_bearPopulationCull.js): trim distant tiny + infected when world totals run high ---

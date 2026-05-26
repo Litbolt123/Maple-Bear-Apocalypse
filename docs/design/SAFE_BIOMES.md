@@ -1,6 +1,8 @@
 # Safe Biomes - Maple Bear Spawning
 
-Based on `BP/biomes/mb_infected_biome.json`, the infected biome replaces specific vanilla biomes. Biomes **NOT** in that replacement list are considered "safer" zones where Maple Bears don't spawn naturally (or spawn at much lower rates).
+Based on `BP/biomes/mb_infected_biome_*.json` (`minecraft:replace_biomes`), the infected biome replaces specific vanilla biomes. Biomes **NOT** in that replacement list are considered "safer" zones where Maple Bears don't spawn naturally (or spawn at much lower rates).
+
+**Dev tool (in-game):** Journal → Developer Tools → Systems → **Biome checker** — shows biome at your feet vs the replace list and catalogs biomes missing from JSON. After editing biome JSON, run `npm run sync:biome-registry` (or `node tools/syncBiomeReplaceRegistry.cjs`).
 
 ## 🔴 Biomes Targeted by Infected Biome (NOT Safe)
 
@@ -43,20 +45,27 @@ The infected biome replaces these biomes at various densities:
 
 ---
 
-## 🟢 Potentially Safe Biomes (NOT in Replacement List)
+## 🟢 Safe by design (overworld — intentional)
 
-These biomes are **NOT** targeted by the infected biome replacement, making them potentially safer zones:
+These vanilla biomes are **deliberately omitted** from `replace_biomes`. The dev **Biome checker** labels them **Safe by design** (not “forgotten”). Source of truth for the checker: `INTENTIONAL_SAFE_OVERWORLD_BIOMES` in `tools/syncBiomeReplaceRegistry.cjs` (regenerate with `npm run sync:biome-registry`).
 
-### Mushroom Biomes
-- **Mushroom Fields** (Mushroom Island)
-- **Mushroom Fields Shore**
+| Biome id | Notes |
+|----------|--------|
+| `minecraft:mushroom_island` | Mushroom Fields |
+| `minecraft:mushroom_island_shore` | Mushroom Fields Shore |
+| `minecraft:mega_taiga` | Mega Taiga |
+| `minecraft:mega_taiga_hills` | Mega Taiga Hills |
+| `minecraft:ice_mountains` | Ice Mountains (legacy id in catalog) |
+| `minecraft:redwood_taiga_mutated` | Giant Tree Taiga (mutated) |
+| `minecraft:redwood_taiga_hills_mutated` | Giant Tree Taiga Hills (mutated) |
 
-### Badlands Variants (if not already covered)
-- Some mesa variants might be safe if not explicitly listed
+### Nether / End
 
-### Other Rare/Uncommon Biomes
-- Any biome not explicitly listed in the replacement targets
-- Custom biomes from other addons (if they don't match vanilla biome IDs)
+Gameplay in those dimensions is fine without infected biome JSON today. Reference catalog ids (`hell`, `crimson_forest`, `warped_forest`, `soulsand_valley`, `basalt_deltas`, `the_end`) are **not** in `mb_infected_biome_*.json` yet — add `replace_biomes` groups there when you want dimension infection.
+
+### Other overworld biomes
+
+Any other catalog id not on the replace list and not in the table above shows as **Review gaps** in the biome checker (worth a deliberate pass).
 
 ---
 

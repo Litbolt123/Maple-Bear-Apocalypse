@@ -7,8 +7,10 @@ import { system } from "@minecraft/server";
 import { getAllPlayersIncludingSim } from "./mb_simPlayers.js";
 import {
     getSpreadMobCacheCompletedTicks,
+    isEntityQuerySpreadActive,
     isSpreadThrottleActive,
     queryEntitiesOneSpreadSection,
+    shouldDeferVillageBurst,
     SPREAD_CELL_COUNT
 } from "./mb_workSpread.js";
 
@@ -80,7 +82,7 @@ function queryMobsNearAnchors(dimension, anchors) {
     const validMobs = [];
     for (const pos of anchors) {
         let part;
-        if (isSpreadThrottleActive()) {
+        if (isEntityQuerySpreadActive()) {
             for (let s = 0; s < SPREAD_CELL_COUNT; s++) {
                 const slice = queryEntitiesOneSpreadSection(
                     dimension,
@@ -263,7 +265,12 @@ export function getCachedMobs(dimension, center = null, maxDistance = MOB_CACHE_
         const playerPositions = cachedPlayerPositions?.get(norm) || [];
         const cacheCenter = center || averagePosition(playerPositions);
 
-        if (isSpreadThrottleActive() && playerPositions.length > 0) {
+        if (shouldDeferVillageBurst("mobCache")) {
+            if (cached?.mobs?.length) {
+                return filterMobsByCenter(cached.mobs.filter((m) => isEntityValid(m)), cacheCenter, maxDistance);
+            }
+        }
+        if (isEntityQuerySpreadActive() && playerPositions.length > 0) {
             let entry = cached;
             if (!entry?.building) {
                 const seed = entry?.mobs?.filter((m) => isEntityValid(m)) ?? [];

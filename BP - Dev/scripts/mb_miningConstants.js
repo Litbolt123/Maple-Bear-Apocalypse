@@ -11,6 +11,12 @@ export const MINING_BEAR_TYPES = [
     { id: "mb:mining_mb_day20", tunnelHeight: 2 }
 ];
 
+/** Per-break chance to leave snow on the floor at a mined block (stacks with main.js snow trail). */
+export const MINING_SNOW_ON_BREAK_CHANCE = {
+    "mb:mining_mb": 0.32,
+    "mb:mining_mb_day20": 0.42
+};
+
 /** Shared pathfinding for mining + infected mobs. */
 export const PATHFINDING_ENTITY_TYPES = [
     "mb:mining_mb", "mb:mining_mb_day20",

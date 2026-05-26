@@ -13,9 +13,18 @@ import { registerDustedDirtBlock, unregisterDustedDirtBlock, countNearbyDustedDi
 import { initializePropertyHandler, getPlayerProperty, setPlayerProperty, getWorldProperty, setWorldProperty, getAddonDifficultyState } from "./mb_dynamicPropertyHandler.js";
 import { initializeAdaptivePerformanceWatch, getPerfWallStress01, getPerfMobPressureForSpawn01, getPlayerThriftTier } from "./mb_performanceProfile.js";
 import { getBearSnapshotsForDimensions } from "./mb_bearSnapshot.js";
-import { claimSpreadSlice, isSpreadThrottleActive, spreadPlayersForWork } from "./mb_workSpread.js";
+import {
+    claimSpreadSlice,
+    isSpreadThrottleActive,
+    isVillageEntitySpreadActive,
+    shouldDeferVillageBurst,
+    spreadPlayersForWork,
+    tickPlayerChunkEdgeWatch
+} from "./mb_workSpread.js";
 import { getCachedBlockInfo } from "./mb_blockCache.js";
 import { registerSpawnLoadProbes, initializeSpawnLoadScalerWatch } from "./mb_spawnLoadMetrics.js";
+import { initializeBiomeCheckerHudWatch } from "./mb_biomeCheckerDev.js";
+import { initializeBuffBearOverflowCull } from "./mb_buffCap.js";
 import { getActiveStormCount } from "./mb_snowStorm.js";
 import { isDustStormsEnabled, isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
 import { ACTION_BAR_SLOT, setHudActionBarSegment, clearHudActionBarSegment, pushHudActionBarToast } from "./mb_actionBarHud.js";
@@ -26,7 +35,7 @@ import "./mb_miningAI.js";
 import { collectedBlocks } from "./mb_miningAI.js";
 import { setInfectedAngerTarget, angerNearbyInfectedAtPlayer } from "./mb_infectedAI.js";
 import { setFlyingBearAngerTarget, angerNearbyFlyingBearsAtPlayer } from "./mb_flyingAI.js";
-import "./mb_torpedoAI.js";
+import { isTorpedoDud, isTorpedoBearTypeId, markTorpedoAsDud } from "./mb_torpedoAI.js";
 import "./mb_buffAI.js";
 import "./mb_dimensionAdaptation.js";
 import "./mb_biomeAmbience.js";
@@ -35,6 +44,7 @@ import { isPlayerInStorm, getStormExposureRates, summonStorm, setStormOverride, 
 import { tickInfectionCoughAndBreath, playPowderHiccup, playCureSighRelief, resetInfectionAudioCooldowns } from "./mb_infectionAudio.js";
 import { hasInfectionExposureLineOfSight } from "./mb_infectionExposureLos.js";
 import { SNOW_REPLACEABLE_BLOCKS, SNOW_TWO_BLOCK_PLANTS } from "./mb_blockLists.js";
+import { tryPlaceSnowLayerUnder } from "./mb_snowPlacement.js";
 import { CHAT_ACHIEVEMENT, CHAT_DANGER, CHAT_DANGER_STRONG, CHAT_SUCCESS, CHAT_WARNING, CHAT_INFO, CHAT_DEV, CHAT_HIGHLIGHT, CHAT_SPECIAL } from "./mb_chatColors.js";
 import {
     MAPLE_BEAR_ID,
@@ -177,6 +187,8 @@ const STORM_EXPOSURE_DECAY_SECONDS_PER_TICK = 1; // Every check when not in stor
 
 // Biome check optimization
 const BIOME_CHECK_COOLDOWN = 200; // 10 seconds in ticks (200 ticks = 10 seconds)
+/** Inventory codex discovery — not time-critical; runs less often than infection timers. */
+const INV_DISCOVERY_INTERVAL_TICKS = 120;
 const biomeCheckCache = new Map(); // playerId -> lastCheckTick
 /** Per-chunk cooldown for expensive findClosestBiome fallback (villages / new chunks). */
 const BIOME_CLOSEST_FALLBACK_COOLDOWN = 1200;
@@ -192,7 +204,7 @@ function getBiomeIdAt(dimension, location) {
         if (b && typeof b === "object" && b.id) return b.id;
         if (typeof b === "string") return b;
     } catch { }
-    if (isSpreadThrottleActive()) {
+    if (isSpreadThrottleActive() || isVillageEntitySpreadActive() || shouldDeferVillageBurst("biomeFallback")) {
         return null;
     }
     try {
@@ -3432,11 +3444,25 @@ world.afterEvents.entityDie.subscribe((event) => {
         }
     }
     
-    // Torpedo bear death: explode on death and place snow layers
+    // Torpedo bear death: explode on death and place snow layers (duds skip the blast)
     if (entity.typeId === "mb:torpedo_mb" || entity.typeId === "mb:torpedo_mb_day20") {
         try {
             const loc = entity.location;
             const dimension = entity.dimension;
+
+            if (isTorpedoDud(entity)) {
+                if (isDebugEnabled("main", "death")) {
+                    console.warn(`[TORPEDO DEATH] Dud torpedo — no explosion at (${loc.x.toFixed(1)}, ${loc.y.toFixed(1)}, ${loc.z.toFixed(1)})`);
+                }
+                try {
+                    const x = Math.floor(loc.x);
+                    const y = Math.floor(loc.y);
+                    const z = Math.floor(loc.z);
+                    dimension.runCommand(`playsound torpedo_mb.death @a ${x} ${y} ${z} 0.5 1`);
+                } catch {
+                    /* ignore */
+                }
+            } else {
             
             // Only log death events if debug is enabled
             if (isDebugEnabled("main", "death")) {
@@ -3651,6 +3677,7 @@ world.afterEvents.entityDie.subscribe((event) => {
                         }
                     }
                 }
+            }
             }
         } catch (error) {
             // Ignore explosion errors
@@ -4297,6 +4324,159 @@ function tickSimulatedPlayerInfection(id, state) {
     } catch { /* ignore */ }
 }
 
+/** True while any item-discovery codex flag is still unset. */
+function playerNeedsInventoryDiscoveryScan(codex) {
+    if (!codex?.items) return true;
+    const it = codex.items;
+    if (!it.snowFound) return true;
+    if (!it.brewingStandSeen) return true;
+    if (!it.goldSeen) return true;
+    if (!it.goldNuggetSeen) return true;
+    if (!codex.biomes?.dustedDirtSeen) return true;
+    if (!it.basicJournalSeen) return true;
+    if (!it.snowBookCrafted) return true;
+    return false;
+}
+
+/** One inventory pass per player (replaces multiple full-slot loops). */
+function tickInventoryCodexDiscovery() {
+    if (shouldDeferVillageBurst("invDiscovery")) return;
+    const allPlayers = world.getAllPlayers();
+    const thriftTier = getPlayerThriftTier();
+    const invLoopTick = Math.floor(system.currentTick / INV_DISCOVERY_INTERVAL_TICKS);
+    let targets = (thriftTier >= 2 && allPlayers.length > 1)
+        ? [allPlayers[invLoopTick % allPlayers.length]]
+        : allPlayers;
+    if (isVillageEntitySpreadActive()) {
+        targets = spreadPlayersForWork(allPlayers, "invDiscovery");
+    }
+    for (const p of targets) {
+        if (!p) continue;
+        if (shouldDeferVillageBurst("invDiscovery")) continue;
+        try {
+            const inv = p.getComponent("inventory")?.container;
+            if (!inv) continue;
+            const codex = getCodex(p);
+            if (!playerNeedsInventoryDiscoveryScan(codex)) continue;
+
+            const introSeen = normalizeBoolean(getPlayerProperty(p, PLAYER_INTRO_SEEN_PROPERTY));
+            const shouldSuppressDiscovery = !introSeen || introInProgress.has(p.id);
+
+            let foundSnow = codex?.items?.snowFound;
+            let foundBrew = codex?.items?.brewingStandSeen;
+            let foundGold = codex?.items?.goldSeen;
+            let foundNugget = codex?.items?.goldNuggetSeen;
+            let foundDusted = codex?.biomes?.dustedDirtSeen;
+            let foundJournal = codex?.items?.basicJournalSeen;
+            let foundBook = codex?.items?.snowBookCrafted;
+
+            for (let i = 0; i < inv.size; i++) {
+                const it = inv.getItem(i);
+                if (!it?.typeId) continue;
+                const tid = it.typeId;
+                if (!foundSnow && tid === SNOW_ITEM_ID) {
+                    markCodex(p, "items.snowFound");
+                    if (!shouldSuppressDiscovery) sendDiscoveryMessage(p, codex, "important", "snow", "items.snowFound");
+                    checkKnowledgeProgression(p);
+                    foundSnow = true;
+                } else if (!foundBrew && tid === "minecraft:brewing_stand") {
+                    markCodex(p, "items.brewingStandSeen");
+                    if (!shouldSuppressDiscovery && sendDiscoveryMessage(p, codex, "interesting", "brewing_stand", "items.brewingStandSeen")) {
+                        p.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * getPlayerSoundVolume(p) });
+                    }
+                    foundBrew = true;
+                } else if (!foundGold && tid === "minecraft:gold_ingot") {
+                    markCodex(p, "items.goldSeen");
+                    if (!shouldSuppressDiscovery && sendDiscoveryMessage(p, codex, "interesting", "gold", "items.goldSeen")) {
+                        p.playSound("mob.villager.idle", { pitch: 1.1, volume: 0.5 * getPlayerSoundVolume(p) });
+                    }
+                    checkKnowledgeProgression(p);
+                    foundGold = true;
+                } else if (!foundNugget && tid === "minecraft:gold_nugget") {
+                    markCodex(p, "items.goldNuggetSeen");
+                    if (!shouldSuppressDiscovery && sendDiscoveryMessage(p, codex, "interesting", "gold_nugget", "items.goldNuggetSeen")) {
+                        p.playSound("mob.villager.idle", { pitch: 1.1, volume: 0.5 * getPlayerSoundVolume(p) });
+                    }
+                    checkKnowledgeProgression(p);
+                    foundNugget = true;
+                } else if (!foundDusted && tid === "mb:dusted_dirt") {
+                    markCodex(p, "biomes.dustedDirtSeen");
+                    if (!shouldSuppressDiscovery && sendDiscoveryMessage(p, codex, "interesting", "", "biomes.dustedDirtSeen")) {
+                        p.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * getPlayerSoundVolume(p) });
+                    }
+                    foundDusted = true;
+                } else if (!foundJournal && tid === "mb:basic_journal") {
+                    markCodex(p, "items.basicJournalSeen");
+                    foundJournal = true;
+                } else if (!foundBook && tid === "mb:snow_book") {
+                    markCodex(p, "items.snowBookCrafted");
+                    if (!codex.items?.bookCraftMessageShown) {
+                        markCodex(p, "items.bookCraftMessageShown");
+                        codex.items.bookCraftMessageShown = true;
+                        p.sendMessage(CHAT_INFO + "You feel your knowledge pulled into the book...");
+                        const vol = getPlayerSoundVolume(p);
+                        p.playSound("mob.enderman.portal", { pitch: 0.8, volume: 1.0 * vol });
+                        p.playSound("mob.enderman.teleport", { pitch: 1.2, volume: 0.8 * vol });
+                        p.playSound("mob.wither.spawn", { pitch: 0.6, volume: 0.6 * vol });
+                        p.playSound("random.orb", { pitch: 1.5, volume: 1.0 * vol });
+                        applyEffect(p, "minecraft:blindness", 60, { amplifier: 0 });
+                    }
+                    foundBook = true;
+                }
+                if (foundSnow && foundBrew && foundGold && foundNugget && foundDusted && foundJournal && foundBook) {
+                    break;
+                }
+            }
+        } catch { /* ignore */ }
+    }
+}
+
+function tickBiomeDiscovery() {
+    const currentTick = system.currentTick || 0;
+    const allPlayers = world.getAllPlayers();
+    const thriftTier = getPlayerThriftTier();
+    const biomeLoopTick = Math.floor(currentTick / 40);
+    let biomePlayers = (thriftTier >= 2 && allPlayers.length > 1)
+        ? [allPlayers[biomeLoopTick % allPlayers.length]]
+        : allPlayers;
+    if (isVillageEntitySpreadActive()) {
+        biomePlayers = spreadPlayersForWork(allPlayers, "biomeDiscovery");
+    }
+    for (const p of biomePlayers) {
+        if (!p) continue;
+        if (shouldDeferVillageBurst("biomeDiscovery")) continue;
+        try {
+            const lastCheck = biomeCheckCache.get(p.id) || 0;
+            const biomeCooldown = isVillageEntitySpreadActive() ? BIOME_CHECK_COOLDOWN * 3 : BIOME_CHECK_COOLDOWN;
+            if (currentTick - lastCheck < biomeCooldown) continue;
+
+            const biomeId = getBiomeIdAt(p.dimension, p.location);
+            let onDusted = false;
+            try {
+                const x = Math.floor(p.location.x);
+                const z = Math.floor(p.location.z);
+                const belowY = Math.floor(p.location.y - 1);
+                const info = getCachedBlockInfo(p.dimension, { x, y: belowY, z }, 12);
+                onDusted = info.typeId === "mb:dusted_dirt";
+            } catch { /* ignore */ }
+
+            if ((biomeId && (biomeId === "mb:infected_biome" || biomeId.includes("infected_biome"))) || onDusted) {
+                const codex = getCodex(p);
+                if (!codex.biomes.infectedBiomeSeen) {
+                    codex.biomes.infectedBiomeSeen = true;
+                    markCodex(p, "biomes.infectedBiomeSeen");
+                    p.sendMessage(CHAT_INFO + "You notice the ground beneath you feels... different. The air is heavy with an unsettling presence.");
+                    p.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * getPlayerSoundVolume(p) });
+                    saveCodex(p, codex);
+                }
+                const infectionLevel = onDusted ? 8 : 5;
+                recordBiomeVisit(p, "mb:infected_biome", infectionLevel);
+            }
+            biomeCheckCache.set(p.id, currentTick);
+        } catch { /* ignore */ }
+    }
+}
+
 // --- Infection Timers and Effects ---
 system.runInterval(() => {
     // Unified infection system
@@ -4609,221 +4789,23 @@ system.runInterval(() => {
             }
         }
     }
+}, 40);
 
-    // One-shot inventory scan for item discoveries
-    // NOTE: Discovery messages are suppressed during intro sequence to avoid interrupting the spectacle
-    // Phase 3: Round-robin sharding. On 3+/5+ players the 40-tick inventory scan would do
-    // ~36 item checks x many codex flags x each player. Since the inventory scan is purely
-    // "seen/unseen" codex marking (no time-critical state), we shard players across
-    // invocations by tick index. Players still get scanned periodically (every ~40 ticks
-    // x playerCount), which is below any noticeable discovery delay threshold.
+system.runInterval(() => {
     try {
-        const _infectionAllPlayers = world.getAllPlayers();
-        const _infectionThriftTier = getPlayerThriftTier();
-        const _invLoopTick = Math.floor(system.currentTick / 40);
-        const _invPlayers = (_infectionThriftTier >= 2 && _infectionAllPlayers.length > 1)
-            ? [_infectionAllPlayers[_invLoopTick % _infectionAllPlayers.length]]
-            : _infectionAllPlayers;
-        for (const p of _invPlayers) {
-            if (!p) continue;
-            const inv = p.getComponent("inventory")?.container;
-            if (!inv) continue;
-            const codex = getCodex(p);
-            
-            // Skip discovery messages if intro is in progress or not seen yet (per-player)
-            const introSeen = normalizeBoolean(getPlayerProperty(p, PLAYER_INTRO_SEEN_PROPERTY));
-            const introActive = introInProgress.has(p.id);
-            const shouldSuppressDiscovery = !introSeen || introActive;
-            
-            // Check for snow (always discover, but suppress message during intro)
-            if (!codex?.items?.snowFound) {
-                for (let i = 0; i < inv.size; i++) {
-                    const it = inv.getItem(i);
-                    if (it && it.typeId === SNOW_ITEM_ID) { 
-                        try { 
-                            markCodex(p, "items.snowFound"); 
-                            if (!shouldSuppressDiscovery) {
-                                sendDiscoveryMessage(p, codex, "important", "snow", "items.snowFound");
-                            }
-                            checkKnowledgeProgression(p);
-                        } catch { }
-                        break; 
-                    }
-                }
-            }
-            
-            // Check for brewing stand (suppress message during intro)
-            if (!codex?.items?.brewingStandSeen) {
-                for (let i = 0; i < inv.size; i++) {
-                    const it = inv.getItem(i);
-                    if (it && it.typeId === "minecraft:brewing_stand") { 
-                        try { 
-                            markCodex(p, "items.brewingStandSeen"); 
-                            if (!shouldSuppressDiscovery && sendDiscoveryMessage(p, codex, "interesting", "brewing_stand", "items.brewingStandSeen")) {
-                                const volumeMultiplier = getPlayerSoundVolume(p);
-                                p.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * volumeMultiplier });
-                            }
-                        } catch { }
-                        break; 
-                    }
-                }
-            }
-            
-            // Check for gold ingot (suppress message during intro)
-            if (!codex?.items?.goldSeen) {
-                for (let i = 0; i < inv.size; i++) {
-                    const it = inv.getItem(i);
-                    if (it && it.typeId === "minecraft:gold_ingot") { 
-                        try { 
-                            markCodex(p, "items.goldSeen");
-                            if (!shouldSuppressDiscovery && sendDiscoveryMessage(p, codex, "interesting", "gold", "items.goldSeen")) {
-                                const volumeMultiplier = getPlayerSoundVolume(p);
-                                p.playSound("mob.villager.idle", { pitch: 1.1, volume: 0.5 * volumeMultiplier });
-                            }
-                            checkKnowledgeProgression(p);
-                        } catch { }
-                        break; 
-                    }
-                }
-            }
-            
-            // Check for gold nugget (suppress message during intro)
-            if (!codex?.items?.goldNuggetSeen) {
-                for (let i = 0; i < inv.size; i++) {
-                    const it = inv.getItem(i);
-                    if (it && it.typeId === "minecraft:gold_nugget") { 
-                        try { 
-                            markCodex(p, "items.goldNuggetSeen");
-                            if (!shouldSuppressDiscovery && sendDiscoveryMessage(p, codex, "interesting", "gold_nugget", "items.goldNuggetSeen")) {
-                                const volumeMultiplier = getPlayerSoundVolume(p);
-                                p.playSound("mob.villager.idle", { pitch: 1.1, volume: 0.5 * volumeMultiplier });
-                            }
-                            checkKnowledgeProgression(p);
-                        } catch { }
-                        break; 
-                    }
-                }
-            }
-            
-            // Check for dusted dirt (suppress message during intro)
-            if (!codex?.items?.dustedDirtSeen) {
-                for (let i = 0; i < inv.size; i++) {
-                    const it = inv.getItem(i);
-                    if (it && it.typeId === "mb:dusted_dirt") { 
-                        try { 
-                            markCodex(p, "biomes.dustedDirtSeen"); // Only mark biomes version, removed from items 
-                            if (!shouldSuppressDiscovery && sendDiscoveryMessage(p, codex, "interesting", "", "biomes.dustedDirtSeen")) {
-                                const volumeMultiplier = getPlayerSoundVolume(p);
-                                p.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * volumeMultiplier });
-                            }
-                        } catch { }
-                        break; 
-                    }
-                }
-            }
-            
-            // Check for basic journal (NEVER send discovery message - it's given as part of intro)
-            if (!codex?.items?.basicJournalSeen) {
-                for (let i = 0; i < inv.size; i++) {
-                    const it = inv.getItem(i);
-                    if (it && it.typeId === "mb:basic_journal") { 
-                        try { 
-                            markCodex(p, "items.basicJournalSeen"); 
-                            // NEVER send discovery message for basic journal - it's part of intro sequence
-                            // If player finds it later (not from intro), they already have it so no message needed
-                        } catch { }
-                        break; 
-                    }
-                }
-            }
-            
-            // Check for powdery journal
-            if (!codex?.items?.snowBookCrafted) {
-                for (let i = 0; i < inv.size; i++) {
-                    const it = inv.getItem(i);
-                    if (it && it.typeId === "mb:snow_book") { 
-                        try { 
-                            markCodex(p, "items.snowBookCrafted"); 
-                            // Only send message if not already sent (prevent duplicates)
-                            if (!codex.items?.bookCraftMessageShown) {
-                                markCodex(p, "items.bookCraftMessageShown");
-                                codex.items.bookCraftMessageShown = true;
-                            p.sendMessage(CHAT_INFO + "You feel your knowledge pulled into the book...");
-                            
-                            // Dramatic sound effects
-                            const volumeMultiplier = getPlayerSoundVolume(p);
-                            p.playSound("mob.enderman.portal", { pitch: 0.8, volume: 1.0 * volumeMultiplier });
-                            p.playSound("mob.enderman.teleport", { pitch: 1.2, volume: 0.8 * volumeMultiplier });
-                            p.playSound("mob.wither.spawn", { pitch: 0.6, volume: 0.6 * volumeMultiplier });
-                            p.playSound("random.orb", { pitch: 1.5, volume: 1.0 * volumeMultiplier });
-                            
-                            // Temporary blindness effect
-                                applyEffect(p, "minecraft:blindness", 60, { amplifier: 0 });
-                            }
-                        } catch { }
-                        break; 
-                    }
-                }
-            }
-        }
-    } catch { }
-    
-    // Biome discovery system - check if player is in infected biome (optimized with cooldown)
-    // Phase 3: Round-robin with inventory scan — same reasoning, biome checks already have
-    // BIOME_CHECK_COOLDOWN so sharding just staggers the expensive `getBiomeIdAt` + getBlock
-    // reads across tick windows. Single-player behavior unchanged.
-            try {
-        const currentTick = system.currentTick || Date.now();
-        const _biomeAllPlayers = world.getAllPlayers();
-        const _biomeThriftTier = getPlayerThriftTier();
-        const _biomeLoopTick = Math.floor(currentTick / 40);
-        let _biomePlayers = (_biomeThriftTier >= 2 && _biomeAllPlayers.length > 1)
-            ? [_biomeAllPlayers[_biomeLoopTick % _biomeAllPlayers.length]]
-            : _biomeAllPlayers;
-        if (isSpreadThrottleActive()) {
-            _biomePlayers = spreadPlayersForWork(_biomeAllPlayers, "biomeDiscovery");
-        }
+        tickPlayerChunkEdgeWatch();
+    } catch { /* ignore */ }
+}, 20);
 
-        for (const p of _biomePlayers) {
-            if (!p) continue;
-            try {
-                // Check cooldown to avoid expensive biome checks
-                const lastCheck = biomeCheckCache.get(p.id) || 0;
-                const biomeCooldown = isSpreadThrottleActive() ? BIOME_CHECK_COOLDOWN * 3 : BIOME_CHECK_COOLDOWN;
-                if (currentTick - lastCheck < biomeCooldown) {
-                    continue; // Skip this player, cooldown not expired
-                }
+system.runInterval(() => {
+    if (!claimSpreadSlice("invDiscovery", INV_DISCOVERY_INTERVAL_TICKS)) return;
+    tickInventoryCodexDiscovery();
+}, 20);
 
-                const biomeId = getBiomeIdAt(p.dimension, p.location);
-                // Extra fallback: check block underfoot for dusted dirt as a proxy (biome visuals may lag)
-                let onDusted = false;
-                try {
-                    const under = p.dimension.getBlock({ x: Math.floor(p.location.x), y: Math.floor(p.location.y - 1), z: Math.floor(p.location.z) });
-                    onDusted = !!under && under.typeId === "mb:dusted_dirt";
-                } catch { }
-
-                if ((biomeId && (biomeId === "mb:infected_biome" || biomeId.includes("infected_biome"))) || onDusted) {
-                    const codex = getCodex(p);
-                    if (!codex.biomes.infectedBiomeSeen) {
-                        codex.biomes.infectedBiomeSeen = true;
-                        markCodex(p, "biomes.infectedBiomeSeen");
-                        p.sendMessage(CHAT_INFO + "You notice the ground beneath you feels... different. The air is heavy with an unsettling presence.");
-                        const volumeMultiplier = getPlayerSoundVolume(p);
-                        p.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * volumeMultiplier });
-                        saveCodex(p, codex);
-                    }
-
-                    // Record biome visit with infection level
-                    const infectionLevel = onDusted ? 8 : 5; // Higher infection level if on dusted dirt
-                    recordBiomeVisit(p, "mb:infected_biome", infectionLevel);
-                }
-
-                // Update cooldown cache
-                biomeCheckCache.set(p.id, currentTick);
-            } catch { }
-        }
-    } catch { }
-}, 40); // Changed from 20 to 40 ticks for better performance
+system.runInterval(() => {
+    if (!claimSpreadSlice("biomeDiscovery", 40)) return;
+    tickBiomeDiscovery();
+}, 20);
 
 system.runInterval(() => {
     try {
@@ -5513,95 +5495,9 @@ system.runInterval(() => {
 // --- Maple Bear Snow Trail and Item Drops ---
 // Leaves occasional snow layers under bears and drops snow items, with per-type frequency and throttling
 const lastSnowTrailTickByEntity = new Map();
-const TRAIL_COOLDOWN_TICKS = 40; // 2s between placements per entity
+const TRAIL_COOLDOWN_TICKS = 40; // 2s between placements per entity (most bears)
+const MINING_TRAIL_COOLDOWN_TICKS = 15; // 0.75s — mining bears spread snow more while moving
 // Periodic snow drops removed - using death drops via loot tables only
-
-function tryPlaceSnowLayerUnder(entity) {
-    try {
-        const blockLoc = {
-            x: Math.floor(entity.location.x),
-            y: Math.floor(entity.location.y - 0.5),
-            z: Math.floor(entity.location.z)
-        };
-        const aboveLoc = { x: blockLoc.x, y: blockLoc.y + 1, z: blockLoc.z };
-        const dim = entity.dimension;
-        const below = dim.getBlock(blockLoc);
-        const above = dim.getBlock(aboveLoc);
-        if (!below || !above) return;
-        
-        // Check if there are nearby blocks (don't place in empty air)
-        let hasNearbyBlocks = false;
-        for (let dx = -1; dx <= 1; dx++) {
-            for (let dz = -1; dz <= 1; dz++) {
-                if (dx === 0 && dz === 0) continue;
-                try {
-                    const nearbyBlock = dim.getBlock({ x: blockLoc.x + dx, y: blockLoc.y, z: blockLoc.z + dz });
-                    if (nearbyBlock && !nearbyBlock.isAir && !nearbyBlock.isLiquid) {
-                        hasNearbyBlocks = true;
-                        break;
-                    }
-                } catch { }
-            }
-            if (hasNearbyBlocks) break;
-        }
-        
-        // Only place if there are nearby blocks
-        if (!hasNearbyBlocks) return;
-        
-        // Avoid placing inside fluids or on air
-        if (!below || below.isLiquid || below.isAir || below.isAir === undefined) return;
-        
-        const belowType = below.typeId;
-        // Never place snow on top of mb:snow_layer - skip
-        if (belowType === "mb:snow_layer") return;
-        // Replace vanilla snow layer with custom snow layer
-        if (belowType === "minecraft:snow_layer") {
-            try { below.setType("mb:snow_layer"); } catch { below.setType(SNOW_LAYER_BLOCK); }
-            return;
-        }
-        // If the block below is any ground foliage (grass, flowers, etc.), replace it with snow
-        if (SNOW_REPLACEABLE_BLOCKS.has(belowType)) {
-            const aboveType = above.typeId;
-            if (aboveType === "mb:snow_layer" || aboveType === "minecraft:snow_layer") return;
-            if (SNOW_TWO_BLOCK_PLANTS.has(belowType) && above && SNOW_TWO_BLOCK_PLANTS.has(aboveType)) {
-                try { below.setType("mb:snow_layer"); } catch { below.setType(SNOW_LAYER_BLOCK); }
-                try { above.setType("minecraft:air"); } catch { }
-            } else {
-                try { below.setType("mb:snow_layer"); } catch { below.setType(SNOW_LAYER_BLOCK); }
-            }
-        } else {
-            // Place snow in the air above, or replace foliage (grass, tall_grass, etc.) above
-            if (!above) return;
-            const aboveType = above.typeId;
-            if (aboveType === "mb:snow_layer" || aboveType === "minecraft:snow_layer") return;
-            // Replace foliage above so snow doesn't stack on top of grass
-            if (SNOW_REPLACEABLE_BLOCKS.has(aboveType)) {
-                if (SNOW_TWO_BLOCK_PLANTS.has(aboveType)) {
-                    const blockAboveAbove = dim.getBlock({ x: blockLoc.x, y: blockLoc.y + 2, z: blockLoc.z });
-                    if (blockAboveAbove && SNOW_TWO_BLOCK_PLANTS.has(blockAboveAbove.typeId)) {
-                        try { above.setType("mb:snow_layer"); } catch { above.setType(SNOW_LAYER_BLOCK); }
-                        try { blockAboveAbove.setType("minecraft:air"); } catch { }
-                    } else if (SNOW_TWO_BLOCK_PLANTS.has(belowType)) {
-                        try { below.setType("mb:snow_layer"); } catch { below.setType(SNOW_LAYER_BLOCK); }
-                        try { above.setType("minecraft:air"); } catch { }
-                    } else {
-                        try { above.setType("mb:snow_layer"); } catch { above.setType(SNOW_LAYER_BLOCK); }
-                    }
-                } else {
-                    try { above.setType("mb:snow_layer"); } catch { above.setType(SNOW_LAYER_BLOCK); }
-                }
-            } else if (above.isAir !== undefined && above.isAir && !below.isAir && !below.isLiquid) {
-                try {
-                    above.setType("mb:snow_layer");
-                } catch {
-                    above.setType(SNOW_LAYER_BLOCK);
-                }
-            }
-        }
-    } catch { }
-}
-
-// tryDropSnowItem removed - using death drops via loot tables only
 
 const SNOW_TRAIL_DIMENSIONS = ["overworld", "nether", "the_end"];
 // Bear typeIds that leave a snow trail (flying + torpedo bears have their own systems).
@@ -5647,16 +5543,19 @@ system.runInterval(() => {
             if (t === BUFF_BEAR_DAY13_ID) trailChance = 0.2;
             if (t === BUFF_BEAR_DAY20_ID) trailChance = 0.25;
             
-            // Mining bears (medium-large)
-            if (t === MINING_BEAR_ID) trailChance = 0.1;
-            if (t === MINING_BEAR_DAY20_ID) trailChance = 0.15;
+            // Mining bears — heavier trail than infected (they spread powder while digging)
+            if (t === MINING_BEAR_ID) trailChance = 0.28;
+            if (t === MINING_BEAR_DAY20_ID) trailChance = 0.38;
             
             // Infected animals (same as infected bears)
             if (t === INFECTED_PIG_ID) trailChance = 0.06;
             if (t === INFECTED_COW_ID) trailChance = 0.08;
 
+            const trailCooldown = (t === MINING_BEAR_ID || t === MINING_BEAR_DAY20_ID)
+                ? MINING_TRAIL_COOLDOWN_TICKS
+                : TRAIL_COOLDOWN_TICKS;
             const lastTrail = lastSnowTrailTickByEntity.get(entity.id) ?? 0;
-            if (nowTick - lastTrail >= TRAIL_COOLDOWN_TICKS && Math.random() < trailChance) {
+            if (nowTick - lastTrail >= trailCooldown && Math.random() < trailChance) {
                 tryPlaceSnowLayerUnder(entity);
                 lastSnowTrailTickByEntity.set(entity.id, nowTick);
             }
@@ -7802,32 +7701,39 @@ function executeMbCommand(sender, subcommand, args = []) {
             return;
         }
         case "force_spawn": {
-            const entityId = args[0] || "mb:mb_day20";
+            let spawnArgs = args;
+            const forceTorpedoDud = spawnArgs[spawnArgs.length - 1] === "dud";
+            if (forceTorpedoDud) spawnArgs = spawnArgs.slice(0, -1);
+            const entityId = spawnArgs[0] || "mb:mb_day20";
             let target = sender;
             let distanceArg = "2";
             let quantity = 1;
             // Menu sends: [entityId, distance, quantity] when "Near me", or [entityId, targetName, distance, quantity] when another player
-            if (args.length === 3) {
-                distanceArg = args[1];
-                quantity = Math.min(10, Math.max(1, parseInt(args[2], 10) || 1));
-            } else if (args.length >= 4) {
+            if (spawnArgs.length === 3) {
+                distanceArg = spawnArgs[1];
+                quantity = Math.min(10, Math.max(1, parseInt(spawnArgs[2], 10) || 1));
+            } else if (spawnArgs.length >= 4) {
                 if (isReleaseAdminBuild()) {
                     sender.sendMessage(CHAT_WARNING + "Release host tools: spawn near yourself only (use the journal menu).");
                     return;
                 }
-                target = args[1] ? world.getAllPlayers().find(p => p.name === args[1]) : sender;
-                distanceArg = args[2];
-                quantity = Math.min(10, Math.max(1, parseInt(args[3], 10) || 1));
-            } else if (args.length === 2) {
-                const second = String(args[1]);
+                target = spawnArgs[1] ? world.getAllPlayers().find(p => p.name === spawnArgs[1]) : sender;
+                distanceArg = spawnArgs[2];
+                quantity = Math.min(10, Math.max(1, parseInt(spawnArgs[3], 10) || 1));
+            } else if (spawnArgs.length === 2) {
+                const second = String(spawnArgs[1]);
                 const asNum = parseInt(second, 10);
                 if (second.toLowerCase() === "random" || !Number.isNaN(asNum)) {
                     distanceArg = second;
                 } else {
-                    target = world.getAllPlayers().find(p => p.name === args[1]) || sender;
+                    target = world.getAllPlayers().find(p => p.name === spawnArgs[1]) || sender;
                 }
             }
-            if (!target) { sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `No player named ${args[1]} found.`); return; }
+            if (!target) { sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `No player named ${spawnArgs[1]} found.`); return; }
+            if (forceTorpedoDud && !isTorpedoBearTypeId(entityId)) {
+                sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_WARNING + "Dud flag only applies to torpedo bears.");
+                return;
+            }
             if (isReleaseAdminBuild()) {
                 if (!RELEASE_ADMIN_FORCE_SPAWN_IDS.has(entityId)) {
                     sender.sendMessage(CHAT_WARNING + "That bear type is not allowed on the release pack. Use Host tools in the journal.");
@@ -7859,10 +7765,12 @@ function executeMbCommand(sender, subcommand, args = []) {
                     const dx = Math.cos(angle) * dist;
                     const dz = Math.sin(angle) * dist;
                     const offset = { x: loc.x + dx, y: loc.y, z: loc.z + dz };
-                    target.dimension.spawnEntity(entityId, offset);
+                    const spawnedEntity = target.dimension.spawnEntity(entityId, offset);
+                    if (forceTorpedoDud && spawnedEntity) markTorpedoAsDud(spawnedEntity);
                     spawned++;
                 }
-                sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `Spawned ${CHAT_HIGHLIGHT}${spawned}${CHAT_INFO} ${entityId} ${distance} block${distance !== 1 ? "s" : ""} from ${target.name}.`);
+                const dudLabel = forceTorpedoDud ? " (dud)" : "";
+                sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `Spawned ${CHAT_HIGHLIGHT}${spawned}${CHAT_INFO} ${entityId}${dudLabel} ${distance} block${distance !== 1 ? "s" : ""} from ${target.name}.`);
             } catch (err) {
                 sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Spawn failed: " + (err?.message || err));
             }
@@ -8290,6 +8198,11 @@ system.runTimeout(() => {
         initializeSpawnLoadScalerWatch();
     } catch { /* ignore */ }
 }, 100);
+system.runTimeout(() => {
+    try {
+        initializeBiomeCheckerHudWatch();
+    } catch { /* ignore */ }
+}, 100);
 initializeInfectionDirectorWatch();
 registerSpawnLoadProbes({
     storm: getActiveStormCount,
@@ -8297,6 +8210,7 @@ registerSpawnLoadProbes({
     mobPressure: getPerfMobPressureForSpawn01
 });
 initializeBearPopulationCull();
+initializeBuffBearOverflowCull();
 
 // --- Initialize Item Registry ---
 // Initialize item registry for modular item handlers

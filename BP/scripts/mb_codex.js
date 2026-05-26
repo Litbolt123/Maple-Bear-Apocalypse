@@ -71,6 +71,12 @@ import {
     BEAR_CULL_TYPE_GROUPS
 } from "./mb_bearCullDev.js";
 import { showJournalWhatsNew } from "./mb_journalWhatsNew.js";
+import {
+    openBiomeCheckerHub,
+    isBiomeCheckerHudPersonalEnabled,
+    setBiomeCheckerHudPersonalEnabled,
+    isBiomeCheckerHudEnabledForPlayer
+} from "./mb_biomeCheckerDev.js";
 
 const SPAWN_DIFFICULTY_PROPERTY = "mb_spawnDifficulty";
 
@@ -1844,10 +1850,9 @@ export function showCodexBook(player, context) {
         if (hasJournalPowerToolsAccess(player) && (INCLUDE_ADMIN_TOOLS || INCLUDE_FULL_DEVELOPER_TOOLS)) {
             sanitizePinnedDevItems(player);
             const pinned = getPinnedDevItems(player);
-            const LEGACY_PIN_IDS = { spawn_difficulty: "spawn_controller", spawn_type_toggles: "spawn_controller", force_spawn: "spawn_controller" };
             const eligiblePins = new Set(getPinEligibleDevItems().map((i) => i.id));
             for (const itemId of pinned) {
-                const resolvedId = LEGACY_PIN_IDS[itemId] || itemId;
+                const resolvedId = migratePinnedDevItemId(itemId);
                 if (!eligiblePins.has(resolvedId)) continue;
                 const item = findPinnableItemById(resolvedId);
                 if (item) {
@@ -4551,40 +4556,273 @@ export function showCodexBook(player, context) {
     }
 
     function findPinnableItemById(id) {
-        const j = getJournalMainPinnableItems().find((i) => i.id === id);
+        const resolved = migratePinnedDevItemId(id);
+        const j = getJournalMainPinnableItems().find((i) => i.id === resolved);
         if (j) return j;
-        return PINNABLE_DEV_ITEMS.find((i) => i.id === id);
+        return PINNABLE_DEV_ITEMS.find((i) => i.id === resolved);
+    }
+
+    /** Remap old pin ids saved on worlds before menu reshuffles. */
+    function migratePinnedDevItemId(id) {
+        if (id === "spawn_difficulty" || id === "spawn_type_toggles") return "spawn_controller";
+        if (id === "storm_control" || id === "summon_storm" || id === "storm_state" || id === "storm_override") {
+            return "storm";
+        }
+        return id;
+    }
+
+    function pinDevShortcutFromMain(actionFn) {
+        journalPowerToolsBack = () => openMain();
+        actionFn();
+    }
+
+    function pinForceSpawnFromMain() {
+        forceSpawnNav.rootBack = () => openMain();
+        forceSpawnNav.afterComplete = () => openMain();
+        openForceSpawnMenu();
     }
 
     const PINNABLE_DEV_ITEMS = [
-        { id: "script_toggles", label: "Script Toggles", action: () => openScriptTogglesMenu() },
-        { id: "spawn_controller", label: "Spawn Controller", action: () => openSpawnControllerMenu() },
-        { id: "spawn_load", label: "Spawn load & efficiency", action: () => openSpawnLoadEfficiencyMenu(() => openMain()) },
-        { id: "hud_action_bar", label: "HUD & action bar", action: () => openDeveloperToolsHudMenu(() => openMain()) },
-        { id: "camp_mobility", label: "Camp / mobility debug", action: () => openMobilityCampDevMenu() },
-        { id: "storm", label: "Storm hub", pinInReleaseAdmin: true, action: () => openStormHubMenu() },
-        { id: "set_day", label: "Set Day...", action: () => promptSetDay() },
-        { id: "simulate_day", label: "Simulate Next Day", action: () => { triggerDebugCommand("simulate_next_day", [], () => journalPowerToolsBack()); } },
-        { id: "infection", label: "Clear / Set Infection", action: () => openTargetPlayerMenu("Infection", (name) => openInfectionDevMenu(name)) },
-        { id: "immunity", label: "Grant / Remove Immunity", action: () => openTargetPlayerMenu("Immunity", (name) => openImmunityDevMenu(name)) },
-        { id: "kill_bears", label: "Kill Bears %", action: () => openKillBearsMenu() },
-        { id: "clear_bears", label: "Clear Bears", action: () => openClearBearsMenu() },
-        { id: "ai_throttle", label: "AI Throttle & Speed", action: () => openAIThrottleMenu() },
-        { id: "bear_cull_dev", label: "Bear cull tuning (dev)", action: () => openBearCullDevMenu() },
-        { id: "sim_players", label: "Simulated players (dev)", action: () => openSimulatedPlayersMenu() },
-        { id: "debug_menu", label: "Debug Menu", action: () => openDebugMenu() },
-        { id: "fully_unlock", label: "Fully Unlock Codex", action: () => { fullyUnlockCodex(player); player.sendMessage(CHAT_SUCCESS + "Codex fully unlocked."); journalPowerToolsBack(); } },
-        { id: "reset_codex", label: "Reset My Codex", action: () => openTargetPlayerMenu("Reset Codex", (name) => { triggerDebugCommand("reset_codex", name ? [name] : []); journalPowerToolsBack(); }) },
-        { id: "reset_day", label: "Reset World Day to 1", action: () => triggerDebugCommand("reset_day") },
-        { id: "reset_intro", label: "Reset Intro", action: () => triggerDebugCommand("reset_intro", [], () => journalPowerToolsBack()) },
-        { id: "bears_target", label: "Bears Target Player", action: () => openBearsTargetPlayerMenu() },
-        { id: "list_bears", label: "List Nearby Bears", pinInReleaseAdmin: true, action: () => openListBearsMenu() },
-        { id: "inspect_bear", label: "Inspect Nearest Bear", action: () => triggerDebugCommand("inspect_entity", [], () => journalPowerToolsBack()) },
-        { id: "reset_section", label: "Reset Codex Section", action: () => openResetCodexSectionMenu() },
-        { id: "dump_codex", label: "Dump Codex State", action: () => openDumpCodexTargetMenu() },
-        { id: "set_kill_counts", label: "Set Kill Counts", action: () => openTargetPlayerMenu("Set Kill Counts", (name) => openSetKillCountMenu(name)) },
-        { id: "sound_catalog", label: "Play sound (catalog)", action: () => openSoundPreviewDevMenu() },
-        { id: "script_self_test", label: "Script self-test (in-game)", action: () => openScriptSelfTestDevMenu(() => openMain()) }
+        // Performance & spawn (matches Developer Tools → Performance / Spawn controller)
+        {
+            id: "spawn_auto",
+            pinCategory: "performance",
+            label: "Spawn AUTO hub",
+            action: () => pinDevShortcutFromMain(() => openSpawnAutoModesMenu(() => openMain()))
+        },
+        {
+            id: "spawn_controller",
+            pinCategory: "performance",
+            label: "Spawn controller",
+            action: () => pinDevShortcutFromMain(() => openSpawnControllerMenu())
+        },
+        {
+            id: "spawn_load",
+            pinCategory: "performance",
+            label: "Spawn load & efficiency",
+            action: () => pinDevShortcutFromMain(() => openSpawnLoadEfficiencyMenu(() => openMain()))
+        },
+        {
+            id: "spawn_hud_spatial",
+            pinCategory: "performance",
+            label: "Spawn HUD & spatial",
+            action: () => pinDevShortcutFromMain(() => openSpawnHudSpatialMenu())
+        },
+        {
+            id: "emulsifier",
+            pinCategory: "performance",
+            label: "Emulsifier zones",
+            action: () => pinDevShortcutFromMain(() => openEmulsifierMenu())
+        },
+        {
+            id: "camp_mobility",
+            pinCategory: "performance",
+            label: "Camp / mobility debug",
+            action: () => pinDevShortcutFromMain(() => openMobilityCampDevMenu())
+        },
+        {
+            id: "bear_cull_dev",
+            pinCategory: "performance",
+            label: "Bear cull tuning",
+            action: () => pinDevShortcutFromMain(() => openBearCullDevMenu())
+        },
+        {
+            id: "ai_throttle",
+            pinCategory: "performance",
+            label: "AI throttle & speed",
+            action: () => pinDevShortcutFromMain(() => openAIThrottleMenu())
+        },
+        // Systems
+        {
+            id: "script_toggles",
+            pinCategory: "systems",
+            label: "Script toggles",
+            action: () => pinDevShortcutFromMain(() => openScriptTogglesMenu())
+        },
+        {
+            id: "biome_checker",
+            pinCategory: "systems",
+            label: "Biome checker",
+            action: () => pinDevShortcutFromMain(() => openBiomeCheckerHub(player, () => openMain()))
+        },
+        {
+            id: "script_self_test",
+            pinCategory: "systems",
+            label: "Script self-test",
+            action: () => pinDevShortcutFromMain(() => openScriptSelfTestDevMenu(() => openMain()))
+        },
+        {
+            id: "sim_players",
+            pinCategory: "systems",
+            label: "Simulated players",
+            action: () => pinDevShortcutFromMain(() => openSimulatedPlayersMenu())
+        },
+        {
+            id: "hud_action_bar",
+            pinCategory: "systems",
+            label: "HUD & action bar",
+            action: () => pinDevShortcutFromMain(() => openDeveloperToolsHudMenu(() => openMain()))
+        },
+        {
+            id: "developer_tools",
+            pinCategory: "systems",
+            label: "Developer Tools hub",
+            action: () => openDeveloperToolsWithDisclaimer()
+        },
+        // World & day
+        {
+            id: "set_day",
+            pinCategory: "world",
+            label: "Set day…",
+            action: () => pinDevShortcutFromMain(() => promptSetDay())
+        },
+        {
+            id: "simulate_day",
+            pinCategory: "world",
+            label: "Simulate next day",
+            action: () => triggerDebugCommand("simulate_next_day", [], () => journalPowerToolsBack())
+        },
+        {
+            id: "reset_day",
+            pinCategory: "world",
+            label: "Reset world day to 1",
+            action: () => triggerDebugCommand("reset_day")
+        },
+        {
+            id: "reset_intro",
+            pinCategory: "world",
+            label: "Reset intro",
+            action: () => triggerDebugCommand("reset_intro", [], () => journalPowerToolsBack())
+        },
+        // Bears
+        {
+            id: "dev_bears",
+            pinCategory: "bears",
+            label: "Bears tools hub",
+            action: () => pinDevShortcutFromMain(() => openDeveloperToolsBearsMenu())
+        },
+        {
+            id: "force_spawn",
+            pinCategory: "bears",
+            label: "Force spawn bears",
+            action: () => pinForceSpawnFromMain()
+        },
+        {
+            id: "clear_bears",
+            pinCategory: "bears",
+            label: "Clear bears",
+            action: () => pinDevShortcutFromMain(() => openClearBearsMenu())
+        },
+        {
+            id: "kill_bears",
+            pinCategory: "bears",
+            label: "Kill bears %",
+            action: () => pinDevShortcutFromMain(() => openKillBearsMenu())
+        },
+        {
+            id: "list_bears",
+            pinCategory: "bears",
+            label: "List nearby bears",
+            pinInReleaseAdmin: true,
+            action: () => pinDevShortcutFromMain(() => openListBearsMenu())
+        },
+        {
+            id: "bears_target",
+            pinCategory: "bears",
+            label: "Bears target player",
+            action: () => pinDevShortcutFromMain(() => openBearsTargetPlayerMenu())
+        },
+        {
+            id: "inspect_bear",
+            pinCategory: "bears",
+            label: "Inspect nearest bear",
+            action: () => triggerDebugCommand("inspect_entity", [], () => journalPowerToolsBack())
+        },
+        // Storm
+        {
+            id: "storm",
+            pinCategory: "storm",
+            label: "Storm hub",
+            pinInReleaseAdmin: true,
+            action: () => pinDevShortcutFromMain(() => openStormHubMenu())
+        },
+        // Infection & players
+        {
+            id: "infection",
+            pinCategory: "infection",
+            label: "Clear / set infection",
+            action: () => openTargetPlayerMenu("Infection", (name) => openInfectionDevMenu(name))
+        },
+        {
+            id: "immunity",
+            pinCategory: "infection",
+            label: "Grant / remove immunity",
+            action: () => openTargetPlayerMenu("Immunity", (name) => openImmunityDevMenu(name))
+        },
+        // Codex
+        {
+            id: "fully_unlock",
+            pinCategory: "codex",
+            label: "Fully unlock codex",
+            action: () => {
+                fullyUnlockCodex(player);
+                player.sendMessage(CHAT_SUCCESS + "Codex fully unlocked.");
+                journalPowerToolsBack();
+            }
+        },
+        {
+            id: "reset_codex",
+            pinCategory: "codex",
+            label: "Reset my codex",
+            action: () =>
+                openTargetPlayerMenu("Reset Codex", (name) => {
+                    triggerDebugCommand("reset_codex", name ? [name] : []);
+                    journalPowerToolsBack();
+                })
+        },
+        {
+            id: "reset_section",
+            pinCategory: "codex",
+            label: "Reset codex section",
+            action: () => pinDevShortcutFromMain(() => openResetCodexSectionMenu())
+        },
+        {
+            id: "dump_codex",
+            pinCategory: "codex",
+            label: "Dump codex state",
+            action: () => pinDevShortcutFromMain(() => openDumpCodexTargetMenu())
+        },
+        {
+            id: "set_kill_counts",
+            pinCategory: "codex",
+            label: "Set kill counts",
+            action: () => openTargetPlayerMenu("Set Kill Counts", (name) => openSetKillCountMenu(name))
+        },
+        // Audio & debug
+        {
+            id: "sound_catalog",
+            pinCategory: "debug",
+            label: "Play sound (catalog)",
+            action: () => pinDevShortcutFromMain(() => openSoundPreviewDevMenu())
+        },
+        {
+            id: "debug_menu",
+            pinCategory: "debug",
+            label: "Debug menu (AI logs)",
+            action: () => pinDevShortcutFromMain(() => openDebugMenu())
+        }
+    ];
+
+    const PIN_MENU_CATEGORIES = [
+        { key: "journal", title: "§fJournal sections", filter: (item) => !!item.journalPin },
+        { key: "performance", title: "§bPerformance & spawn", filter: (item) => item.pinCategory === "performance" },
+        { key: "systems", title: "§aSystems", filter: (item) => item.pinCategory === "systems" },
+        { key: "world", title: "§eWorld & day", filter: (item) => item.pinCategory === "world" },
+        { key: "bears", title: "§6Bears", filter: (item) => item.pinCategory === "bears" },
+        { key: "storm", title: "§3Storm", filter: (item) => item.pinCategory === "storm" },
+        { key: "infection", title: "§cInfection & players", filter: (item) => item.pinCategory === "infection" },
+        { key: "codex", title: "§dCodex tools", filter: (item) => item.pinCategory === "codex" },
+        { key: "debug", title: "§5Audio & debug", filter: (item) => item.pinCategory === "debug" }
     ];
 
     function openSimulatedPlayersMenu() {
@@ -4640,17 +4878,15 @@ export function showCodexBook(player, context) {
     }
 
     function getPinEligibleDevItems() {
-        let items;
+        const journal = getJournalMainPinnableItems();
         if (INCLUDE_FULL_DEVELOPER_TOOLS) {
-            items = PINNABLE_DEV_ITEMS.slice();
-        } else {
-            // Release: journal section pins only — no storm/spawn dev shortcuts on the main menu.
-            items = [];
+            return [...journal, ...PINNABLE_DEV_ITEMS];
         }
-        if (!INCLUDE_FULL_DEVELOPER_TOOLS) {
-            items = items.filter((it) => it.id !== "bear_cull_dev");
+        if (INCLUDE_ADMIN_TOOLS) {
+            const adminPins = PINNABLE_DEV_ITEMS.filter((it) => it.pinInReleaseAdmin);
+            if (adminPins.length) return [...journal, ...adminPins];
         }
-        return [...getJournalMainPinnableItems(), ...items];
+        return journal;
     }
 
     function getPinnedDevItems(p) {
@@ -4659,12 +4895,7 @@ export function showCodexBook(player, context) {
             if (!raw || typeof raw !== "string") return [];
             const arr = JSON.parse(raw);
             const ids = Array.isArray(arr) ? arr : [];
-            const LEGACY_TO_SPAWN_CONTROLLER = ["spawn_difficulty", "spawn_type_toggles", "force_spawn"];
-            const LEGACY_TO_STORM = ["storm_control", "summon_storm", "storm_state", "storm_override"];
-            const migrated = ids.map(id =>
-                LEGACY_TO_SPAWN_CONTROLLER.includes(id) ? "spawn_controller" :
-                LEGACY_TO_STORM.includes(id) ? "storm" : id
-            );
+            const migrated = ids.map((id) => migratePinnedDevItemId(id));
             const deduped = [...new Set(migrated)];
             if (migrated.some((id, i) => id !== ids[i]) || deduped.length !== ids.length) {
                 setPinnedDevItems(p, deduped);
@@ -4682,29 +4913,70 @@ export function showCodexBook(player, context) {
     /** Drop pins that are not allowed on this build (e.g. full dev pins after switching from dev pack). */
     function sanitizePinnedDevItems(p) {
         const eligible = new Set(getPinEligibleDevItems().map((i) => i.id));
-        const LEGACY_PIN_IDS = { spawn_difficulty: "spawn_controller", spawn_type_toggles: "spawn_controller", force_spawn: "spawn_controller" };
         const pinned = getPinnedDevItems(p);
-        const kept = pinned.filter((id) => eligible.has(LEGACY_PIN_IDS[id] || id));
+        const kept = pinned.filter((id) => eligible.has(migratePinnedDevItemId(id)));
         if (kept.length !== pinned.length) {
             setPinnedDevItems(p, kept);
         }
     }
 
+    function formatPinnedDevItemsSummary(pinnedIds) {
+        if (!pinnedIds.length) return "none";
+        const labels = pinnedIds.map((id) => findPinnableItemById(id)?.label || id);
+        const text = labels.join(", ");
+        return text.length > 180 ? text.slice(0, 177) + "…" : text;
+    }
+
     function openPinUnpinMenu() {
-        const pinEligible = getPinEligibleDevItems();
-        const pinned = new Set(getPinnedDevItems(player));
+        const pinned = getPinnedDevItems(player);
+        const pinnedSet = new Set(pinned);
         const form = new ActionFormData()
-            .title("§fPin/Unpin to Main Menu")
-            .body("§7Journal sections + dev tools can be pinned to the main menu.\n§8Current pins: " + (pinned.size ? Array.from(pinned).map((id) => findPinnableItemById(id)?.label || id).join(", ") : "none"));
+            .title("§fPin to main menu")
+            .body(
+                "§7Pin journal sections or dev shortcuts to the journal main screen.\n\n" +
+                    `§8Pinned (${pinned.length}): §7${formatPinnedDevItemsSummary(pinned)}\n\n` +
+                    "§7Pick a category:"
+            );
+        const visibleCats = PIN_MENU_CATEGORIES.filter((cat) => getPinEligibleDevItems().some(cat.filter));
+        for (const cat of visibleCats) {
+            const inCat = getPinEligibleDevItems().filter(cat.filter);
+            const pinnedInCat = inCat.filter((i) => pinnedSet.has(i.id)).length;
+            form.button(`${cat.title} §8(${pinnedInCat}/${inCat.length})`);
+        }
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            const v = getPlayerSoundVolume(player);
+            if (!res || res.canceled || res.selection === visibleCats.length) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * v });
+                return journalPowerToolsBack();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * v });
+            const cat = visibleCats[res.selection];
+            if (cat) openPinUnpinCategoryMenu(cat);
+            else journalPowerToolsBack();
+        }).catch(() => journalPowerToolsBack());
+    }
+
+    function openPinUnpinCategoryMenu(cat) {
+        const pinEligible = getPinEligibleDevItems().filter(cat.filter);
+        const pinned = new Set(getPinnedDevItems(player));
+        const pinnedInCat = pinEligible.filter((i) => pinned.has(i.id)).length;
+        const form = new ActionFormData()
+            .title(cat.title)
+            .body(
+                `§7Tap to pin or unpin. §8(${pinnedInCat}/${pinEligible.length} pinned in this category)\n\n` +
+                    "§8Pinned shortcuts return to the journal main menu when you finish."
+            );
         for (const item of pinEligible) {
             const isPinned = pinned.has(item.id);
             form.button((isPinned ? "§a" : "§f") + item.label + (isPinned ? " §8(pinned)" : ""));
         }
         form.button("§8Back");
         form.show(player).then((res) => {
+            const v = getPlayerSoundVolume(player);
             if (!res || res.canceled || res.selection === pinEligible.length) {
-                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
-                return journalPowerToolsBack();
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * v });
+                return openPinUnpinMenu();
             }
             const item = pinEligible[res.selection];
             if (item) {
@@ -4717,9 +4989,9 @@ export function showCodexBook(player, context) {
                 }
                 setPinnedDevItems(player, Array.from(pinned));
             }
-            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
-            openPinUnpinMenu(); // Refresh
-        }).catch(() => journalPowerToolsBack());
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * v });
+            openPinUnpinCategoryMenu(cat);
+        }).catch(() => openPinUnpinMenu());
     }
 
     function openSoundPlayTargetMenu(categoryIndex, soundEntry) {
@@ -5279,17 +5551,23 @@ export function showCodexBook(player, context) {
 
     function openDeveloperToolsSystemsMenu() {
         journalPowerToolsBack = () => openDeveloperToolsSystemsMenu();
+        const biomeHudOn = isBiomeCheckerHudPersonalEnabled(player);
         const form = new ActionFormData()
             .title("§aSystems")
-            .body("§7Script switches, spawn hub, and §ein-game §7script self-test §8(diagnostics)§7.");
+            .body(
+                "§7Script switches, spawn hub, biome checker, and §ein-game §7self-test §8(diagnostics)§7.\n\n" +
+                    `§8Biome HUD: §7${biomeHudOn ? "§aON §8(action bar while you play)" : "§7OFF"}`
+            );
         form.button("§fScript toggles §8(AI, storms, infection audio…)");
         form.button("§fSpawn controller");
+        form.button(biomeHudOn ? "§cTurn off §2§lmy§r §7biome HUD" : "§aTurn on §2§lmy§r §7biome HUD");
+        form.button("§2Biome checker §8(replace list)");
         form.button("§eScript self-test §8(in-game)");
         form.button("§bSimulated players §8(dev)");
         form.button("§8Back");
         form.show(player).then((res) => {
             const v = getPlayerSoundVolume(player);
-            if (!res || res.canceled || res.selection === 4) {
+            if (!res || res.canceled || res.selection === 6) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * v });
                 return openDeveloperTools();
             }
@@ -5297,7 +5575,13 @@ export function showCodexBook(player, context) {
             journalPowerToolsBack = () => openDeveloperToolsSystemsMenu();
             if (res.selection === 0) openScriptTogglesMenu();
             else if (res.selection === 1) openSpawnControllerMenu();
-            else if (res.selection === 2) openScriptSelfTestDevMenu(() => openDeveloperToolsSystemsMenu());
+            else if (res.selection === 2) {
+                setBiomeCheckerHudPersonalEnabled(!biomeHudOn, player);
+                try { saveAllProperties(); } catch { /* ignore */ }
+                player.sendMessage(CHAT_INFO + (biomeHudOn ? "Biome checker HUD off." : "Biome checker HUD on."));
+                openDeveloperToolsSystemsMenu();
+            } else if (res.selection === 3) openBiomeCheckerHub(player, () => openDeveloperToolsSystemsMenu());
+            else if (res.selection === 4) openScriptSelfTestDevMenu(() => openDeveloperToolsSystemsMenu());
             else system.run(() => openSimulatedPlayersMenu());
         }).catch(() => openDeveloperTools());
     }
@@ -5362,16 +5646,17 @@ export function showCodexBook(player, context) {
         journalPowerToolsBack = () => openDeveloperToolsBearsMenu();
         const form = new ActionFormData()
             .title("§6Bears")
-            .body("§7Clear, cull, list, inspect, and force AI targeting.");
+            .body("§7Clear, cull, list, inspect, force spawn, and force AI targeting.");
         form.button("§fClear bears §8(radius)");
         form.button("§fKill bears % §7(all / type / variant)");
         form.button("§fBears target player");
         form.button("§fList nearby bears");
         form.button("§fInspect nearest bear");
+        form.button("§eForce spawn bears §8(by category)");
         form.button("§8Back");
         form.show(player).then((res) => {
             const v = getPlayerSoundVolume(player);
-            if (!res || res.canceled || res.selection === 5) {
+            if (!res || res.canceled || res.selection === 6) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * v });
                 return openDeveloperTools();
             }
@@ -5382,6 +5667,11 @@ export function showCodexBook(player, context) {
             else if (res.selection === 2) openBearsTargetPlayerMenu();
             else if (res.selection === 3) openListBearsMenu();
             else if (res.selection === 4) triggerDebugCommand("inspect_entity", [], () => openDeveloperToolsBearsMenu());
+            else if (res.selection === 5) {
+                forceSpawnNav.rootBack = () => openDeveloperToolsBearsMenu();
+                forceSpawnNav.afterComplete = () => openDeveloperToolsBearsMenu();
+                openForceSpawnMenu();
+            }
         }).catch(() => openDeveloperTools());
     }
 
@@ -5461,17 +5751,19 @@ export function showCodexBook(player, context) {
         const scanPersonal = isSpawnScanPerfHudPersonalEnabled(player);
         const presetPersonal = isSpawnPresetHudPersonalEnabled(player);
         const simHudPersonal = isSimPlayersHudPersonalEnabled(player);
+        const biomeHudPersonal = isBiomeCheckerHudPersonalEnabled(player);
         const broadcastHud = isSpawnHudBroadcastEnabled();
         const scanSee = isSpawnScanPerfOverlayEnabledForPlayer(player);
         const presetSee = isSpawnPresetHudEnabledForPlayer(player);
+        const biomeHudSee = isBiomeCheckerHudEnabledForPlayer(player);
         const legacyScanWorld = isSpawnScanPerfOverlayEnabled();
         const form = new ActionFormData()
             .title("§fHUD & action bar")
             .body(
                 `§7Bedrock allows §fone §7action-bar line. Spawn scan/preset HUDs are §fper player§7; optional §ebroadcast§7 shows them to everyone if any dev has theirs on.\n` +
                     `${formatHudMergeOrderForMenu()}\n\n` +
-                    `§8Your toggles §7scan ${scanPersonal ? "§aON" : "§7OFF"} §8preset ${presetPersonal ? "§aON" : "§7OFF"} §8sim ${simHudPersonal ? "§aON" : "§7OFF"} §8| §8Broadcast §7(world) ${broadcastHud ? "§aON" : "§7OFF"}\n` +
-                    `§8You see §7scan ${scanSee ? "§aON" : "§7OFF"} §8preset ${presetSee ? "§aON" : "§7OFF"} §8§o(includes legacy world scan if ever ON)` +
+                    `§8Your toggles §7scan ${scanPersonal ? "§aON" : "§7OFF"} §8preset ${presetPersonal ? "§aON" : "§7OFF"} §8sim ${simHudPersonal ? "§aON" : "§7OFF"} §8biome ${biomeHudPersonal ? "§aON" : "§7OFF"} §8| §8Broadcast §7(world) ${broadcastHud ? "§aON" : "§7OFF"}\n` +
+                    `§8You see §7scan ${scanSee ? "§aON" : "§7OFF"} §8preset ${presetSee ? "§aON" : "§7OFF"} §8biome ${biomeHudSee ? "§aON" : "§7OFF"} §8§o(includes legacy world scan if ever ON)` +
                     (legacyScanWorld ? "\n§8Legacy world scan HUD §7was ON §8— toggle scan to migrate to per-player." : "") +
                     `\n\n§8Live §7(${dbg.count} seg): §r${preview}`
             );
@@ -5479,6 +5771,7 @@ export function showCodexBook(player, context) {
         form.button(scanPersonal ? "§cTurn off §e§lmy§r §7scan perf HUD" : "§aTurn on §e§lmy§r §7scan perf HUD");
         form.button(presetPersonal ? "§cTurn off §6§lmy§r §7preset hint HUD" : "§aTurn on §6§lmy§r §7preset hint HUD");
         form.button(simHudPersonal ? "§cTurn off §b§lmy§r §7sim players HUD" : "§aTurn on §b§lmy§r §7sim players HUD");
+        form.button(biomeHudPersonal ? "§cTurn off §2§lmy§r §7biome checker HUD" : "§aTurn on §2§lmy§r §7biome checker HUD");
         form.button(broadcastHud ? "§cBroadcast spawn HUDs §8→ OFF §7(all players)" : "§aBroadcast spawn HUDs §8→ ON §7(all players)");
         form.button(campWatch ? "§cRemove §bcamp watch §7tag" : "§aAdd §bcamp watch §7tag");
         form.button("§eClear all merged segments §8(your line)");
@@ -5489,7 +5782,7 @@ export function showCodexBook(player, context) {
         form.button("§8Back");
         form.show(player).then((res) => {
             const v = getPlayerSoundVolume(player);
-            if (!res || res.canceled || res.selection === 10) {
+            if (!res || res.canceled || res.selection === 11) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * v });
                 return goBack();
             }
@@ -5513,12 +5806,18 @@ export function showCodexBook(player, context) {
                 return openDeveloperToolsHudMenu(onBack);
             }
             if (res.selection === 3) {
+                setBiomeCheckerHudPersonalEnabled(!biomeHudPersonal, player);
+                try { saveAllProperties(); } catch { /* ignore */ }
+                player.sendMessage(CHAT_INFO + (biomeHudPersonal ? "Your biome checker HUD off." : "Your biome checker HUD on."));
+                return openDeveloperToolsHudMenu(onBack);
+            }
+            if (res.selection === 4) {
                 setSpawnHudBroadcastEnabled(!broadcastHud);
                 try { saveAllProperties(); } catch { /* ignore */ }
                 player.sendMessage(CHAT_INFO + "Spawn HUD broadcast to all players: " + (!broadcastHud ? "ON." : "OFF."));
                 return openDeveloperToolsHudMenu(onBack);
             }
-            if (res.selection === 4) {
+            if (res.selection === 5) {
                 try {
                     if (campWatch) player.removeTag("mb_dev_camp_watch");
                     else player.addTag("mb_dev_camp_watch");
@@ -5526,25 +5825,25 @@ export function showCodexBook(player, context) {
                 player.sendMessage(CHAT_INFO + (campWatch ? "Removed mb_dev_camp_watch." : "Added mb_dev_camp_watch (camp HUD needs cheats / allowlist)."));
                 return openDeveloperToolsHudMenu(onBack);
             }
-            if (res.selection === 5) {
+            if (res.selection === 6) {
                 clearAllHudSegments(player);
                 player.sendMessage(CHAT_SUCCESS + "Cleared all merged HUD segments for you.");
                 return openDeveloperToolsHudMenu(onBack);
             }
-            if (res.selection === 6) {
+            if (res.selection === 7) {
                 cancelAndClearDayNarrativeHud(player);
                 player.sendMessage(CHAT_INFO + "Cleared day / ambient action bar (narrative) and its auto-hide timer.");
                 return openDeveloperToolsHudMenu(onBack);
             }
-            if (res.selection === 7) {
+            if (res.selection === 8) {
                 pushHudActionBarToast(player, "§7HUD test toast §8(merged)", 60);
                 return openDeveloperToolsHudMenu(onBack);
             }
-            if (res.selection === 8) {
+            if (res.selection === 9) {
                 journalPowerToolsBack = () => openDeveloperToolsHudMenu(onBack);
                 return openSpawnAutoModesMenu(() => openDeveloperToolsHudMenu(onBack));
             }
-            if (res.selection === 9) {
+            if (res.selection === 10) {
                 journalPowerToolsBack = () => openDeveloperToolsHudMenu(onBack);
                 return openSpawnPerformanceHub();
             }
@@ -5822,12 +6121,11 @@ export function showCodexBook(player, context) {
         form.button("§6Manual world tuning §8(intensity, combos, scan)");
         form.button("§bHUD & spatial §8(overlays, clusters)");
         form.button("§fCore rules §8(difficulty, speed, types)");
-        form.button("§eForce spawn §8(by category)");
         form.button("§dEmulsifier");
         form.button("§8Back");
 
         form.show(player).then((res) => {
-            if (!res || res.canceled || res.selection === 7) {
+            if (!res || res.canceled || res.selection === 6) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
                 return journalPowerToolsBack();
             }
@@ -5846,10 +6144,6 @@ export function showCodexBook(player, context) {
                 case 4:
                     return openSpawnGameplayHub();
                 case 5:
-                    forceSpawnNav.rootBack = () => openSpawnControllerMenu();
-                    forceSpawnNav.afterComplete = () => openSpawnControllerMenu();
-                    return openForceSpawnMenu();
-                case 6:
                     return openEmulsifierMenu();
                 default:
                     return journalPowerToolsBack();
@@ -6877,7 +7171,9 @@ export function showCodexBook(player, context) {
         { id: "mb:mining_mb", label: "Mining" },
         { id: "mb:mining_mb_day20", label: "Mining (day 20)" },
         { id: "mb:torpedo_mb", label: "Torpedo" },
-        { id: "mb:torpedo_mb_day20", label: "Torpedo (day 20)" }
+        { id: "mb:torpedo_mb_day20", label: "Torpedo (day 20)" },
+        { id: "mb:torpedo_mb", label: "Torpedo (dud)", torpedoDud: true },
+        { id: "mb:torpedo_mb_day20", label: "Torpedo (day 20, dud)", torpedoDud: true }
     ];
 
     const FORCE_SPAWN_CATEGORIES = [
@@ -6886,7 +7182,7 @@ export function showCodexBook(player, context) {
         { label: "§6Buff bears", start: 9, end: 12 },
         { label: "§bFlying bears", start: 12, end: 15 },
         { label: "§8Mining bears", start: 15, end: 17 },
-        { label: "§4Torpedo bears", start: 17, end: 19 }
+        { label: "§4Torpedo bears", start: 17, end: 21 }
     ];
 
     function openForceSpawnMenu() {
@@ -7013,6 +7309,7 @@ export function showCodexBook(player, context) {
                 const args = [opt.id];
                 if (targetName) args.push(targetName);
                 args.push(distanceValue, String(qOpt.value));
+                if (opt.torpedoDud) args.push("dud");
                 triggerDebugCommand("force_spawn", args, () => runForceSpawnAfterComplete());
             } else openForceSpawnMenu();
         }).catch(() => openForceSpawnMenu());

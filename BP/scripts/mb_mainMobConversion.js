@@ -9,9 +9,9 @@ import {
     MB_CONVERSION_WORLD_PRESSURE_START,
     MB_CONVERSION_WORLD_PRESSURE_END,
     MB_CONVERSION_WORLD_MULT_MIN,
-    getInfectionRate,
-    getMaxBuffBearsForNearbyPlayerCount
+    getInfectionRate
 } from "./mb_balance.js";
+import { isBuffBearSpawnBlocked, isBuffBearTypeId as isBuffBearTypeIdCap } from "./mb_buffCap.js";
 import { refreshSpawnLoadMetrics, getSpawnLoadDebugSnapshot } from "./mb_spawnLoadMetrics.js";
 import { queryEntitiesSpread } from "./mb_workSpread.js";
 import {
@@ -128,7 +128,7 @@ function ensureMobConversionHurtTracking() {
 ensureMobConversionHurtTracking();
 
 function isBuffBearTypeId(typeId) {
-    return BUFF_BEAR_TYPE_IDS.has(typeId);
+    return isBuffBearTypeIdCap(typeId);
 }
 
 function infectedBearTypeForDay(currentDay) {
@@ -144,41 +144,6 @@ const pendingBuffConversionByDimension = new Map();
 function normalizeDimensionId(id) {
     if (!id) return "";
     return id.replace(/^minecraft:/, "");
-}
-
-/** Dimension-wide buff count for conversion cap (matches spawn player-count limit). */
-function countBuffBearsInDimension(dimension) {
-    if (!dimension) return 0;
-    let n = 0;
-    for (const typeId of BUFF_BEAR_TYPE_IDS) {
-        try {
-            const list = dimension.getEntities({ type: typeId });
-            n += list?.length ?? 0;
-        } catch {
-            /* ignore one type */
-        }
-    }
-    return n;
-}
-
-function getPlayerCountForBuffCap(dimension) {
-    try {
-        const dimId = dimension?.id;
-        let n = 0;
-        for (const player of world.getAllPlayers()) {
-            if (player?.isValid && player.dimension?.id === dimId) n++;
-        }
-        return Math.max(1, n);
-    } catch {
-        return 1;
-    }
-}
-
-function getEffectiveBuffCountForCap(dimension) {
-    const dimKey = normalizeDimensionId(dimension?.id);
-    const live = countBuffBearsInDimension(dimension);
-    const pending = pendingBuffConversionByDimension.get(dimKey) ?? 0;
-    return live + pending;
 }
 
 function reserveBuffConversionSlot(dimension) {
@@ -201,8 +166,15 @@ function clampSpawnTypeForBuffCap(dimension, location, proposedTypeId) {
     if (!isBuffBearTypeId(proposedTypeId)) return proposedTypeId;
 
     const currentDay = getCurrentDay();
-    const maxBuff = getMaxBuffBearsForNearbyPlayerCount(getPlayerCountForBuffCap(dimension));
-    if (getEffectiveBuffCountForCap(dimension) >= maxBuff) {
+    const dimKey = normalizeDimensionId(dimension?.id);
+    const pending = pendingBuffConversionByDimension.get(dimKey) ?? 0;
+    if (
+        isBuffBearSpawnBlocked({
+            dimension,
+            nearCenter: location,
+            extraPending: pending
+        })
+    ) {
         return infectedBearTypeForDay(currentDay);
     }
 

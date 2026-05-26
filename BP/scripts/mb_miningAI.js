@@ -11,7 +11,8 @@ import { isDebugEnabled } from "./mb_codex.js";
 import { isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
 import { getCachedPlayers, getCachedPlayerPositions, getCachedMobs, isEntityValid } from "./mb_sharedCache.js";
 import { getMiningWorkMultiplier, getAiIntervalStretch } from "./mb_performanceProfile.js";
-import { DIMENSION_IDS, MINING_BEAR_TYPES, PATHFINDING_ENTITY_TYPES, AIR_BLOCKS } from "./mb_miningConstants.js";
+import { DIMENSION_IDS, MINING_BEAR_TYPES, PATHFINDING_ENTITY_TYPES, AIR_BLOCKS, MINING_SNOW_ON_BREAK_CHANCE } from "./mb_miningConstants.js";
+import { tryPlaceSnowLayerNearBreak } from "./mb_snowPlacement.js";
 import { getBearSnapshot, getBearSnapshotsForDimensions } from "./mb_bearSnapshot.js";
 import { claimSpreadSlice, isSpreadThrottleActive } from "./mb_workSpread.js";
 
@@ -1245,6 +1246,14 @@ function clearBlock(dimension, x, y, z, digContext, entity = null, targetInfo = 
         // Only drop 25% of the time to reduce lag from too many items
         if (entity && Math.random() < 0.25) {
             collectOrDropBlock(entity, originalType, { x: x + 0.5, y: y + 0.5, z: z + 0.5 });
+        }
+
+        if (entity) {
+            const entityType = entity.typeId;
+            const breakSnowChance = MINING_SNOW_ON_BREAK_CHANCE[entityType];
+            if (breakSnowChance && Math.random() < breakSnowChance) {
+                tryPlaceSnowLayerNearBreak(dimension, x, y, z);
+            }
         }
         
         if (digContext) {
@@ -10057,8 +10066,52 @@ function processContext(ctx, config, tick, leaderSummaryById) {
                                         }
                                     }
                                 } else {
-                                    if ((getDebugGeneral() || getDebugMining()) || (system.currentTick % 40 === 0)) {
-                                        console.warn(`[MINING AI] Skipped movement after stairs - step not ready (dy=${dy.toFixed(1)}, cleared=${digContext.cleared}, stepReady=${stepReady}, hasClearedSpace=${hasClearedSpace})`);
+                                    // Step blocked (solid + no headroom): keep mining when budget allows, but
+                                    // always nudge forward/up — otherwise bears freeze when mining is throttled
+                                    // (max=0) or carveStair could not break this tick.
+                                    try {
+                                        if (digContext.max > 0 && digContext.cleared < digContext.max) {
+                                            const headBlock = getBlock(dimension, Math.floor(loc.x), stepBaseY + 2, Math.floor(loc.z));
+                                            if (headBlock && isBreakableBlock(headBlock) && isSolidBlock(headBlock)) {
+                                                clearBlock(dimension, Math.floor(loc.x), stepBaseY + 2, Math.floor(loc.z), digContext, entity, targetInfo);
+                                            }
+                                            if (digContext.cleared < digContext.max && blockInFront && isBreakableBlock(blockInFront) && isSolidBlock(blockInFront)) {
+                                                clearBlock(dimension, stepX, stepBaseY + 1, stepZ, digContext, entity, targetInfo);
+                                            }
+                                            if (digContext.cleared < digContext.max && blockAboveFront && isBreakableBlock(blockAboveFront) && isSolidBlock(blockAboveFront)) {
+                                                clearBlock(dimension, stepX, stepBaseY + 2, stepZ, digContext, entity, targetInfo);
+                                            }
+                                        }
+                                        const progress = entityProgress.get(entity.id);
+                                        const stuck5s = !!(progress && progress.stuckTicks >= STUCK_EXTENDED_TICKS);
+                                        let forwardImpulse = stuck5s ? 0.14 : 0.11;
+                                        const canSeeThroughWallsNudge = canSeeTargetThroughBlocks(entity, targetInfo, 3);
+                                        const hasVisualLosNudge = typeof hasLineOfSight !== "undefined" ? hasLineOfSight : canSeeTargetThroughBlocks(entity, targetInfo, 0);
+                                        if (canSeeThroughWallsNudge && !hasVisualLosNudge) {
+                                            forwardImpulse *= 1.25;
+                                        }
+                                        const feetY = Math.floor(loc.y);
+                                        const feetBlock = getBlock(dimension, Math.floor(loc.x), feetY - 1, Math.floor(loc.z));
+                                        const isOnGround = feetBlock && isSolidBlock(feetBlock) && !AIR_BLOCKS.has(feetBlock.typeId);
+                                        let upwardImpulse = 0;
+                                        if (isOnGround && dy > 1.2) {
+                                            upwardImpulse = Math.min(STAIR_UPWARD_IMPULSE, Math.max(0.08, dy * 0.05));
+                                            if (dy > 8) {
+                                                upwardImpulse = Math.min(0.24, upwardImpulse * 1.15);
+                                            }
+                                        }
+                                        entity.applyImpulse({
+                                            x: dirX * forwardImpulse,
+                                            y: upwardImpulse,
+                                            z: dirZ * forwardImpulse
+                                        });
+                                    } catch (nudgeErr) {
+                                        if (getDebugGeneral()) {
+                                            console.warn(`[MINING AI] Stair blocked nudge error: ${nudgeErr}`);
+                                        }
+                                    }
+                                    if ((getDebugGeneral() || getDebugMining()) && system.currentTick % 80 === 0) {
+                                        console.warn(`[MINING AI] Stair blocked — mining/nudge (dy=${dy.toFixed(1)}, cleared=${digContext.cleared}/${digContext.max}, stepReady=${stepReady}, hasClearedSpace=${hasClearedSpace})`);
                                     }
                                 }
                             }

@@ -12,6 +12,8 @@ Start here to navigate the repo. **Session log:** [context summary.md](context%2
 | [PLAYER_CHANGELOG.md](PLAYER_CHANGELOG.md) | Player-facing beta notes (referenced in-game) |
 | [RELEASE_BODY.md](RELEASE_BODY.md) | GitHub Release description (CI; edit before each tag) |
 | [releasing.md](releasing.md) | Maintainer runbook: tag → Actions → `.mcpack` on Releases |
+| [development/PERFORMANCE_OPTIMIZATION_ROADMAP.md](development/PERFORMANCE_OPTIMIZATION_ROADMAP.md) | Hot scripts, phased optimizations |
+| [development/CURSOR_SDK.md](development/CURSOR_SDK.md) | Optional Cursor SDK ideas (not in repo) |
 | [README.md](README.md) | This index |
 | [ORGANIZATION.md](ORGANIZATION.md) | Folder tree and conventions |
 
@@ -23,6 +25,7 @@ Start here to navigate the repo. **Session log:** [context summary.md](context%2
 |------|---------|
 | [DESIGN_VISION.md](design/DESIGN_VISION.md) | Design intent and principles |
 | [SAFE_BIOMES.md](design/SAFE_BIOMES.md) | Safer biomes vs Maple Bear pressure |
+| [MBA_ITEMS_MASTER_PLAN.md](design/MBA_ITEMS_MASTER_PLAN.md) | Planned MBA gear, loot, purification, journal (not implemented) |
 
 ---
 

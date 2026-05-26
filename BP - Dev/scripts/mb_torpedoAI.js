@@ -10,6 +10,50 @@ import { getCachedPlayers, getCachedMobs, isEntityValid } from "./mb_sharedCache
 import { getAddonDifficultyState, getWorldProperty } from "./mb_dynamicPropertyHandler.js";
 import { getBearSnapshot } from "./mb_bearSnapshot.js";
 import { getAiIntervalStretch } from "./mb_performanceProfile.js";
+import { TORPEDO_BEAR_ID, TORPEDO_BEAR_DAY20_ID } from "./mb_spawnEntityIds.js";
+
+/** Dynamic property: true when this torpedo bear must not explode on death or block exhaustion. */
+export const TORPEDO_DUD_PROPERTY = "mb_torpedo_dud";
+/** Fraction of newly spawned torpedo bears that are duds (no death explosion). */
+export const TORPEDO_DUD_CHANCE = 0.05;
+
+export function isTorpedoBearTypeId(typeId) {
+    return typeId === TORPEDO_BEAR_ID || typeId === TORPEDO_BEAR_DAY20_ID;
+}
+
+export function isTorpedoDud(entity) {
+    if (!entity) return false;
+    try {
+        const v = entity.getDynamicProperty(TORPEDO_DUD_PROPERTY);
+        return v === true || v === 1 || v === "1";
+    } catch {
+        return false;
+    }
+}
+
+/** Force this torpedo to be a dud (dev spawn, etc.). */
+export function markTorpedoAsDud(entity) {
+    if (!entity || !isTorpedoBearTypeId(entity.typeId)) return;
+    try {
+        entity.setDynamicProperty(TORPEDO_DUD_PROPERTY, true);
+    } catch {
+        /* ignore */
+    }
+}
+
+function rollTorpedoDudOnSpawn(entity) {
+    if (!entity || !isTorpedoBearTypeId(entity.typeId)) return;
+    if (isTorpedoDud(entity)) return;
+    if (Math.random() >= TORPEDO_DUD_CHANCE) return;
+    try {
+        entity.setDynamicProperty(TORPEDO_DUD_PROPERTY, true);
+        if (getDebugGeneral()) {
+            console.warn(`[TORPEDO AI] Dud torpedo (${entity.id.substring(0, 8)}...) — no explosion on death`);
+        }
+    } catch {
+        /* ignore */
+    }
+}
 
 // Debug helper functions
 function getDebugGeneral() {
@@ -125,6 +169,16 @@ function incrementBreakCount(entity) {
 function checkTorpedoExhaustion(entity, config) {
     const breakCount = getBreakCount(entity);
     if (breakCount >= getEffectiveTorpedoMaxBlocks(config)) {
+        // Dud torpedos die quietly when their block budget is spent
+        if (isTorpedoDud(entity)) {
+            try {
+                entity.kill();
+            } catch {
+                /* ignore */
+            }
+            return true;
+        }
+
         // Torpedo is exhausted - explode on death
         const loc = entity.location;
         const dimension = entity.dimension;
@@ -1702,3 +1756,15 @@ if (getDebugGeneral()) {
 system.runTimeout(() => {
     initializeTorpedoAI();
 }, TORPEDO_INIT_DELAY_TICKS);
+
+// Roll dud status once per spawn (natural spawn, conversion, eggs, dev summon, etc.)
+world.afterEvents.entitySpawn.subscribe((event) => {
+    try {
+        if (!isScriptEnabled(SCRIPT_IDS.torpedo)) return;
+        const entity = event.entity;
+        if (!isTorpedoBearTypeId(entity?.typeId)) return;
+        rollTorpedoDudOnSpawn(entity);
+    } catch {
+        /* ignore */
+    }
+});

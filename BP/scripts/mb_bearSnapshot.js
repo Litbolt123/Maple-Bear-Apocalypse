@@ -18,6 +18,8 @@ import {
     getSpreadBearSnapshotEmptyTtl,
     getSpreadSectionLocation,
     isSpreadThrottleActive,
+    isVillageEntitySpreadActive,
+    shouldDeferVillageBurst,
     SPREAD_CELL_COUNT,
     SPREAD_CELL_RADIUS
 } from "./mb_workSpread.js";
@@ -190,7 +192,7 @@ function refreshDimension(dimension, currentTick) {
     if (!dimension) return emptySnapshot(currentTick);
 
     const anchors = getPlayerAnchorsInDimension(dimension);
-    if (isSpreadThrottleActive()) {
+    if (isSpreadThrottleActive() || isVillageEntitySpreadActive()) {
         return refreshDimensionSpread(dimension, currentTick);
     }
     if (anchors.length) {
@@ -224,7 +226,11 @@ function getOrRefresh(dimension) {
         }
     }
 
-    if (isSpreadThrottleActive()) {
+    if (shouldDeferVillageBurst("bearSnapshot") && cached) {
+        return cached;
+    }
+
+    if (isSpreadThrottleActive() || isVillageEntitySpreadActive()) {
         spreadPartialByDimension.delete(key);
     }
 
@@ -327,7 +333,7 @@ export function getBearSnapshotsForDimensions(dimensionIds) {
     const out = new Map();
     const currentTick = system.currentTick;
 
-    if (isSpreadThrottleActive() && dimensionIds.length > 1) {
+    if ((isSpreadThrottleActive() || isVillageEntitySpreadActive()) && dimensionIds.length > 1) {
         const refreshId = dimensionIds[spreadDimRefreshRotate % dimensionIds.length];
         spreadDimRefreshRotate++;
 

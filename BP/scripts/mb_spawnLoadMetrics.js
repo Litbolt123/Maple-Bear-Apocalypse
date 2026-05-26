@@ -10,8 +10,13 @@ import { countBearsAcrossDimensions } from "./mb_bearSnapshot.js";
 import { getCurrentDay } from "./mb_dayTracker.js";
 import {
     claimSpreadSlice,
+    isEntityQuerySpreadActive,
+    isMetricsSpreadActive,
     isSpreadThrottleActive,
+    isVillageEntitySpreadActive,
     queryEntitiesOneSpreadSection,
+    setMetricsSpreadLoad01,
+    shouldDeferVillageBurst,
     SPREAD_CELL_COUNT
 } from "./mb_workSpread.js";
 
@@ -118,7 +123,7 @@ function countBearsAllDimensions(tick) {
 const ITEM_SAMPLE_RADIUS = 96;
 
 function countItemEntitiesNear(ow, anchor, seen, n) {
-    if (isSpreadThrottleActive()) {
+    if (isEntityQuerySpreadActive()) {
         const slice = queryEntitiesOneSpreadSection(ow, "spawnItems:ow", anchor, ITEM_SAMPLE_RADIUS, {
             type: ITEM_ENTITY_TYPE
         });
@@ -151,10 +156,13 @@ function countItemEntitiesNear(ow, anchor, seen, n) {
 }
 
 function countItemsOverworldThrottled(tick) {
-    const interval = isSpreadThrottleActive() ? 40 : 120;
+    if (shouldDeferVillageBurst("spawnItems")) return;
+
+    const spreadSampling = isVillageEntitySpreadActive() || isMetricsSpreadActive();
+    const interval = spreadSampling ? 40 : 120;
     if (tick - lastItemRefreshTick < interval) return;
 
-    if (isSpreadThrottleActive() && !claimSpreadSlice("spawnItems", 5)) return;
+    if (spreadSampling && !claimSpreadSlice("spawnItems", 5)) return;
 
     lastItemRefreshTick = tick;
     try {
@@ -173,7 +181,7 @@ function countItemsOverworldThrottled(tick) {
             return;
         }
 
-        if (isSpreadThrottleActive()) {
+        if (isEntityQuerySpreadActive()) {
             if (!itemSampleBuild?.building) {
                 itemSampleBuild = {
                     building: true,
@@ -238,6 +246,7 @@ function recomputeCachedMultipliers() {
     if (!isSpawnLoadAutoEnabled()) {
         cachedIntervalMult = Math.min(2.15, biasInt);
         cachedBlockScale = Math.max(0.52, biasBlock);
+        setMetricsSpreadLoad01(0);
         return;
     }
 
@@ -246,6 +255,7 @@ function recomputeCachedMultipliers() {
     const autoBlock = 1 - load01 * 0.28;
     cachedIntervalMult = Math.min(2.35, biasInt * autoInt);
     cachedBlockScale = Math.max(0.5, biasBlock * autoBlock);
+    setMetricsSpreadLoad01(load01);
 }
 
 /**
@@ -312,7 +322,8 @@ export function initializeSpawnLoadScalerWatch() {
         }, 4);
         system.runInterval(() => {
             try {
-                const base = isSpreadThrottleActive() ? 80 : 40;
+                if (shouldDeferVillageBurst("spawnLoadMetrics")) return;
+                const base = isVillageEntitySpreadActive() ? 80 : 40;
                 if (!claimSpreadSlice("spawnLoadMetrics", base)) return;
                 refreshSpawnLoadMetrics(system.currentTick);
             } catch {

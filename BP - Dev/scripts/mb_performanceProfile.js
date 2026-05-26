@@ -12,7 +12,7 @@
 import { system, world } from "@minecraft/server";
 import { getWorldProperty, setWorldProperty } from "./mb_dynamicPropertyHandler.js";
 import { getBearSnapshotsForDimensions } from "./mb_bearSnapshot.js";
-import { claimSpreadSlice, isSpreadThrottleActive } from "./mb_workSpread.js";
+import { claimSpreadSlice, getMetricsSpreadLoad01, isSpreadThrottleActive } from "./mb_workSpread.js";
 
 /** 0 = full auto (advanced), 1 = a little, 2 = mid (recommended default), 3 = laggy */
 export const LAG_COMFORT_PROPERTY = "mb_lag_comfort";
@@ -336,13 +336,19 @@ export function getPlayerThriftTier() {
  * @returns {number} 1 / 1.15 / 1.5 / 2.0 depending on tier
  */
 export function getAiIntervalStretch() {
+    let stretch;
     switch (getPlayerThriftTier()) {
-        case 0: return 1;
-        case 1: return 1.15;
-        case 2: return 1.5;
-        case 3: return 2.0;
-        default: return 1;
+        case 0: stretch = 1; break;
+        case 1: stretch = 1.15; break;
+        case 2: stretch = 1.5; break;
+        case 3: stretch = 2.0; break;
+        default: stretch = 1;
     }
+    const load01 = getMetricsSpreadLoad01();
+    if (load01 > 0) {
+        stretch = Math.min(2.5, stretch * (1 + load01 * 0.15));
+    }
+    return stretch;
 }
 
 /**

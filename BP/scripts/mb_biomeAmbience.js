@@ -11,7 +11,13 @@ import { getCurrentDay } from "./mb_dayTracker.js";
 import { getPlayerSoundVolume, isDebugEnabled } from "./mb_codex.js";
 import { isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
 import { isInsideEmulsifierNoSpawnZone } from "./mb_spawnController.js";
-import { claimSpreadSlice, isSpreadThrottleActive, spreadPlayersForWork } from "./mb_workSpread.js";
+import {
+    claimSpreadSlice,
+    isSpreadThrottleActive,
+    isVillageEntitySpreadActive,
+    shouldDeferVillageBurst,
+    spreadPlayersForWork
+} from "./mb_workSpread.js";
 
 // Track active biome ambience per player
 // Map: playerId -> { soundId: string, biomeId: string, lastCheckTick: number, biomeSize: string }
@@ -243,8 +249,9 @@ function checkBiomeAmbienceForPlayer(player, currentDay) {
  */
 system.runInterval(() => {
     if (!isScriptEnabled(SCRIPT_IDS.biomeAmbience)) return;
+    if (shouldDeferVillageBurst("biomeAmbience")) return;
     try {
-        const sliceBase = isSpreadThrottleActive() ? BIOME_CHECK_INTERVAL_OUT * 2 : BIOME_CHECK_INTERVAL_OUT;
+        const sliceBase = isVillageEntitySpreadActive() ? BIOME_CHECK_INTERVAL_OUT * 2 : BIOME_CHECK_INTERVAL_OUT;
         if (!claimSpreadSlice("biomeAmbience", sliceBase)) return;
 
         const allPlayers = world.getAllPlayers();
@@ -284,6 +291,7 @@ system.runInterval(() => {
  */
 system.runInterval(() => {
     if (!isScriptEnabled(SCRIPT_IDS.biomeAmbience)) return;
+    if (shouldDeferVillageBurst("biomeAmbienceFast")) return;
     try {
         // Only run if there are active ambience entries (players in biomes)
         if (activeBiomeAmbience.size === 0) return;
