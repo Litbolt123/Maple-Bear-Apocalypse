@@ -13,6 +13,8 @@ import { isDebugEnabled } from "./mb_codex.js";
 import { isScriptEnabled, SCRIPT_IDS, isBetaInfectedAIEnabled } from "./mb_scriptToggles.js";
 import { getBearsOfType } from "./mb_bearSnapshot.js";
 import { getAiIntervalStretch, getAiBatchBoost } from "./mb_performanceProfile.js";
+import { isAddonBearActivityDormant, shouldDecimateZeroBearAiWake } from "./mb_entityQueryGate.js";
+import { registerBearAiStartCallback } from "./mb_bearAiBootstrap.js";
 
 const INFECTED_TYPES = [
     "mb:infected",
@@ -291,6 +293,8 @@ function pruneAngerTargetMap(currentTick) {
 }
 
 function runInfectedAI() {
+    if (shouldDecimateZeroBearAiWake()) return;
+    if (isAddonBearActivityDormant()) return;
     if (!isScriptEnabled(SCRIPT_IDS.infected) || !isBetaInfectedAIEnabled()) return;
     try {
         const tick = system.currentTick;
@@ -375,7 +379,8 @@ export function angerNearbyInfectedAtPlayer(dimension, location, targetPlayer, r
     }
 }
 
-// Start after a delay (ensure world is ready)
-system.runTimeout(() => {
-    initializeInfectedAI();
-}, INIT_DELAY_TICKS);
+registerBearAiStartCallback(() => {
+    system.runTimeout(() => {
+        initializeInfectedAI();
+    }, INIT_DELAY_TICKS);
+});

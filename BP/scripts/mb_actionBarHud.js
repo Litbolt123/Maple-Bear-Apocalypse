@@ -5,6 +5,8 @@
  */
 
 import { world, system } from "@minecraft/server";
+import { shouldPauseDayZeroAddonLoops } from "./mb_dayZeroPerfBisect.js";
+import { isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
 
 /** Priority order (ascending = left / first). */
 export const ACTION_BAR_SLOT = {
@@ -15,6 +17,8 @@ export const ACTION_BAR_SLOT = {
     SIM_PLAYERS: 16,
     /** Dev: biome at feet vs replace_biomes list (per-player toggle). */
     BIOME_CHECKER: 17,
+    /** Dev: entity-query / village perf (zero-bear standdown, villager defer). */
+    ENTITY_QUERY: 18,
     SPAWN_SCAN_PERF: 20,
     /** Day tracker / ambient one-liners (merged, not a second HUD). */
     NARRATIVE: 25,
@@ -46,6 +50,7 @@ export const HUD_MERGE_SLOTS_ORDERED = [
     ACTION_BAR_SLOT.SPAWN_TUNING,
     ACTION_BAR_SLOT.SIM_PLAYERS,
     ACTION_BAR_SLOT.BIOME_CHECKER,
+    ACTION_BAR_SLOT.ENTITY_QUERY,
     ACTION_BAR_SLOT.SPAWN_SCAN_PERF,
     ACTION_BAR_SLOT.NARRATIVE,
     ACTION_BAR_SLOT.CAMP_DEV,
@@ -58,6 +63,7 @@ export const HUD_MERGE_SLOT_META = [
     { slot: ACTION_BAR_SLOT.SPAWN_TUNING, title: "Preset hint", detail: "Per-player dev toggle; optional broadcast (Spawn Controller → HUD & spatial)." },
     { slot: ACTION_BAR_SLOT.SIM_PLAYERS, title: "Sim players", detail: "Per-player dev toggle — ghost player count, dims, pattern; optional world particle markers (sim menu)." },
     { slot: ACTION_BAR_SLOT.BIOME_CHECKER, title: "Biome checker", detail: "Per-player dev toggle — biome at feet vs replace list (Systems → Biome checker)." },
+    { slot: ACTION_BAR_SLOT.ENTITY_QUERY, title: "Entity query", detail: "Per-player dev toggle — bears, standdown, villager defer, skip counters (Debug → Entity query / village)." },
     { slot: ACTION_BAR_SLOT.SPAWN_SCAN_PERF, title: "Scan perf", detail: "Per-player; optional broadcast — addon bears, L%=load model, i×/b× scalers, P/C/D/W spatial (journal menu)." },
     { slot: ACTION_BAR_SLOT.NARRATIVE, title: "Day / ambient", detail: "Dawn / join / init one-liner; auto-clears a few ticks after the paired title fades (Journal toggle)." },
     { slot: ACTION_BAR_SLOT.CAMP_DEV, title: "Camp dev", detail: "Tag mb_dev_camp_watch + cheats." },
@@ -205,6 +211,8 @@ export function getHudActiveSegmentCount(player) {
 try {
     system.runInterval(() => {
         try {
+            if (!isScriptEnabled(SCRIPT_IDS.actionBarHud)) return;
+            if (shouldPauseDayZeroAddonLoops()) return;
             if (byPlayer.size === 0) return;
             const players = world.getAllPlayers();
             for (const p of players) {

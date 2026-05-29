@@ -41,14 +41,17 @@ import { INCLUDE_FULL_DEVELOPER_TOOLS } from "./mb_buildConfig.js";
 import { getAllPlayersIncludingSim, isSimFullBehaviorEnabled, areSimPlayersEnabled, isSimulatedPlayer } from "./mb_simPlayers.js";
 import { getStormTouchSpawnChanceMult } from "./mb_exposureSpawnPressure.js";
 import { getInfectionDirectorSpawnModifiers } from "./mb_infectionDirector.js";
-import { getBearSnapshot } from "./mb_bearSnapshot.js";
+import { getBearSnapshot, getBearsOfType } from "./mb_bearSnapshot.js";
+import { shouldSkipExpensiveEntityQueries } from "./mb_entityQueryGate.js";
 import { isEntityValid } from "./mb_sharedCache.js";
 import {
     CHUNK_EDGE_DEFER_TICKS,
     claimSpreadSlice,
     isAnyChunkEdgeDeferActive,
-    isSpreadThrottleActive
+    isSpreadThrottleActive,
+    isVillagerBurstDeferActive
 } from "./mb_workSpread.js";
+import { shouldPauseDayZeroAddonLoops, shouldSleepDayZeroWorldWork } from "./mb_dayZeroPerfBisect.js";
 import {
     TINY_TYPE,
     INFECTED_TYPE,
@@ -4917,6 +4920,9 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
             }
         }
     } else if (isNewChunk) {
+        if (isVillagerBurstDeferActive()) {
+            shouldSkipScan = true;
+        } else {
         const isPlayerCenterChunk = centerChunkKey === getChunkKey(center.x, center.z);
         if (!tryAcquireChunkQueueEnqueueSlot(isPlayerCenterChunk)) {
             shouldSkipScan = true;
@@ -4958,6 +4964,7 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
         shouldSkipScan = true; // Skip scan this tick, will happen later
         if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
             console.warn(`[SPAWN DEBUG] Chunk ${centerChunkKey} scheduled for scan at tick ${scheduledTick} (stagger offset: ${staggerOffset})`);
+        }
         }
         }
     }
@@ -7622,6 +7629,7 @@ if (ERROR_LOGGING) {
 // Emulsifier processing loop: detox nearby corruption and burn fuel over time.
 system.runInterval(() => {
     try {
+        if (shouldSleepDayZeroWorldWork("spawn_emulsifier")) return;
         processEmulsifierZones();
     } catch (error) {
         errorLog("Error in emulsifier interval", error);
@@ -7630,6 +7638,7 @@ system.runInterval(() => {
 
 system.runInterval(() => {
     try {
+        if (shouldSleepDayZeroWorldWork("spawn_emulsifier")) return;
         const zones = loadEmulsifierZones();
         if (Array.isArray(zones) && zones.length > 0) saveEmulsifierZones();
     } catch { }
@@ -7646,6 +7655,7 @@ if (world.beforeEvents?.playerLeave) {
 
 system.runInterval(() => {
     try {
+        if (shouldSleepDayZeroWorldWork("spawn_emulsifier")) return;
         if (pendingEmulsifierConversions.size === 0) return;
         const now = system.currentTick;
         for (const [key, data] of pendingEmulsifierConversions) {
@@ -7693,6 +7703,7 @@ function formatCampTimeToMaxHud(remainingTicks) {
 /** Live HUD for dev: tag `mb_dev_camp_watch` + cheats (merged via mb_actionBarHud). Disabled in release builds. */
 system.runInterval(() => {
     try {
+        if (shouldPauseDayZeroAddonLoops()) return;
         if (!INCLUDE_FULL_DEVELOPER_TOOLS) {
             for (const p of world.getAllPlayers()) {
                 if (p?.isValid) clearHudActionBarSegment(p, ACTION_BAR_SLOT.CAMP_DEV);
@@ -8208,7 +8219,7 @@ system.runInterval(() => {
                 const playerId = player.id;
                 const currentAmbience = activeBuffAmbience.get(playerId);
                 
-                if (buffCount > 0) {
+                if (buffCount > 0 && !shouldSkipExpensiveEntityQueries("buffAmbience")) {
                     const buffBearTypes = [BUFF_BEAR_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID];
                     let nearestBuffBear = null;
                     let nearestDistanceSq = BUFF_AMBIENCE_RANGE * BUFF_AMBIENCE_RANGE;
@@ -8216,11 +8227,7 @@ system.runInterval(() => {
                     for (const buffType of buffBearTypes) {
                         let entities;
                         try {
-                            entities = dimension.getEntities({
-                                location: playerPos,
-                                maxDistance: BUFF_AMBIENCE_RANGE,
-                                type: buffType
-                            });
+                            entities = getBearsOfType(dimension, buffType, playerPos, BUFF_AMBIENCE_RANGE);
                         } catch {
                             continue;
                         }
@@ -8599,18 +8606,19 @@ system.runInterval(() => {
                 
                 const playerPos = player.location;
                 const currentAmbience = activeBuffAmbience.get(playerId);
+                if (shouldSkipExpensiveEntityQueries("buffAmbienceFast")) continue;
                 
-                // Query for buff bears within range
                 const buffBearTypes = [BUFF_BEAR_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID];
                 let nearestBuffBear = null;
                 let nearestDistanceSq = BUFF_AMBIENCE_RANGE * BUFF_AMBIENCE_RANGE;
                 
                 for (const buffType of buffBearTypes) {
-                    const entities = dimension.getEntities({
-                        location: playerPos,
-                        maxDistance: BUFF_AMBIENCE_RANGE,
-                        type: buffType
-                    });
+                    let entities;
+                    try {
+                        entities = getBearsOfType(dimension, buffType, playerPos, BUFF_AMBIENCE_RANGE);
+                    } catch {
+                        continue;
+                    }
                     
                     for (const entity of entities) {
                         if (!entity || !entity.isValid) continue;

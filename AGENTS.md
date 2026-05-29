@@ -64,13 +64,13 @@ Point Bridge (or any Bedrock pack project) at **`BP - Dev/`** and **`RP - Dev/`*
 
 When folding work from **`BP - Dev/`** / **`RP - Dev/`** into a store or public drop:
 
-- **Merge into public trees:** copy or sync changed scripts, JSON, and assets into **`BP/`** and **`RP/`** (whatever actually changed in dev).
+- **Merge into public trees:** copy or sync changed scripts, JSON, and assets into **`BP/`** and **`RP/`** (whatever actually changed in dev). For all behavior scripts except build config: **`npm run sync:bp-from-dev`** (`tools/syncBpFromDev.js` — skips **`mb_buildConfig.js`**).
 - **Do not swap build configs between packs:** **`BP/scripts/mb_buildConfig.js`** → `BUILD_FLAVOR = "release"`, **`INCLUDE_FULL_DEVELOPER_TOOLS = false`**. **`BP - Dev/scripts/mb_buildConfig.js`** → `BUILD_FLAVOR = "dev"`, **`INCLUDE_FULL_DEVELOPER_TOOLS = true`**. One file controls all journal gating (`isReleaseAdminBuild()` in codex).
 - **Manifests:** confirm **`BP/manifest.json`** and **`RP/manifest.json`** (name, description, uuid/version policy) match what you publish; **description** beta label should match **`ADDON_VERSION_PRERELEASE`** and **`PLAYER_CHANGELOG_VERSION`** in **`mb_buildConfig.js`** / **`mb_playerChangelog.js`** (same for **`BP - Dev/`** + **`RP - Dev/`** when tagging dev builds).
 - **Validate:** run **`npm run check`** (or at least `npm run validate` + `npm run lint`) against the **`BP/`** and **`RP/`** trees after the merge.
 - **Ship only public packs** to players: **`BP/`** + **`RP/`** — do not distribute **`BP - Dev/`** or **`RP - Dev/`** as the main download.
 - **Optional:** add a short note to **`docs/context summary.md`** (dated section) for notable release-facing changes.
-- **GitHub Releases (tag-driven CI):** bump **`BP/scripts/mb_buildConfig.js`**, edit **`docs/RELEASE_BODY.md`**, `npm run sync:pack-metadata`, `npm run check`, commit, `git tag v<semver>`, `git push origin v<semver>`. CI attaches **`BP/`** + **`RP/`** zips only; dev packs stay in the repo, not on Releases. Export **`.mcpack` in Bridge**. See **`docs/releasing.md`**.
+- **GitHub Releases (tag-driven CI):** bump **`BP/scripts/mb_buildConfig.js`**, edit **`docs/RELEASE_BODY.md`**, `npm run sync:pack-metadata`, `npm run check`, commit, `git tag v<semver>`, `git push origin v<semver>`. CI attaches **`BP/`** + **`RP/`** zips only; **`BP - Dev/`** and **`RP - Dev/`** stay in the repo (Bridge), not as release downloads. Export **`.mcpack` in Bridge**. See **`docs/releasing.md`**.
 - **Performance:** [`docs/development/PERFORMANCE_OPTIMIZATION_ROADMAP.md`](docs/development/PERFORMANCE_OPTIMIZATION_ROADMAP.md) + [`PERFORMANCE_DEBUG.md`](docs/development/PERFORMANCE_DEBUG.md).
 
 ### Adaptive storm / mining load (no true MSPT)

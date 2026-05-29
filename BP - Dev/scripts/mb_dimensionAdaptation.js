@@ -10,7 +10,13 @@
 
 import { system, world } from "@minecraft/server";
 import { getBearSnapshotsForDimensions } from "./mb_bearSnapshot.js";
+import {
+    isAddonBearActivityDormant,
+    shouldDecimateZeroBearAiWake,
+    shouldSkipExpensiveEntityQueries
+} from "./mb_entityQueryGate.js";
 import { isEntityValid } from "./mb_sharedCache.js";
+import { shouldPauseDayZeroAddonLoops, shouldSleepDayZeroWorldWork } from "./mb_dayZeroPerfBisect.js";
 import { isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
 import { claimSpreadSlice, isSpreadThrottleActive } from "./mb_workSpread.js";
 
@@ -165,7 +171,11 @@ function removeFireResistance(entity) {
 
 system.runInterval(() => {
     try {
+        if (shouldPauseDayZeroAddonLoops()) return;
         if (!isScriptEnabled(SCRIPT_IDS.dimensionAdaptation)) return;
+        if (shouldDecimateZeroBearAiWake()) return;
+        if (isAddonBearActivityDormant()) return;
+        if (shouldSkipExpensiveEntityQueries("dimAdapt")) return;
         if (isSpreadThrottleActive() && !claimSpreadSlice("dimAdapt", ADAPTATION_CHECK_INTERVAL)) return;
 
         // Shared bear snapshot (typed queries) — never dimension.getEntities() (village/load spikes).
@@ -224,6 +234,7 @@ system.runInterval(() => {
 
 world.afterEvents.entitySpawn.subscribe((event) => {
     try {
+        if (shouldSleepDayZeroWorldWork("bear_entity_spawn")) return;
         if (!isScriptEnabled(SCRIPT_IDS.dimensionAdaptation)) return;
 
         const entity = event.entity;

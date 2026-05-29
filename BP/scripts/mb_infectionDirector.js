@@ -6,6 +6,8 @@
 import { world, system } from "@minecraft/server";
 import { getSpawnLoadDebugSnapshot } from "./mb_spawnLoadMetrics.js";
 import { getCurrentDay } from "./mb_dayTracker.js";
+import { shouldSleepDayZeroWorldWork } from "./mb_dayZeroPerfBisect.js";
+import { isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
 import { pushHudActionBarToast } from "./mb_actionBarHud.js";
 import {
     INFECTION_DIRECTOR_DAY_SCOUT_MAX,
@@ -76,6 +78,8 @@ export function initializeInfectionDirectorWatch() {
     try {
         system.runInterval(() => {
             try {
+                if (!isScriptEnabled(SCRIPT_IDS.infectionDirector)) return;
+                if (shouldSleepDayZeroWorldWork("infection_director")) return;
                 const day = getCurrentDay();
                 const base = getInfectionDirectorBaseStageFromDay(day);
                 if (!directorWatchPrimed) {

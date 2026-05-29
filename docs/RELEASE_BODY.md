@@ -6,7 +6,7 @@ Performance pass for **day 0–1** and **village / new-chunk** load, plus **buff
 
 ### Download & install
 
-This release ships **public pack folders** only — download **`…-BP.zip`** and **`…-RP.zip`**, unzip so you have `BP/` and `RP/` folders.
+Download **`…-BP.zip`** and **`…-RP.zip`**, unzip so you have `BP/` and `RP/` folders.
 
 1. Open in **Bridge**, or export `.mcpack` and import into Minecraft.
 2. Enable **The Maple Bear Apocalypse** on both behavior and resource sides of your world.

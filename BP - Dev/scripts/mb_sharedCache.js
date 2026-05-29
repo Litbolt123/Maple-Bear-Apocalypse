@@ -13,6 +13,8 @@ import {
     shouldDeferVillageBurst,
     SPREAD_CELL_COUNT
 } from "./mb_workSpread.js";
+import { shouldSkipMobCacheQueries, noteMobCacheQuerySkipped } from "./mb_entityQueryGate.js";
+import { traceEntityQueryRun, traceEntityQuerySkip } from "./mb_entityQueryTraceDev.js";
 
 /**
  * @minecraft/server `Entity.isValid` is a **boolean**; treat both boolean and
@@ -54,7 +56,11 @@ const MOB_CACHE_EXCLUDE_TYPES = [
     "minecraft:snowball",
     "minecraft:egg",
     "minecraft:ender_pearl",
-    "minecraft:experience_bottle"
+    "minecraft:experience_bottle",
+    /** Villagers are extremely expensive in bulk `getEntities` scans; bears target players + hostile mobs. */
+    "minecraft:villager",
+    "minecraft:villager_v2",
+    "minecraft:wandering_trader"
 ];
 let cachedMobsByDimension = new Map(); // Map<dimensionId, {mobs: Entity[], tick: number, center: {x, y, z} | null}>
 
@@ -64,13 +70,14 @@ function normalizeDimensionKey(dimId) {
 }
 
 /**
- * Query mobs/villagers near one or more anchors; dedupe by entity id.
+ * Query hostile/neutral mobs near anchors (not villagers — village loads spike on `villager` family).
  * @param {import("@minecraft/server").Dimension} dimension
  * @param {{ x: number, y: number, z: number }[]} anchors
  * @returns {import("@minecraft/server").Entity[]}
  */
+/** Hostile mobs only — `mob` family still scans villagers/cows in many Bedrock builds. */
 const MOB_CACHE_QUERY_OPTS = {
-    families: ["mob", "villager"],
+    families: ["monster"],
     excludeTypes: MOB_CACHE_EXCLUDE_TYPES
 };
 
@@ -107,6 +114,10 @@ function queryMobsNearAnchors(dimension, anchors) {
                 location: pos,
                 maxDistance: MOB_CACHE_QUERY_RADIUS
             });
+            traceEntityQueryRun(
+                `mobCache:direct:${dimKey}`,
+                `r=${MOB_CACHE_QUERY_RADIUS} n=${part?.length ?? 0}`
+            );
         } catch {
             continue;
         }
@@ -238,6 +249,10 @@ export function clearPlayerCache() {
  */
 export function getCachedMobs(dimension, center = null, maxDistance = MOB_CACHE_DISTANCE) {
     if (!dimension) return [];
+    if (shouldSkipMobCacheQueries()) {
+        noteMobCacheQuerySkipped();
+        return [];
+    }
 
     const currentTick = system.currentTick;
     const dimId = dimension.id;
@@ -266,9 +281,27 @@ export function getCachedMobs(dimension, center = null, maxDistance = MOB_CACHE_
         const cacheCenter = center || averagePosition(playerPositions);
 
         if (shouldDeferVillageBurst("mobCache")) {
+            traceEntityQuerySkip("mobCache", "villageDefer", dimId);
+            noteMobCacheQuerySkipped();
             if (cached?.mobs?.length) {
-                return filterMobsByCenter(cached.mobs.filter((m) => isEntityValid(m)), cacheCenter, maxDistance);
+                return filterMobsByCenter(
+                    cached.mobs.filter((m) => isEntityValid(m)),
+                    cacheCenter,
+                    maxDistance
+                );
             }
+            return [];
+        }
+        if (shouldSkipMobCacheQueries()) {
+            noteMobCacheQuerySkipped();
+            if (cached?.mobs?.length) {
+                return filterMobsByCenter(
+                    cached.mobs.filter((m) => isEntityValid(m)),
+                    cacheCenter,
+                    maxDistance
+                );
+            }
+            return [];
         }
         if (isEntityQuerySpreadActive() && playerPositions.length > 0) {
             let entry = cached;

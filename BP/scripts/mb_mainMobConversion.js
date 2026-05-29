@@ -13,6 +13,7 @@ import {
 } from "./mb_balance.js";
 import { isBuffBearSpawnBlocked, isBuffBearTypeId as isBuffBearTypeIdCap } from "./mb_buffCap.js";
 import { refreshSpawnLoadMetrics, getSpawnLoadDebugSnapshot } from "./mb_spawnLoadMetrics.js";
+import { shouldSleepDayZeroWorldWork } from "./mb_dayZeroPerfBisect.js";
 import { queryEntitiesSpread } from "./mb_workSpread.js";
 import {
     MAPLE_BEAR_ID,
@@ -119,6 +120,7 @@ function ensureMobConversionHurtTracking() {
     mobConversionHurtTrackingStarted = true;
     world.afterEvents.entityHurt.subscribe((event) => {
         try {
+            if (shouldSleepDayZeroWorldWork("entity_hurt")) return;
             recordMapleBearDamageToVictim(event.hurtEntity, event.damageSource?.damagingEntity);
         } catch {
             /* ignore */

@@ -1,0 +1,14 @@
+{
+	"format_version": "1.21.0",
+	"minecraft:aggregate_feature": {
+		"description": {
+			"identifier": "mb:abandoned_settlement/ruin_props"
+		},
+		"early_out": "first_failure",
+		"features": [
+			"mb:abandoned_settlement/ruin_barrel",
+			"mb:abandoned_settlement/ruin_cobweb",
+			"mb:abandoned_settlement/ruin_dusted"
+		]
+	}
+}

@@ -6,8 +6,10 @@ import { isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
 import { getCachedPlayers } from "./mb_sharedCache.js";
 import { getBearsOfType } from "./mb_bearSnapshot.js";
 import { getAiIntervalStretch } from "./mb_performanceProfile.js";
+import { isAddonBearActivityDormant, shouldDecimateZeroBearAiWake } from "./mb_entityQueryGate.js";
+import { isBearAiBootstrapDeferred, registerBearAiStartCallback } from "./mb_bearAiBootstrap.js";
 import { BUFF_CONVERSION_SPAWN_TAG } from "./mb_mainMobConversion.js";
-import { queryEntitiesSpread } from "./mb_workSpread.js";
+import { queryEntitiesSpread, safeQueryEntitiesNear } from "./mb_workSpread.js";
 
 // Debug helper functions
 function getDebugGeneral() {
@@ -303,10 +305,15 @@ function createBuffExplosion(source) {
         
         try {
             // Get all entities in knockback range
-            const nearbyEntities = dimension.getEntities({
-                location: loc,
-                maxDistance: KNOCKBACK_RANGE,
-                families: ["player", "mob", "villager"]
+            const nearbyEntities = safeQueryEntitiesNear(dimension, "buffKnockback", loc, KNOCKBACK_RANGE, {
+                families: ["player", "monster"],
+                excludeTypes: [
+                    "minecraft:villager",
+                    "minecraft:villager_v2",
+                    "minecraft:wandering_trader",
+                    "minecraft:item",
+                    "minecraft:xp_orb"
+                ]
             });
             
             for (const targetEntity of nearbyEntities) {
@@ -719,6 +726,8 @@ function initializeBuffAI() {
     
     buffAIIntervalId = system.runInterval(() => {
         try {
+            if (shouldDecimateZeroBearAiWake()) return;
+            if (isAddonBearActivityDormant()) return;
             const currentTick = system.currentTick;
             const buffScriptEnabled = isScriptEnabled(SCRIPT_IDS.buff);
             // Journal/menu queries bears without this toggle; countdown logs need the interval to run.
@@ -1038,33 +1047,22 @@ world.afterEvents.entityHurt.subscribe((event) => {
 // Don't call getDebugGeneral() at module load time - world might not be ready
 // Just log basic info and initialize
 
-// Try to initialize after delay (with error handling)
-try {
-    if (typeof system !== "undefined" && system?.currentTick !== undefined) {
-        console.warn("[BUFF AI] ====== SCRIPT LOADED ======");
-        console.warn(`[BUFF AI] Script file loaded at tick ${system.currentTick}`);
-        console.warn(`[BUFF AI] Starting delayed initialization in ${BUFF_INIT_DELAY_TICKS} ticks...`);
-        
-        // Schedule initial initialization attempt
-        try {
-            system.runTimeout(() => {
-                initializeBuffAI();
-            }, BUFF_INIT_DELAY_TICKS);
-        } catch (error) {
-            console.warn(`[BUFF AI] Failed to schedule initial initialization:`, error);
-        }
-    } else {
-        console.warn("[BUFF AI] ====== SCRIPT LOADED (system not ready yet) ======");
+registerBearAiStartCallback(() => {
+    try {
+        system.runTimeout(() => {
+            initializeBuffAI();
+        }, BUFF_INIT_DELAY_TICKS);
+    } catch (error) {
+        console.warn(`[BUFF AI] Failed to schedule initialization:`, error);
     }
-} catch (error) {
-    console.warn(`[BUFF AI] Error during script load:`, error);
-}
+});
 
 // Fallback: Also try to initialize when first player joins (in case world wasn't ready)
 // When last player leaves, tear down the interval so rejoin will trigger a fresh init.
 try {
     if (typeof world !== "undefined" && world?.afterEvents) {
         world.afterEvents.playerJoin.subscribe(() => {
+            if (isBearAiBootstrapDeferred()) return;
             if (!buffAIInitialized && buffAIIntervalId === null) {
                 console.warn("[BUFF AI] Player joined, attempting initialization as fallback...");
                 buffInitAttempts = 0; // Reset attempts for fallback initialization
@@ -1104,6 +1102,7 @@ try {
         if (world.afterEvents.playerSpawn) {
             world.afterEvents.playerSpawn.subscribe((event) => {
                 if (!event.initialSpawn) return;
+                if (isBearAiBootstrapDeferred()) return;
                 if (buffAIInitialized && buffAIIntervalId !== null) return;
                 console.warn("[BUFF AI] Player spawned (initial), attempting initialization as fallback...");
                 buffInitAttempts = 0;

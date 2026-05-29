@@ -2,7 +2,7 @@
 
 This repo ships like **What Am I Doing**: push a **`v*`** Git tag → GitHub Actions validates and zips pack folders → **GitHub Release** attaches those `.zip` files. Ordinary pushes to `main` do **not** publish a Release.
 
-**`.mcpack` export:** done in **Bridge** on your machine (more reliable than CI). CI only ships **`BP/`**, **`RP/`**, **`BP - Dev/`**, **`RP - Dev/`** as zips.
+**`.mcpack` export:** done in **Bridge** on your machine (more reliable than CI). CI attaches **`BP/`** + **`RP/`** zips only. **`BP - Dev/`** and **`RP - Dev/`** live in the git repo for maintainers — they are **not** GitHub Release download assets.
 
 **Players:** [GitHub Releases](https://github.com/Litbolt123/Maple-Bear-Take-Over/releases) → download **`…-BP.zip`** + **`…-RP.zip`**, unzip, export/import via Bridge or Bedrock as you prefer.
 
@@ -23,7 +23,7 @@ Maintainer
 
 GitHub Actions (.github/workflows/release.yml)
   → sync manifests, validate JSON + BP/scripts syntax, lint
-  → zip BP/, RP/ only → dist/*.zip (dev packs stay in repo, not on Releases)
+  → zip BP/, RP/ only → dist/*.zip
   → upload-artifact (always)
   → softprops/action-gh-release (tag pushes only)
        attaches .zip pack folders, body from docs/RELEASE_BODY.md
@@ -40,6 +40,7 @@ Players / maintainers
 |------|------|
 | **`BP/scripts/mb_buildConfig.js`** | `ADDON_VERSION_MAJOR/MINOR/PATCH`, `ADDON_VERSION_PRERELEASE` |
 | **`npm run sync:pack-metadata`** | Updates all four `manifest.json`, `config.json` descriptions |
+| **`npm run sync:bp-from-dev`** | Copies `BP - Dev/scripts/*.js` → `BP/scripts/` (skips `mb_buildConfig.js`) |
 | **`BP - Dev/scripts/mb_buildConfig.js`** | Keep prerelease label in sync for dev playtests |
 | **`docs/RELEASE_BODY.md`** | GitHub Release description (what downloaders read) |
 | **`docs/PLAYER_CHANGELOG.md`** | Longer player notes + in-game What's new source |

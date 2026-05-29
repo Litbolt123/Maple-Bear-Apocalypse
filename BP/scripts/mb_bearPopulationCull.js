@@ -9,6 +9,8 @@
 import { system, world } from "@minecraft/server";
 import { countBearsAcrossDimensions, getBearSnapshot, invalidateBearSnapshots } from "./mb_bearSnapshot.js";
 import { isEntityValid } from "./mb_sharedCache.js";
+import { shouldPauseDayZeroAddonLoops } from "./mb_dayZeroPerfBisect.js";
+import { isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
 import { getWorldProperty } from "./mb_dynamicPropertyHandler.js";
 import { getBearCullEffectiveParams, getBearCullEligibleTypeSet, BEAR_CULL_POLL_INTERVAL_TICKS } from "./mb_bearCullDev.js";
 
@@ -129,6 +131,8 @@ export function initializeBearPopulationCull() {
     started = true;
     system.runInterval(() => {
         try {
+            if (!isScriptEnabled(SCRIPT_IDS.bearCull)) return;
+            if (shouldPauseDayZeroAddonLoops()) return;
             const now = system.currentTick;
             const p = getBearCullEffectiveParams();
             if (now - lastBearCullPassTick < p.intervalTicks) return;

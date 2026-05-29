@@ -22,7 +22,7 @@ const INFECTION_EXPOSURE_PASSTHROUGH = new Set([
     "minecraft:tripwire",
     "minecraft:tripwire_hook",
     "minecraft:redstone_wire",
-    "minecraft:cobweb"
+    "minecraft:web"
 ]);
 
 for (const id of SNOW_REPLACEABLE_BLOCKS) INFECTION_EXPOSURE_PASSTHROUGH.add(id);

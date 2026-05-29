@@ -14,6 +14,18 @@
 import { system, world } from "@minecraft/server";
 import { isEntityValid } from "./mb_sharedCache.js";
 import {
+    getLastGlobalBearCount,
+    setLastGlobalBearCount,
+    setLastKnownMiningBearCount,
+    shouldSkipBearSnapshotRefresh,
+    shouldSkipExpensiveEntityQueries,
+    wakeFromZeroBearStanddown,
+    noteSnapshotRefreshSkipped
+} from "./mb_entityQueryGate.js";
+import { shouldSleepDayZeroWorldWork } from "./mb_dayZeroPerfBisect.js";
+import { MINING_BEAR_TYPES } from "./mb_miningConstants.js";
+import { traceEntityQueryRun } from "./mb_entityQueryTraceDev.js";
+import {
     getPlayerAnchorsInDimension,
     getSpreadBearSnapshotEmptyTtl,
     getSpreadSectionLocation,
@@ -128,6 +140,10 @@ function refreshDimensionNearPlayers(dimension, currentTick, anchors, queryRadiu
                     location: anchor,
                     maxDistance: queryRadius
                 });
+                traceEntityQueryRun(
+                    "bearSnapshotNear",
+                    `dim=${dimension.id} t=${typeId} r=${queryRadius} n=${part?.length ?? 0}`
+                );
                 if (part?.length) mergeIntoPartialList(all, part);
             } catch {
                 /* ignore one query */
@@ -166,6 +182,10 @@ function refreshDimensionSpread(dimension, currentTick) {
                 location: loc,
                 maxDistance: SPREAD_CELL_RADIUS
             });
+            traceEntityQueryRun(
+                "bearSnapshotSpread",
+                `dim=${dimension.id} t=${typeId} n=${part?.length ?? 0}`
+            );
             if (part?.length) mergeIntoPartialList(partial.all, part);
         } catch {
             /* ignore */
@@ -190,6 +210,13 @@ function refreshDimensionSpread(dimension, currentTick) {
 
 function refreshDimension(dimension, currentTick) {
     if (!dimension) return emptySnapshot(currentTick);
+    if (shouldSkipExpensiveEntityQueries("bearSnapshotBuild")) {
+        noteSnapshotRefreshSkipped();
+        const key = normalizeDimensionId(dimension.id);
+        const stale = snapshotsByDimension.get(key);
+        if (stale) return stale;
+        return emptySnapshot(currentTick);
+    }
 
     const anchors = getPlayerAnchorsInDimension(dimension);
     if (isSpreadThrottleActive() || isVillageEntitySpreadActive()) {
@@ -199,17 +226,46 @@ function refreshDimension(dimension, currentTick) {
         return refreshDimensionNearPlayers(dimension, currentTick, anchors, 96);
     }
 
-    // No players in dimension: rare; one unscoped pass per type.
+    // No players in dimension: never unscoped scan on early/zero-bear days (villages load thousands of entities).
+    if (shouldSkipExpensiveEntityQueries("bearSnapshotUnscoped")) {
+        noteSnapshotRefreshSkipped();
+        return emptySnapshot(currentTick);
+    }
     const all = [];
     for (const typeId of ALL_MB_BEAR_TYPES) {
         try {
             const part = dimension.getEntities({ type: typeId });
+            traceEntityQueryRun("bearSnapshotUnscoped", `dim=${dimension.id} t=${typeId} n=${part?.length ?? 0}`);
             if (part?.length) mergeIntoPartialList(all, part);
         } catch {
             /* ignore */
         }
     }
     return bucketEntitiesIntoSnapshot(all, currentTick);
+}
+
+function sumGlobalBearCount() {
+    let total = 0;
+    for (const snap of snapshotsByDimension.values()) {
+        total += snap?.all?.length ?? 0;
+    }
+    return total;
+}
+
+function sumMiningBearCountFromSnapshots() {
+    let n = 0;
+    for (const snap of snapshotsByDimension.values()) {
+        if (!snap?.byType) continue;
+        for (const { id } of MINING_BEAR_TYPES) {
+            n += snap.byType.get(id)?.length ?? 0;
+        }
+    }
+    return n;
+}
+
+function publishBearCountsFromSnapshots() {
+    setLastGlobalBearCount(sumGlobalBearCount());
+    setLastKnownMiningBearCount(sumMiningBearCountFromSnapshots());
 }
 
 function getOrRefresh(dimension) {
@@ -226,7 +282,17 @@ function getOrRefresh(dimension) {
         }
     }
 
-    if (shouldDeferVillageBurst("bearSnapshot") && cached) {
+    if (shouldSkipExpensiveEntityQueries("bearSnapshot")) {
+        if (cached) {
+            noteSnapshotRefreshSkipped();
+            return cached;
+        }
+        noteSnapshotRefreshSkipped();
+        return emptySnapshot(currentTick);
+    }
+
+    if (shouldSkipBearSnapshotRefresh(!cached || cached.all.length === 0) && cached) {
+        noteSnapshotRefreshSkipped();
         return cached;
     }
 
@@ -236,6 +302,7 @@ function getOrRefresh(dimension) {
 
     const fresh = refreshDimension(dimension, currentTick);
     snapshotsByDimension.set(key, fresh);
+    publishBearCountsFromSnapshots();
     return fresh;
 }
 
@@ -333,6 +400,16 @@ export function getBearSnapshotsForDimensions(dimensionIds) {
     const out = new Map();
     const currentTick = system.currentTick;
 
+    if (getLastGlobalBearCount() === 0 && shouldDeferVillageBurst("bearSnapshots")) {
+        for (const id of dimensionIds) {
+            const key = normalizeDimensionId(id);
+            const cached = key ? snapshotsByDimension.get(key) : null;
+            out.set(id, cached ?? emptySnapshot(currentTick));
+        }
+        noteSnapshotRefreshSkipped();
+        return out;
+    }
+
     if ((isSpreadThrottleActive() || isVillageEntitySpreadActive()) && dimensionIds.length > 1) {
         const refreshId = dimensionIds[spreadDimRefreshRotate % dimensionIds.length];
         spreadDimRefreshRotate++;
@@ -396,7 +473,25 @@ export function countBearsAcrossDimensions(dimensionIds, onlyTypes = null) {
 }
 
 /** Force-refresh all snapshots next call (testing / telemetry). */
+try {
+    if (typeof world !== "undefined" && world?.afterEvents?.entitySpawn) {
+        world.afterEvents.entitySpawn.subscribe((event) => {
+            try {
+                if (shouldSleepDayZeroWorldWork("bear_entity_spawn")) return;
+                const typeId = event?.entity?.typeId;
+                if (!typeId || !ALL_MB_BEAR_TYPES_SET.has(typeId)) return;
+                wakeFromZeroBearStanddown();
+            } catch {
+                /* ignore */
+            }
+        });
+    }
+} catch {
+    /* world not ready at import */
+}
+
 export function invalidateBearSnapshots() {
+    wakeFromZeroBearStanddown();
     snapshotsByDimension.clear();
     spreadPartialByDimension.clear();
 }

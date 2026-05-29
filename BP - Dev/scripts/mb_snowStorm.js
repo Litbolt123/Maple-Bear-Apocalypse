@@ -12,6 +12,9 @@ import { SNOW_REPLACEABLE_BLOCKS, SNOW_NEVER_REPLACE_BLOCKS, SNOW_TWO_BLOCK_PLAN
 import { getStormWorkIntervalMultiplier } from "./mb_performanceProfile.js";
 import { getStormStartChanceCampScale } from "./mb_spawnMobilityCamp.js";
 import { STORM_RESERVOIR_INNER_RADIUS_FRACTION, STORM_RESERVOIR_SPAWN_CHANCE_MAX_BUMP } from "./mb_balance.js";
+import { shouldPauseDayZeroAddonLoops } from "./mb_dayZeroPerfBisect.js";
+import { shouldSkipExpensiveEntityQueries } from "./mb_entityQueryGate.js";
+import { safeQueryEntitiesNear } from "./mb_workSpread.js";
 
 /** Stretch storm work intervals when lag profile / player count / dev mult asks for lighter load. */
 function scaledStormTicks(baseTicks) {
@@ -1121,8 +1124,9 @@ system.runTimeout(() => {
 // Storm check loop (start/end storms)
 system.runInterval(() => {
     try {
+        if (shouldPauseDayZeroAddonLoops()) return;
         if (!isScriptEnabled(SCRIPT_IDS.snowStorm) || !isDustStormsEnabled()) return;
-        
+
         const currentTick = system.currentTick;
 
         const beforeCount = storms.length;
@@ -1160,6 +1164,7 @@ system.runInterval(() => {
 // Phased storm work (particles, snow, mob damage, destruct) — run every tick; heavy buckets only on tick % 10 ∈ {0,2,4,6,8}
 system.runInterval(() => {
     try {
+        if (shouldPauseDayZeroAddonLoops()) return;
         if (storms.length === 0 || !isScriptEnabled(SCRIPT_IDS.snowStorm) || !isDustStormsEnabled()) return;
 
         const currentTick = system.currentTick;
@@ -1392,18 +1397,23 @@ system.runInterval(() => {
                 const lastMob = storm._lastMobDamageTick ?? -1e9;
                 if (currentTick - lastMob < mobInterval) continue;
                 storm._lastMobDamageTick = currentTick;
+                if (shouldSkipExpensiveEntityQueries("stormMobDamage")) continue;
 
                 const excludeTypes = new Set([
                     "minecraft:item", "minecraft:xp_orb", "minecraft:arrow", "minecraft:fireball",
-                    "minecraft:small_fireball", "minecraft:firework_rocket"
+                    "minecraft:small_fireball", "minecraft:firework_rocket",
+                    "minecraft:villager", "minecraft:villager_v2", "minecraft:wandering_trader"
                 ]);
                 const mbPrefixes = ["mb:mb_day", "mb:infected", "mb:buff_mb", "mb:flying_mb", "mb:mining_mb", "mb:torpedo_mb", "mb:infected_pig", "mb:infected_cow"];
                 let damaged = 0;
                 try {
-                    const mobs = overworld.getEntities({
-                        location: { x: storm.centerX, y: storm.centerY, z: storm.centerZ },
-                        maxDistance: currentRadius
-                    });
+                    const mobs = safeQueryEntitiesNear(
+                        overworld,
+                        "stormMobDamage",
+                        { x: storm.centerX, y: storm.centerY, z: storm.centerZ },
+                        currentRadius,
+                        { families: ["monster"] }
+                    );
                     let processed = 0;
                     for (const mob of mobs) {
                         if (processed >= STORM_MOB_DAMAGE_MAX_MOBS_PER_TICK) break;

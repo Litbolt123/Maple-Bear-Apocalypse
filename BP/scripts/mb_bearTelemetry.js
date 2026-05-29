@@ -5,7 +5,9 @@
 import { system, world } from "@minecraft/server";
 import { INCLUDE_FULL_DEVELOPER_TOOLS } from "./mb_buildConfig.js";
 import { isDebugEnabled } from "./mb_codex.js";
+import { getBearSnapshotsForDimensions } from "./mb_bearSnapshot.js";
 import { ALL_MB_MOB_TYPES } from "./mb_spawnLoadMetrics.js";
+import { shouldSkipExpensiveEntityQueries } from "./mb_entityQueryGate.js";
 
 const TICK_INTERVAL = 20;
 const LOG_EVERY_TICKS = 100;
@@ -13,26 +15,15 @@ const LOG_EVERY_TICKS = 100;
 let telemetryStarted = false;
 
 function countByType() {
+    if (shouldSkipExpensiveEntityQueries("bearTelemetry")) return {};
     /** @type {Record<string, number>} */
     const counts = {};
-    const dims = ["minecraft:overworld", "minecraft:nether", "minecraft:the_end"];
-    for (const dimId of dims) {
-        let dim;
-        try {
-            dim = world.getDimension(dimId);
-        } catch {
-            continue;
-        }
-        if (!dim) continue;
-        for (const typeId of ALL_MB_MOB_TYPES) {
-            try {
-                const ents = dim.getEntities({ type: typeId });
-                const n = ents?.length || 0;
-                if (n === 0) continue;
-                counts[typeId] = (counts[typeId] || 0) + n;
-            } catch {
-                /* ignore */
-            }
+    const allowed = new Set(ALL_MB_MOB_TYPES);
+    const snaps = getBearSnapshotsForDimensions(["overworld", "nether", "the_end"]);
+    for (const snap of snaps.values()) {
+        for (const [typeId, bucket] of snap.byType) {
+            if (!allowed.has(typeId) || !bucket?.length) continue;
+            counts[typeId] = (counts[typeId] || 0) + bucket.length;
         }
     }
     return counts;

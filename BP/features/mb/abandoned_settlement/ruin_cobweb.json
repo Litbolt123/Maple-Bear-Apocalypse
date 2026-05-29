@@ -1,0 +1,19 @@
+{
+	"format_version": "1.21.0",
+	"minecraft:scatter_feature": {
+		"description": {
+			"identifier": "mb:abandoned_settlement/ruin_cobweb"
+		},
+		"places_feature": "mb:abandoned_settlement/ruin_cobweb_block",
+		"iterations": 3,
+		"x": {
+			"distribution": "uniform",
+			"extent": [-1, 1]
+		},
+		"z": {
+			"distribution": "uniform",
+			"extent": [-1, 1]
+		},
+		"y": 1
+	}
+}

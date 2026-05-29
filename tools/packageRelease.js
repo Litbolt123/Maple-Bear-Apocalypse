@@ -1,5 +1,6 @@
 /**
- * Zip public BP/ and RP/ for GitHub Releases (dev packs stay in the repo only).
+ * Zip public BP/ and RP/ for GitHub Releases.
+ * Dev packs (BP - Dev/, RP - Dev/) stay in the repo only — not release download assets.
  * Export .mcpack in Bridge locally.
  *
  *   node tools/packageRelease.js
@@ -19,7 +20,7 @@ const versionJson = execFileSync(process.execPath, [join(root, "tools/getVersion
 });
 const { version, assetBase } = JSON.parse(versionJson.trim());
 
-/** GitHub Releases: public packs only. Dev folders are not attached. */
+/** GitHub Releases: public packs only. */
 const packs = [
     { dir: "BP", label: "BP" },
     { dir: "RP", label: "RP" }
@@ -60,7 +61,7 @@ for (const { dir, label } of packs) {
     outputs.push(out);
 }
 
-console.log(`\nRelease assets (${version}) — public BP + RP only:`);
+console.log(`\nRelease assets (${version}) — BP + RP only:`);
 for (const p of outputs) {
     console.log(`  ${p}`);
 }

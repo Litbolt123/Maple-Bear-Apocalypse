@@ -1,7 +1,7 @@
 # Unreleased — draft release notes (next beta)
 
 **Status:** Work landed on `main` in dev commit `67d9de8` — **do not bump version** until maintainer says release.  
-**When shipping:** copy player bullets → `docs/PLAYER_CHANGELOG.md`, `docs/RELEASE_BODY.md`, `BP/scripts/mb_playerChangelog.js` (`PLAYER_CHANGELOG_VERSION` + `getPlayerChangelogBody()`), run `npm run sync:pack-metadata`, tag `v*`.
+**When shipping:** copy player bullets → `docs/PLAYER_CHANGELOG.md`, `docs/RELEASE_BODY.md`, `BP/scripts/mb_playerChangelog.js`, run `npm run sync:pack-metadata`, tag `v*`. CI attaches **BP + RP** zips only (no dev pack downloads on the Release).
 
 ---
 
@@ -52,8 +52,8 @@
 4. [ ] `mb_playerChangelog.js` + `BP - Dev` copy — bump `PLAYER_CHANGELOG_VERSION` + in-game body.
 5. [ ] `docs/RELEASE_BODY.md` — GitHub Release text.
 6. [ ] `mb_buildConfig.js` — `ADDON_VERSION_PRERELEASE`; `npm run sync:pack-metadata`.
-7. [ ] Merge `BP - Dev` → `BP`, `RP - Dev` → `RP` (keep release `mb_buildConfig.js`).
-8. [ ] `npm run check`; tag; GitHub Release (BP + RP zips only).
+7. [ ] Merge dev → public: `npm run sync:bp-from-dev`; copy any changed JSON/assets in `BP/` + `RP/` from dev twins (keep release `mb_buildConfig.js`).
+8. [ ] `npm run check`; tag; GitHub Release (**BP + RP** zips only).
 
 ---
 

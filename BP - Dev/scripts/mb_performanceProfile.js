@@ -12,6 +12,11 @@
 import { system, world } from "@minecraft/server";
 import { getWorldProperty, setWorldProperty } from "./mb_dynamicPropertyHandler.js";
 import { getBearSnapshotsForDimensions } from "./mb_bearSnapshot.js";
+import { getLastGlobalBearCount, noteEngineTickBacklog } from "./mb_entityQueryGate.js";
+import { shouldSleepDayZeroWorldWork } from "./mb_dayZeroPerfBisect.js";
+import { shouldDeferVillageBurst } from "./mb_workSpread.js";
+import { isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
+import { isBearAiBootstrapDeferred } from "./mb_bearAiBootstrap.js";
 import { claimSpreadSlice, getMetricsSpreadLoad01, isSpreadThrottleActive } from "./mb_workSpread.js";
 
 /** 0 = full auto (advanced), 1 = a little, 2 = mid (recommended default), 3 = laggy */
@@ -136,6 +141,14 @@ function recordWallClockSample() {
         const dWall = now - lastSampleWallMs;
         const dTick = g - lastSampleGameTick;
         if (dTick > 0 && dWall > 0 && dWall < 20000) {
+            if (dTick >= 2 || dWall >= 120) {
+                try {
+                    const estimatedSkipped = Math.max(dTick, Math.ceil(dWall / 50));
+                    noteEngineTickBacklog(estimatedSkipped);
+                } catch {
+                    /* ignore */
+                }
+            }
             const mpt = dWall / dTick;
             if (Number.isFinite(mpt) && mpt < 500) {
                 msPerTickSamples.push(mpt);
@@ -148,6 +161,10 @@ function recordWallClockSample() {
 }
 
 function refreshExpensiveMobLoadCache() {
+    if (getLastGlobalBearCount() === 0) {
+        cachedWeightedMobScore = 0;
+        return;
+    }
     let score = 0;
     try {
         const snaps = getBearSnapshotsForDimensions(DIMENSION_IDS);
@@ -172,6 +189,10 @@ export function initializeAdaptivePerformanceWatch() {
     try {
         system.runInterval(() => {
             try {
+                if (!isScriptEnabled(SCRIPT_IDS.performanceProfile)) return;
+                if (shouldDeferVillageBurst("perfWall") || isBearAiBootstrapDeferred()) {
+                    return;
+                }
                 recordWallClockSample();
             } catch {
                 /* ignore */
@@ -179,6 +200,10 @@ export function initializeAdaptivePerformanceWatch() {
         }, 1);
         system.runInterval(() => {
             try {
+                if (!isScriptEnabled(SCRIPT_IDS.performanceProfile)) return;
+                if (shouldSleepDayZeroWorldWork("perf_sampler") || shouldDeferVillageBurst("perfMobSnap")) {
+                    return;
+                }
                 if (isSpreadThrottleActive()) {
                     if (!claimSpreadSlice("perfMobSnap", 160)) return;
                 }

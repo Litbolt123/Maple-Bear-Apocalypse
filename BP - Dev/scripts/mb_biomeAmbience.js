@@ -10,6 +10,7 @@ import { system, world } from "@minecraft/server";
 import { getCurrentDay } from "./mb_dayTracker.js";
 import { getPlayerSoundVolume, isDebugEnabled } from "./mb_codex.js";
 import { isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
+import { shouldPauseDayZeroAddonLoops, shouldSleepDayZeroWorldWork } from "./mb_dayZeroPerfBisect.js";
 import { isInsideEmulsifierNoSpawnZone } from "./mb_spawnController.js";
 import {
     claimSpreadSlice,
@@ -249,6 +250,7 @@ function checkBiomeAmbienceForPlayer(player, currentDay) {
  */
 system.runInterval(() => {
     if (!isScriptEnabled(SCRIPT_IDS.biomeAmbience)) return;
+    if (shouldSleepDayZeroWorldWork("biome_ambience")) return;
     if (shouldDeferVillageBurst("biomeAmbience")) return;
     try {
         const sliceBase = isVillageEntitySpreadActive() ? BIOME_CHECK_INTERVAL_OUT * 2 : BIOME_CHECK_INTERVAL_OUT;
@@ -291,6 +293,7 @@ system.runInterval(() => {
  */
 system.runInterval(() => {
     if (!isScriptEnabled(SCRIPT_IDS.biomeAmbience)) return;
+    if (shouldSleepDayZeroWorldWork("biome_ambience")) return;
     if (shouldDeferVillageBurst("biomeAmbienceFast")) return;
     try {
         // Only run if there are active ambience entries (players in biomes)
@@ -328,6 +331,7 @@ world.afterEvents.playerSpawn.subscribe((event) => {
     // Small delay to ensure world is ready
     system.runTimeout(() => {
         try {
+            if (shouldPauseDayZeroAddonLoops() || shouldSleepDayZeroWorldWork("biome_ambience")) return;
             if (!player.isValid) return;
             const biomeInfo = getInfectedBiomeInfo(player);
             if (biomeInfo) {

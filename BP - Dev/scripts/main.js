@@ -1,6 +1,7 @@
 import { world, system, EntityTypes, Entity, Player, ItemStack } from "@minecraft/server";
 import { ActionFormData, ModalFormData } from "@minecraft/server-ui";
 import "./mb_buildConfig.js";
+import "./mb_villagerSpawnPolicy.js";
 import {
     INCLUDE_FULL_DEVELOPER_TOOLS,
     isReleaseAdminBuild,
@@ -12,7 +13,10 @@ import { initializeDayTracking, getCurrentDay, setCurrentDay, getInfectionMessag
 import { registerDustedDirtBlock, unregisterDustedDirtBlock, countNearbyDustedDirtBlocks, upsertEmulsifierZoneAtBlock, removeEmulsifierZoneAtBlock, getEmulsifierZoneAtBlock, getZoneFuelQueueForUI, isInsideEmulsifierNoSpawnZone } from "./mb_spawnController.js";
 import { initializePropertyHandler, getPlayerProperty, setPlayerProperty, getWorldProperty, setWorldProperty, getAddonDifficultyState } from "./mb_dynamicPropertyHandler.js";
 import { initializeAdaptivePerformanceWatch, getPerfWallStress01, getPerfMobPressureForSpawn01, getPlayerThriftTier } from "./mb_performanceProfile.js";
-import { getBearSnapshotsForDimensions } from "./mb_bearSnapshot.js";
+import { getBearSnapshot, getBearSnapshotsForDimensions } from "./mb_bearSnapshot.js";
+import { shouldPauseDayZeroAddonLoops, shouldSleepDayZeroWorldWork } from "./mb_dayZeroPerfBisect.js";
+import { isEarlyWorldZeroBearPhase, shouldSkipExpensiveEntityQueries } from "./mb_entityQueryGate.js";
+import { traceEntityQueryRun } from "./mb_entityQueryTraceDev.js";
 import {
     claimSpreadSlice,
     isSpreadThrottleActive,
@@ -24,6 +28,7 @@ import {
 import { getCachedBlockInfo } from "./mb_blockCache.js";
 import { registerSpawnLoadProbes, initializeSpawnLoadScalerWatch } from "./mb_spawnLoadMetrics.js";
 import { initializeBiomeCheckerHudWatch } from "./mb_biomeCheckerDev.js";
+import { initializeEntityQueryDebugHudWatch } from "./mb_entityQueryDebugDev.js";
 import { initializeBuffBearOverflowCull } from "./mb_buffCap.js";
 import { getActiveStormCount } from "./mb_snowStorm.js";
 import { isDustStormsEnabled, isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
@@ -31,6 +36,7 @@ import { ACTION_BAR_SLOT, setHudActionBarSegment, clearHudActionBarSegment, push
 import { findItem, hasItem } from "./mb_itemFinder.js";
 import { initializeItemRegistry, registerItemHandler } from "./mb_itemRegistry.js";
 import { getSimPlayers, isSimFullBehaviorEnabled } from "./mb_simPlayers.js";
+import "./mb_bearAiBootstrap.js";
 import "./mb_miningAI.js";
 import { collectedBlocks } from "./mb_miningAI.js";
 import { setInfectedAngerTarget, angerNearbyInfectedAtPlayer } from "./mb_infectedAI.js";
@@ -2906,6 +2912,8 @@ const trackedDustedDirtBlocks = new Map(); // key: "x,y,z,dim" -> { tick, dimens
 
 // Run cleanup periodically
 system.runInterval(() => {
+    if (!isScriptEnabled(SCRIPT_IDS.dustedDirtCleanup)) return;
+    if (shouldPauseDayZeroAddonLoops()) return;
     cleanupOldDustedDirt();
 }, 600); // Check every 30 seconds
 
@@ -3291,6 +3299,16 @@ world.afterEvents.entityDie.subscribe((event) => {
         } catch (e) { /* ignore */ }
         handlePlayerDeath(entity);
         return; // Exit early for player deaths
+    }
+
+    if (shouldSleepDayZeroWorldWork("entity_die")) return;
+
+    const deadTypeId = entity?.typeId;
+    if (
+        isEarlyWorldZeroBearPhase() &&
+        (deadTypeId === "minecraft:villager" || deadTypeId === "minecraft:villager_v2")
+    ) {
+        return;
     }
     
     // Mob conversion: bear kill takes priority over storm (death often loses damagingEntity during storms).
@@ -3689,6 +3707,7 @@ world.afterEvents.entityDie.subscribe((event) => {
 
 // --- Anger spread: flying MB hit by player → target that player ---
 world.afterEvents.entityHurt.subscribe((event) => {
+    if (shouldSleepDayZeroWorldWork("entity_hurt")) return;
     const hurtEntity = event.hurtEntity;
     const source = event.damageSource;
     const flyingTypes = [FLYING_BEAR_ID, FLYING_BEAR_DAY15_ID, FLYING_BEAR_DAY20_ID];
@@ -3702,6 +3721,7 @@ world.afterEvents.entityHurt.subscribe((event) => {
 // --- Anger spread: infected (bear/pig/cow) hit by player → target that player ---
 const INFECTED_ANGER_TYPES = [INFECTED_BEAR_ID, INFECTED_BEAR_DAY8_ID, INFECTED_BEAR_DAY13_ID, INFECTED_BEAR_DAY20_ID, INFECTED_PIG_ID, INFECTED_COW_ID];
 world.afterEvents.entityHurt.subscribe((event) => {
+    if (shouldSleepDayZeroWorldWork("entity_hurt")) return;
     const hurtEntity = event.hurtEntity;
     const source = event.damageSource;
     if (!hurtEntity?.typeId || !INFECTED_ANGER_TYPES.includes(hurtEntity.typeId)) return;
@@ -3713,6 +3733,7 @@ world.afterEvents.entityHurt.subscribe((event) => {
 
 // --- Bear Infection: On hit by Maple Bear ---
 world.afterEvents.entityHurt.subscribe((event) => {
+    if (shouldSleepDayZeroWorldWork("entity_hurt")) return;
     const player = event.hurtEntity;
     const source = event.damageSource;
     if (!(player instanceof Player)) return;
@@ -4479,6 +4500,9 @@ function tickBiomeDiscovery() {
 
 // --- Infection Timers and Effects ---
 system.runInterval(() => {
+    if (!isScriptEnabled(SCRIPT_IDS.infectionSystem)) return;
+    if (shouldSleepDayZeroWorldWork("infection")) return;
+    if (shouldDeferVillageBurst("infection")) return;
     // Unified infection system
     syncSimPlayerInfectionEntries();
     const infectionAudioEnabled = isScriptEnabled(SCRIPT_IDS.infectionAudio);
@@ -4792,22 +4816,26 @@ system.runInterval(() => {
 }, 40);
 
 system.runInterval(() => {
+    if (shouldSleepDayZeroWorldWork("chunk_edge")) return;
     try {
         tickPlayerChunkEdgeWatch();
     } catch { /* ignore */ }
 }, 20);
 
 system.runInterval(() => {
+    if (shouldSleepDayZeroWorldWork("discovery")) return;
     if (!claimSpreadSlice("invDiscovery", INV_DISCOVERY_INTERVAL_TICKS)) return;
     tickInventoryCodexDiscovery();
 }, 20);
 
 system.runInterval(() => {
+    if (shouldSleepDayZeroWorldWork("discovery")) return;
     if (!claimSpreadSlice("biomeDiscovery", 40)) return;
     tickBiomeDiscovery();
 }, 20);
 
 system.runInterval(() => {
+    if (shouldSleepDayZeroWorldWork("infection")) return;
     try {
         const players = world.getAllPlayers();
         const byId = new Map(players.map((p) => [p.id, p]));
@@ -4859,6 +4887,8 @@ function isPlayerAirborne(player, wasOnInfectedGround = false) {
 // --- Ground Exposure Infection Pressure - Adaptive Checking System ---
 // Slow check loop: Detects state changes and tracks which players need frequent checking
 system.runInterval(() => {
+    if (shouldSleepDayZeroWorldWork("ground")) return;
+    if (shouldDeferVillageBurst("groundSlow")) return;
     if (!claimSpreadSlice("groundSlow", GROUND_CHECK_INTERVAL_OFF)) return;
     // Phase 3: Round-robin for 3+/5+ players. This loop does 2-3 `getBlock` reads per
     // player to detect state transitions onto infected ground. Once a player is tracked,
@@ -4961,6 +4991,8 @@ system.runInterval(() => {
 
 // Fast check loop: Processes ground exposure for players on infected ground (more frequent)
 system.runInterval(() => {
+    if (shouldSleepDayZeroWorldWork("ground")) return;
+    if (shouldDeferVillageBurst("groundFast")) return;
     if (!claimSpreadSlice("groundFast", GROUND_CHECK_INTERVAL_ON)) return;
     // Only check players who are on infected ground
     if (playersOnInfectedGround.size === 0) return;
@@ -5338,6 +5370,8 @@ system.runInterval(() => {
 
 // Decay loop: Processes decay for players off infected ground (less frequent)
 system.runInterval(() => {
+    if (shouldSleepDayZeroWorldWork("ground")) return;
+    if (shouldDeferVillageBurst("groundDecay")) return;
     for (const player of world.getAllPlayers()) {
         try {
             if (playersOnInfectedGround.has(player.id)) continue; // Skip players being handled by fast loop
@@ -5443,6 +5477,7 @@ system.runInterval(() => {
 // --- Immunity Cleanup System ---
 system.runInterval(() => {
     try {
+        if (shouldPauseDayZeroAddonLoops()) return;
         // Clean up expired immunity entries
         const currentTime = Date.now();
         const expiredPlayers = [];
@@ -5511,6 +5546,8 @@ const SNOW_TRAIL_TYPES = new Set([
 
 system.runInterval(() => {
     try {
+        if (shouldSleepDayZeroWorldWork("snow_trail")) return;
+        if (shouldDeferVillageBurst("snowTrail")) return;
         if (isSpreadThrottleActive() && !claimSpreadSlice("snowTrail", 80)) return;
         const nowTick = system.currentTick;
         // Iterate the shared MB-bear snapshot instead of world.getAllEntities(), which
@@ -6423,12 +6460,14 @@ function spreadSnowEffect(location, dimension) {
  */
 function corruptDroppedItems(origin, dimension) {
     try {
+        if (shouldSkipExpensiveEntityQueries("corruptItems")) return;
         const radius = 5;
         const itemEntities = dimension.getEntities({
             location: origin,
             maxDistance: radius,
             type: "minecraft:item"
         });
+        traceEntityQueryRun("corruptItems", `n=${itemEntities?.length ?? 0} r=${radius}`);
 
         for (const item of itemEntities) {
             // 75% chance to corrupt each item into snow
@@ -7684,14 +7723,17 @@ function executeMbCommand(sender, subcommand, args = []) {
             else if (dimId === "the_end" || dimId === "minecraft:the_end") dim = world.getDimension("the_end");
             const loc = sender.location;
             const counts = {};
-            const bearPrefixes = ["mb:mb_", "mb:infected", "mb:buff_mb", "mb:flying_mb", "mb:mining_mb", "mb:torpedo_mb", "mb:infected_pig", "mb:infected_cow"];
+            const radiusSq = radius * radius;
             try {
-                const entities = dim.getEntities({ location: loc, maxDistance: radius });
-                for (const e of entities) {
+                const snap = getBearSnapshot(dim);
+                for (const e of snap.all) {
+                    if (!e?.isValid || !e.location) continue;
+                    const dx = e.location.x - loc.x;
+                    const dy = e.location.y - loc.y;
+                    const dz = e.location.z - loc.z;
+                    if (dx * dx + dy * dy + dz * dz > radiusSq) continue;
                     const id = e.typeId || "";
-                    if (bearPrefixes.some(p => id.startsWith(p)) || id.startsWith("mb:infected")) {
-                        counts[id] = (counts[id] || 0) + 1;
-                    }
+                    counts[id] = (counts[id] || 0) + 1;
                 }
                 const lines = Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([id, n]) => CHAT_INFO + id + ": " + CHAT_HIGHLIGHT + n);
                 sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `Bears within ${radius} blocks (${dim.id}):\n` + (lines.length ? lines.join("\n") : CHAT_DEV + "None"));
@@ -8201,21 +8243,51 @@ system.runTimeout(() => {
 system.runTimeout(() => {
     try {
         initializeBiomeCheckerHudWatch();
+        initializeEntityQueryDebugHudWatch();
     } catch { /* ignore */ }
 }, 100);
-initializeInfectionDirectorWatch();
-registerSpawnLoadProbes({
-    storm: getActiveStormCount,
-    wallStress: getPerfWallStress01,
-    mobPressure: getPerfMobPressureForSpawn01
-});
-initializeBearPopulationCull();
-initializeBuffBearOverflowCull();
+/** Stagger heavy watchers so pack load does not hitch one tick (Watchdog 500ms+ spikes). */
+function initializeDeferredPackServices() {
+    try {
+        if (shouldPauseDayZeroAddonLoops()) return;
+        registerSpawnLoadProbes({
+            storm: getActiveStormCount,
+            wallStress: getPerfWallStress01,
+            mobPressure: getPerfMobPressureForSpawn01
+        });
+    } catch {
+        /* ignore */
+    }
+    try {
+        initializeInfectionDirectorWatch();
+    } catch {
+        /* ignore */
+    }
+    try {
+        initializeBearPopulationCull();
+        initializeBuffBearOverflowCull();
+    } catch {
+        /* ignore */
+    }
+    try {
+        initializeItemRegistry();
+    } catch {
+        /* ignore */
+    }
+    try {
+        registerBearTelemetryTick();
+    } catch {
+        /* ignore */
+    }
+}
 
-// --- Initialize Item Registry ---
-// Initialize item registry for modular item handlers
-initializeItemRegistry();
-registerBearTelemetryTick();
+system.runTimeout(() => {
+    try {
+        initializeDeferredPackServices();
+    } catch {
+        /* ignore */
+    }
+}, 40);
 
 // --- Initialize Basic Journal for Existing Players on Script Load ---
 // This ensures players who load into an existing world (not joining) also get the journal

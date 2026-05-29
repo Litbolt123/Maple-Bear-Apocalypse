@@ -1,0 +1,19 @@
+{
+	"format_version": "1.21.0",
+	"minecraft:scatter_feature": {
+		"description": {
+			"identifier": "mb:abandoned_settlement/ruin_floor"
+		},
+		"places_feature": "mb:abandoned_settlement/ruin_floor_block",
+		"iterations": 25,
+		"x": {
+			"distribution": "uniform",
+			"extent": [-2, 2]
+		},
+		"z": {
+			"distribution": "uniform",
+			"extent": [-2, 2]
+		},
+		"y": 0
+	}
+}

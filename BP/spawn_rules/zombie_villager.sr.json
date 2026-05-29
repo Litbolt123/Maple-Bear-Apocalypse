@@ -1,0 +1,18 @@
+{
+	"format_version": "1.8.0",
+	"minecraft:spawn_rules": {
+		"description": {
+			"identifier": "minecraft:zombie_villager",
+			"population_control": "monster"
+		},
+		"conditions": [
+			{
+				"minecraft:biome_filter": {
+					"test": "has_biome_tag",
+					"operator": "==",
+					"value": "mb_no_villager_spawn"
+				}
+			}
+		]
+	}
+}

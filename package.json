@@ -21,7 +21,9 @@
     "version": "node tools/getVersion.js",
     "verify:build-config": "node tools/verifyBuildConfig.js",
     "release:package": "node tools/packageRelease.js",
-    "sync:biome-registry": "node tools/syncBiomeReplaceRegistry.cjs"
+    "sync:biome-registry": "node tools/syncBiomeReplaceRegistry.cjs",
+    "sync:bp-from-dev": "node tools/syncBpFromDev.js",
+    "generate:no-village-biomes": "node tools/generateNoVillageBiomeOverrides.js"
   },
   "repository": {
     "type": "git",

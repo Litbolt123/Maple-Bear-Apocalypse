@@ -9,6 +9,13 @@ import { isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
 import { getCachedPlayers, getCachedMobs, isEntityValid } from "./mb_sharedCache.js";
 import { getAddonDifficultyState, getWorldProperty } from "./mb_dynamicPropertyHandler.js";
 import { getBearSnapshot } from "./mb_bearSnapshot.js";
+import {
+    isAddonBearActivityDormant,
+    noteDormantAiLoopSkipped,
+    shouldDecimateZeroBearAiWake
+} from "./mb_entityQueryGate.js";
+import { shouldSleepDayZeroWorldWork } from "./mb_dayZeroPerfBisect.js";
+import { registerBearAiStartCallback } from "./mb_bearAiBootstrap.js";
 import { getAiIntervalStretch } from "./mb_performanceProfile.js";
 import { TORPEDO_BEAR_ID, TORPEDO_BEAR_DAY20_ID } from "./mb_spawnEntityIds.js";
 
@@ -1086,6 +1093,11 @@ function initializeTorpedoAI() {
     
     torpedoAIIntervalId = system.runInterval(() => {
         if (!isScriptEnabled(SCRIPT_IDS.torpedo)) return;
+        if (shouldDecimateZeroBearAiWake()) return;
+        if (isAddonBearActivityDormant()) {
+            noteDormantAiLoopSkipped();
+            return;
+        }
         const seen = new Set();
         const currentTick = system.currentTick;
         const ticksSinceStart = currentTick - aiLoopStartTick;
@@ -1393,10 +1405,19 @@ function initializeTorpedoAI() {
                 try {
                     const vel = entity.getVelocity?.();
                     if (vel) {
-                        const nearbyPlayers = dimension.getEntities({
-                            location: entity.location,
-                            maxDistance: 50,
-                            type: "minecraft:player"
+                        const nearbyPlayers = getCachedPlayers().filter((player) => {
+                            if (!player?.isValid || player.dimension?.id !== dimension.id) return false;
+                            try {
+                                const pl = player.location;
+                                const el = entity.location;
+                                if (!pl || !el) return false;
+                                const dx = pl.x - el.x;
+                                const dy = pl.y - el.y;
+                                const dz = pl.z - el.z;
+                                return dx * dx + dy * dy + dz * dz <= 50 * 50;
+                            } catch {
+                                return false;
+                            }
                         });
                         for (const player of nearbyPlayers) {
                             try {
@@ -1753,13 +1774,16 @@ if (getDebugGeneral()) {
     console.warn(`[TORPEDO AI] Note: Debug flags are checked dynamically when players join`);
     console.warn(`[TORPEDO AI] Starting delayed initialization in ${TORPEDO_INIT_DELAY_TICKS} ticks...`);
 }
-system.runTimeout(() => {
-    initializeTorpedoAI();
-}, TORPEDO_INIT_DELAY_TICKS);
+registerBearAiStartCallback(() => {
+    system.runTimeout(() => {
+        initializeTorpedoAI();
+    }, TORPEDO_INIT_DELAY_TICKS);
+});
 
 // Roll dud status once per spawn (natural spawn, conversion, eggs, dev summon, etc.)
 world.afterEvents.entitySpawn.subscribe((event) => {
     try {
+        if (shouldSleepDayZeroWorldWork("bear_entity_spawn")) return;
         if (!isScriptEnabled(SCRIPT_IDS.torpedo)) return;
         const entity = event.entity;
         if (!isTorpedoBearTypeId(entity?.typeId)) return;

@@ -19,6 +19,10 @@ import {
     shouldDeferVillageBurst,
     SPREAD_CELL_COUNT
 } from "./mb_workSpread.js";
+import { shouldSleepDayZeroWorldWork } from "./mb_dayZeroPerfBisect.js";
+import { isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
+import { shouldSkipExpensiveEntityQueries } from "./mb_entityQueryGate.js";
+import { traceEntityQueryRun } from "./mb_entityQueryTraceDev.js";
 
 /** 1 = apply auto scaling from world snapshot + probes (default). 0 = bias presets only. */
 export const SPAWN_LOAD_AUTO_PROPERTY = "mb_spawn_load_auto";
@@ -111,6 +115,7 @@ export function setSpawnLoadBiasLevel(level) {
 const ALL_MB_MOB_TYPES_SET = new Set(ALL_MB_MOB_TYPES);
 
 function countBearsAllDimensions(tick) {
+    if (shouldSkipExpensiveEntityQueries("spawnLoadBears")) return;
     if (tick - lastBearRefreshTick < BEAR_COUNT_REFRESH_INTERVAL_TICKS) return;
     lastBearRefreshTick = tick;
     try {
@@ -136,12 +141,14 @@ function countItemEntitiesNear(ow, anchor, seen, n) {
         }
         return n;
     }
+    if (shouldSkipExpensiveEntityQueries("spawnItemsDirect")) return n;
     try {
         const items = ow.getEntities({
             type: ITEM_ENTITY_TYPE,
             location: anchor,
             maxDistance: ITEM_SAMPLE_RADIUS
         });
+        traceEntityQueryRun("spawnItemsDirect", `r=${ITEM_SAMPLE_RADIUS} n=${items?.length ?? 0}`);
         for (const item of items || []) {
             const id = item?.id;
             if (!id || seen.has(id)) continue;
@@ -157,6 +164,7 @@ function countItemEntitiesNear(ow, anchor, seen, n) {
 
 function countItemsOverworldThrottled(tick) {
     if (shouldDeferVillageBurst("spawnItems")) return;
+    if (shouldSkipExpensiveEntityQueries("spawnItems")) return;
 
     const spreadSampling = isVillageEntitySpreadActive() || isMetricsSpreadActive();
     const interval = spreadSampling ? 40 : 120;
@@ -322,7 +330,10 @@ export function initializeSpawnLoadScalerWatch() {
         }, 4);
         system.runInterval(() => {
             try {
-                if (shouldDeferVillageBurst("spawnLoadMetrics")) return;
+                if (!isScriptEnabled(SCRIPT_IDS.spawnLoadMetrics)) return;
+                if (shouldSleepDayZeroWorldWork("spawn_metrics") || shouldDeferVillageBurst("spawnLoadMetrics")) {
+                    return;
+                }
                 const base = isVillageEntitySpreadActive() ? 80 : 40;
                 if (!claimSpreadSlice("spawnLoadMetrics", base)) return;
                 refreshSpawnLoadMetrics(system.currentTick);

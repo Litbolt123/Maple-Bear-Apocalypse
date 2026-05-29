@@ -14,7 +14,16 @@ import { getMiningWorkMultiplier, getAiIntervalStretch } from "./mb_performanceP
 import { DIMENSION_IDS, MINING_BEAR_TYPES, PATHFINDING_ENTITY_TYPES, AIR_BLOCKS, MINING_SNOW_ON_BREAK_CHANCE } from "./mb_miningConstants.js";
 import { tryPlaceSnowLayerNearBreak } from "./mb_snowPlacement.js";
 import { getBearSnapshot, getBearSnapshotsForDimensions } from "./mb_bearSnapshot.js";
-import { claimSpreadSlice, isSpreadThrottleActive } from "./mb_workSpread.js";
+import {
+    getLastGlobalBearCount,
+    shouldAllowMiningAiLoop,
+    getLastKnownMiningBearCount,
+    isVillagerEntityQueryMuteActive,
+    noteDormantAiLoopSkipped,
+    shouldDecimateZeroBearAiWake
+} from "./mb_entityQueryGate.js";
+import { registerBearAiStartCallback } from "./mb_bearAiBootstrap.js";
+import { claimSpreadSlice, isSpreadThrottleActive, safeQueryEntitiesNear } from "./mb_workSpread.js";
 
 // Basic debug to verify script is loaded
 // console.warn("[MINING AI] Script loaded successfully");
@@ -1950,11 +1959,13 @@ function processPathfindingChunk(entityId) {
     const PATHFIND_ENTITY_LOOKUP_RADIUS = 20;
     try {
         const typeId = state.entityTypeId || "mb:mining_mb";
-        const entities = dimension.getEntities({
-            type: typeId,
-            location: anchor,
-            maxDistance: PATHFIND_ENTITY_LOOKUP_RADIUS
-        });
+        const entities = safeQueryEntitiesNear(
+            dimension,
+            `miningPathfind:${typeId}`,
+            anchor,
+            PATHFIND_ENTITY_LOOKUP_RADIUS,
+            { type: typeId }
+        );
         for (const e of entities) {
             if (e.id === entityId) {
                 entity = e;
@@ -1964,11 +1975,13 @@ function processPathfindingChunk(entityId) {
         if (!entity) {
             for (const fallbackId of PATHFINDING_ENTITY_TYPES) {
                 if (fallbackId === typeId) continue;
-                const fallbackEnts = dimension.getEntities({
-                    type: fallbackId,
-                    location: anchor,
-                    maxDistance: PATHFIND_ENTITY_LOOKUP_RADIUS
-                });
+                const fallbackEnts = safeQueryEntitiesNear(
+                    dimension,
+                    `miningPathfind:${fallbackId}`,
+                    anchor,
+                    PATHFIND_ENTITY_LOOKUP_RADIUS,
+                    { type: fallbackId }
+                );
                 for (const e of fallbackEnts) {
                     if (e.id === entityId) {
                         entity = e;
@@ -3214,11 +3227,21 @@ function canReachTargetByWalking(entity, targetInfo, tunnelHeight) {
         // If it's another entity, don't count it as blocked - entities can move
         let hasOtherEntity = false;
         try {
-            const entitiesAtTarget = dimension.getEntities({
-                location: { x: targetX + 0.5, y: targetY + 1, z: targetZ + 0.5 },
-                maxDistance: 1.5,
-                excludeTypes: ["minecraft:item", "minecraft:xp_orb"]
-            });
+            const entitiesAtTarget = safeQueryEntitiesNear(
+                dimension,
+                "miningWalk:target",
+                { x: targetX + 0.5, y: targetY + 1, z: targetZ + 0.5 },
+                1.5,
+                {
+                    excludeTypes: [
+                        "minecraft:item",
+                        "minecraft:xp_orb",
+                        "minecraft:villager",
+                        "minecraft:villager_v2",
+                        "minecraft:wandering_trader"
+                    ]
+                }
+            );
             for (const otherEntity of entitiesAtTarget) {
                 if (otherEntity.id !== entity.id && otherEntity.id !== targetInfo.entity?.id) {
                     // Another entity is at the target location - don't count as blocked
@@ -3250,11 +3273,21 @@ function canReachTargetByWalking(entity, targetInfo, tunnelHeight) {
                 let hasEntityInFront = false;
                 
                 try {
-                    const entitiesInFront = dimension.getEntities({
-                        location: { x: frontX + 0.5, y: targetY + 0.5, z: frontZ + 0.5 },
-                        maxDistance: 1.0,
-                        excludeTypes: ["minecraft:item", "minecraft:xp_orb"]
-                    });
+                    const entitiesInFront = safeQueryEntitiesNear(
+                        dimension,
+                        "miningWalk:front",
+                        { x: frontX + 0.5, y: targetY + 0.5, z: frontZ + 0.5 },
+                        1.0,
+                        {
+                            excludeTypes: [
+                                "minecraft:item",
+                                "minecraft:xp_orb",
+                                "minecraft:villager",
+                                "minecraft:villager_v2",
+                                "minecraft:wandering_trader"
+                            ]
+                        }
+                    );
                     for (const otherEntity of entitiesInFront) {
                         if (otherEntity.id !== entity.id && otherEntity.id !== targetInfo.entity?.id) {
                             // Another entity is in front of target - don't count as blocked
@@ -3318,11 +3351,21 @@ function canReachTargetByWalking(entity, targetInfo, tunnelHeight) {
         try {
             // Check for entities at multiple Y levels (entity might be at different heights)
             for (let checkY = baseCheckY; checkY <= baseCheckY + tunnelHeight; checkY++) {
-                const entitiesAtStep = dimension.getEntities({
-                    location: { x: checkX + 0.5, y: checkY + 0.5, z: checkZ + 0.5 },
-                    maxDistance: 1.5, // Increased from 1.0 to catch entities better
-                    excludeTypes: ["minecraft:item", "minecraft:xp_orb"]
-                });
+                const entitiesAtStep = safeQueryEntitiesNear(
+                    dimension,
+                    "miningWalk:step",
+                    { x: checkX + 0.5, y: checkY + 0.5, z: checkZ + 0.5 },
+                    1.5,
+                    {
+                        excludeTypes: [
+                            "minecraft:item",
+                            "minecraft:xp_orb",
+                            "minecraft:villager",
+                            "minecraft:villager_v2",
+                            "minecraft:wandering_trader"
+                        ]
+                    }
+                );
                 for (const otherEntity of entitiesAtStep) {
                     if (otherEntity.id !== entity.id && otherEntity.id !== targetInfo.entity?.id) {
                         // Another entity is blocking this step - don't count as blocked
@@ -3389,11 +3432,21 @@ function canReachTargetByWalking(entity, targetInfo, tunnelHeight) {
                     let hasEntityAtAdj = false;
                     try {
                         for (let checkY = baseCheckY; checkY <= baseCheckY + tunnelHeight; checkY++) {
-                            const entitiesAtAdj = dimension.getEntities({
-                                location: { x: adjX + 0.5, y: checkY + 0.5, z: adjZ + 0.5 },
-                                maxDistance: 1.5,
-                                excludeTypes: ["minecraft:item", "minecraft:xp_orb"]
-                            });
+                            const entitiesAtAdj = safeQueryEntitiesNear(
+                                dimension,
+                                "miningWalk:adj",
+                                { x: adjX + 0.5, y: checkY + 0.5, z: adjZ + 0.5 },
+                                1.5,
+                                {
+                                    excludeTypes: [
+                                        "minecraft:item",
+                                        "minecraft:xp_orb",
+                                        "minecraft:villager",
+                                        "minecraft:villager_v2",
+                                        "minecraft:wandering_trader"
+                                    ]
+                                }
+                            );
                             for (const otherEntity of entitiesAtAdj) {
                                 if (otherEntity.id !== entity.id && otherEntity.id !== targetInfo.entity?.id) {
                                     // Entity at adjacent position - don't count as blocking (entities can move)
@@ -10349,6 +10402,11 @@ function initializeMiningAI() {
     
     miningAIIntervalId = system.runInterval(() => {
         if (!isScriptEnabled(SCRIPT_IDS.mining)) return;
+        if (shouldDecimateZeroBearAiWake()) return;
+        if (!shouldAllowMiningAiLoop()) {
+            noteDormantAiLoopSkipped();
+            return;
+        }
         try {
             const tick = system.currentTick;
             const ticksSinceStart = tick - aiLoopStartTick;
@@ -10356,7 +10414,11 @@ function initializeMiningAI() {
             
             // Count total mining bears via shared snapshot (throttled on day 0–1).
             let totalBearsThisTick = lastMiningAIState?.bearCount ?? 0;
-            if (!isSpreadThrottleActive() || claimSpreadSlice("miningBearCount", 24)) {
+            if (isVillagerEntityQueryMuteActive()) {
+                totalBearsThisTick = lastMiningAIState?.bearCount ?? getLastKnownMiningBearCount();
+            } else if (getLastGlobalBearCount() === 0) {
+                totalBearsThisTick = 0;
+            } else if (!isSpreadThrottleActive() || claimSpreadSlice("miningBearCount", 24)) {
                 totalBearsThisTick = 0;
                 try {
                     const snaps = getBearSnapshotsForDimensions(DIMENSION_IDS);
@@ -10908,32 +10970,25 @@ function initializeMiningAI() {
                     }
                 }
                 
-                // Clean up target coordination - remove dead bears from coordination map
-                let activeTargetIds = null;
+                // Clean up target coordination — validate targets by id (no mob/villager cache sweep).
                 if (tick % 20 === 0) {
-                    activeTargetIds = new Set();
-                    try {
-                        const allPlayers = getCachedPlayers();
-                        for (const player of allPlayers) {
-                            const playerIsValid = typeof player.isValid === "function" ? player.isValid() : Boolean(player.isValid);
-                            if (playerIsValid) {
-                                activeTargetIds.add(player.id);
+                    for (const targetId of Array.from(targetCoordination.keys())) {
+                        let alive = false;
+                        try {
+                            const ent = world.getEntity(targetId);
+                            alive = ent && isEntityValid(ent);
+                        } catch {
+                            alive = false;
+                        }
+                        if (!alive) {
+                            targetCoordination.delete(targetId);
+                            if (getDebugTarget()) {
+                                console.warn(`[MINING AI] Removed dead target ${targetId.substring(0, 8)} from coordination`);
                             }
                         }
-                        for (const player of allPlayers) {
-                            try {
-                                const dim = player.dimension;
-                                if (!dim) continue;
-                                const mobs = getCachedMobs(dim, player.location, 128);
-                                for (const mob of mobs) {
-                                    const mobIsValid = typeof mob.isValid === "function" ? mob.isValid() : Boolean(mob.isValid);
-                                    if (mobIsValid) activeTargetIds.add(mob.id);
-                                }
-                            } catch { /* ignore */ }
-                        }
-                    } catch { }
+                    }
                 }
-                
+
                 for (const [targetId, bearSet] of targetCoordination.entries()) {
                     for (const bearId of Array.from(bearSet)) {
                         if (!activeWorkerIds.has(bearId)) {
@@ -10948,11 +11003,6 @@ function initializeMiningAI() {
                         targetCoordination.delete(targetId);
                         if (getDebugTarget()) {
                             console.warn(`[MINING AI] Removed empty target coordination entry for ${targetId.substring(0, 8)}`);
-                        }
-                    } else if (activeTargetIds && !activeTargetIds.has(targetId)) {
-                        targetCoordination.delete(targetId);
-                        if (getDebugTarget()) {
-                            console.warn(`[MINING AI] Removed dead target ${targetId.substring(0, 8)} from coordination`);
                         }
                     }
                 }
@@ -11211,8 +11261,8 @@ if (typeof world !== "undefined" && world.afterEvents) {
     });
 }
 
-// Start initialization with a delay to ensure world is ready
-console.warn("[MINING AI] Script loaded, starting delayed initialization...");
-system.runTimeout(() => {
-    initializeMiningAI();
-}, INIT_DELAY_TICKS);
+registerBearAiStartCallback(() => {
+    system.runTimeout(() => {
+        initializeMiningAI();
+    }, INIT_DELAY_TICKS);
+});

@@ -12,7 +12,24 @@ import {
     isSimPlayersHudPersonalEnabled,
     setSimPlayersHudPersonalEnabled
 } from "./mb_simPlayers.js";
-import { getAllScriptToggles, setScriptEnabled, SCRIPT_IDS, isScriptEnabled, isBetaInfectedAIEnabled, setBetaInfectedAIEnabled, isDustStormsEnabled, setDustStormsEnabled, isBetaVisibleToAll, setBetaVisibleToAll, getBetaOwnerId, setBetaOwnerId } from "./mb_scriptToggles.js";
+import {
+    getAllScriptToggles,
+    setScriptEnabled,
+    SCRIPT_IDS,
+    isScriptEnabled,
+    isBetaInfectedAIEnabled,
+    setBetaInfectedAIEnabled,
+    isDustStormsEnabled,
+    setDustStormsEnabled,
+    isBetaVisibleToAll,
+    setBetaVisibleToAll,
+    getBetaOwnerId,
+    setBetaOwnerId,
+    SCRIPT_TOGGLE_GROUPS,
+    SCRIPT_TOGGLE_LABELS,
+    setAllScriptToggles,
+    areAllScriptTogglesOff
+} from "./mb_scriptToggles.js";
 import { recordDailyEvent, getCurrentDay, getDayDisplayInfo, cancelAndClearDayNarrativeHud } from "./mb_dayTracker.js";
 import { playerInfection, curedPlayers, formatTicksDuration, formatMillisDuration, formatInfectionHudTimeRemaining, HITS_TO_INFECT, bearHitCount, maxSnowLevels, MINOR_INFECTION_TYPE, MAJOR_INFECTION_TYPE, MINOR_HITS_TO_INFECT, IMMUNE_HITS_TO_INFECT, PERMANENT_IMMUNITY_PROPERTY, MINOR_CURE_GOLDEN_APPLE_PROPERTY, MINOR_CURE_GOLDEN_CARROT_PROPERTY } from "./main.js";
 import { CHAT_ACHIEVEMENT, CHAT_DANGER, CHAT_SUCCESS, CHAT_WARNING, CHAT_INFO, CHAT_DEV, CHAT_HIGHLIGHT, CHAT_SPECIAL } from "./mb_chatColors.js";
@@ -77,6 +94,12 @@ import {
     setBiomeCheckerHudPersonalEnabled,
     isBiomeCheckerHudEnabledForPlayer
 } from "./mb_biomeCheckerDev.js";
+import {
+    openEntityQueryDebugHub,
+    openVillagerSuppressionDevMenu,
+    isEntityQueryHudPersonalEnabled,
+    setEntityQueryHudPersonalEnabled
+} from "./mb_entityQueryDebugDev.js";
 
 const SPAWN_DIFFICULTY_PROPERTY = "mb_spawnDifficulty";
 
@@ -5552,22 +5575,26 @@ export function showCodexBook(player, context) {
     function openDeveloperToolsSystemsMenu() {
         journalPowerToolsBack = () => openDeveloperToolsSystemsMenu();
         const biomeHudOn = isBiomeCheckerHudPersonalEnabled(player);
+        const entityQueryHudOn = isEntityQueryHudPersonalEnabled(player);
         const form = new ActionFormData()
             .title("§aSystems")
             .body(
-                "§7Script switches, spawn hub, biome checker, and §ein-game §7self-test §8(diagnostics)§7.\n\n" +
-                    `§8Biome HUD: §7${biomeHudOn ? "§aON §8(action bar while you play)" : "§7OFF"}`
+                "§7Script toggles §8(all systems)§7, spawn hub, biome checker, self-test.\n\n" +
+                    `§8Script toggles: §7${areAllScriptTogglesOff() ? "§cALL OFF" : "§amixed/on"}\n` +
+                    `§8Biome HUD: §7${biomeHudOn ? "§aON" : "§7OFF"} §8· Entity-query HUD: §7${entityQueryHudOn ? "§aON" : "§7OFF"}`
             );
         form.button("§fScript toggles §8(AI, storms, infection audio…)");
         form.button("§fSpawn controller");
         form.button(biomeHudOn ? "§cTurn off §2§lmy§r §7biome HUD" : "§aTurn on §2§lmy§r §7biome HUD");
         form.button("§2Biome checker §8(replace list)");
+        form.button("§eVillager suppress §8(script despawn)");
+        form.button("§bEntity query / village §8(perf HUD)");
         form.button("§eScript self-test §8(in-game)");
         form.button("§bSimulated players §8(dev)");
         form.button("§8Back");
         form.show(player).then((res) => {
             const v = getPlayerSoundVolume(player);
-            if (!res || res.canceled || res.selection === 6) {
+            if (!res || res.canceled || res.selection === 8) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * v });
                 return openDeveloperTools();
             }
@@ -5581,7 +5608,11 @@ export function showCodexBook(player, context) {
                 player.sendMessage(CHAT_INFO + (biomeHudOn ? "Biome checker HUD off." : "Biome checker HUD on."));
                 openDeveloperToolsSystemsMenu();
             } else if (res.selection === 3) openBiomeCheckerHub(player, () => openDeveloperToolsSystemsMenu());
-            else if (res.selection === 4) openScriptSelfTestDevMenu(() => openDeveloperToolsSystemsMenu());
+            else if (res.selection === 4) {
+                openVillagerSuppressionDevMenu(player, () => openDeveloperToolsSystemsMenu());
+            } else if (res.selection === 5) {
+                openEntityQueryDebugHub(player, () => openDeveloperToolsSystemsMenu());
+            } else if (res.selection === 6) openScriptSelfTestDevMenu(() => openDeveloperToolsSystemsMenu());
             else system.run(() => openSimulatedPlayersMenu());
         }).catch(() => openDeveloperTools());
     }
@@ -5958,57 +5989,100 @@ export function showCodexBook(player, context) {
         }).catch(() => openMain());
     }
 
-    function openScriptTogglesMenu() {
+    function openScriptToggleCategoryMenu(groupKey) {
+        const group = SCRIPT_TOGGLE_GROUPS[groupKey];
+        if (!group) return openScriptTogglesHub();
         const toggles = getAllScriptToggles();
-        const labels = {
-            [SCRIPT_IDS.mining]: "Mining AI",
-            [SCRIPT_IDS.infected]: "Infected AI",
-            [SCRIPT_IDS.flying]: "Flying AI",
-            [SCRIPT_IDS.torpedo]: "Torpedo AI",
-            [SCRIPT_IDS.buff]: "Buff AI",
-            [SCRIPT_IDS.biomeAmbience]: "Biome Ambience",
-            [SCRIPT_IDS.infectionAudio]: "Infection Audio",
-            [SCRIPT_IDS.spawnController]: "Spawn Controller",
-            [SCRIPT_IDS.snowStorm]: "Snow Storm",
-            [SCRIPT_IDS.dimensionAdaptation]: "Dimension Adaptation (Nether fire res.)"
-        };
-        const ids = [
-            SCRIPT_IDS.mining,
-            SCRIPT_IDS.infected,
-            SCRIPT_IDS.flying,
-            SCRIPT_IDS.torpedo,
-            SCRIPT_IDS.buff,
-            SCRIPT_IDS.biomeAmbience,
-            SCRIPT_IDS.infectionAudio,
-            SCRIPT_IDS.spawnController,
-            SCRIPT_IDS.snowStorm,
-            SCRIPT_IDS.dimensionAdaptation
-        ];
-        const body = ids.map(id => `§7${labels[id]}: §${toggles[id] ? "aON" : "cOFF"}`).join("\n");
-        const form = new ActionFormData()
-            .title("§cScript Toggles")
-            .body(`§7Enable/disable scripts. §8Useful if something breaks.\n\n${body}`);
-
-        ids.forEach((id) => {
-            form.button(toggles[id] ? `§a${labels[id]} §8(ON) → OFF` : `§c${labels[id]} §8(OFF) → ON`);
-        });
-        form.button("§8Back");
-
+        const body =
+            group.ids.map((id) => `§7${SCRIPT_TOGGLE_LABELS[id]}: §${toggles[id] ? "aON" : "cOFF"}`).join("\n") ||
+            "§8(none)";
+        const form = new ActionFormData().title(group.title).body(`§7Tap to flip one system.\n\n${body}`);
+        for (const id of group.ids) {
+            const on = toggles[id];
+            form.button(on ? `§a${SCRIPT_TOGGLE_LABELS[id]} §8(ON)` : `§c${SCRIPT_TOGGLE_LABELS[id]} §8(OFF)`);
+        }
+        form.button("§8Back to script toggles");
         form.show(player).then((res) => {
-            if (!res || res.canceled || res.selection === ids.length) {
-                const volumeMultiplier = getPlayerSoundVolume(player);
-                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
-                return journalPowerToolsBack();
+            const v = getPlayerSoundVolume(player);
+            if (!res || res.canceled || res.selection === group.ids.length) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * v });
+                return openScriptTogglesHub();
             }
-            if (res.selection >= 0 && res.selection < ids.length) {
-                const id = ids[res.selection];
+            const id = group.ids[res.selection];
+            if (id) {
                 const next = !toggles[id];
                 setScriptEnabled(id, next);
-                player.sendMessage(CHAT_INFO + labels[id] + ": " + (next ? CHAT_SUCCESS + "ON" : CHAT_DANGER + "OFF"));
-                player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
+                try {
+                    saveAllProperties();
+                } catch {
+                    /* ignore */
+                }
+                player.sendMessage(
+                    CHAT_INFO + SCRIPT_TOGGLE_LABELS[id] + ": " + (next ? CHAT_SUCCESS + "ON" : CHAT_DANGER + "OFF")
+                );
             }
-            openScriptTogglesMenu();
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * v });
+            openScriptToggleCategoryMenu(groupKey);
+        }).catch(() => openScriptTogglesHub());
+    }
+
+    function openScriptTogglesHub() {
+        const toggles = getAllScriptToggles();
+        const onCount = Object.values(toggles).filter(Boolean).length;
+        const total = Object.keys(toggles).length;
+        const form = new ActionFormData()
+            .title("§cScript toggles")
+            .body(
+                "§7Turn addon systems on/off. §8Journal + day counter always run.\n\n" +
+                    `§8Active: §7${onCount}/${total} §8· §7${areAllScriptTogglesOff() ? "§c§lALL OFF" : "mixed"}\n\n` +
+                    "§8Use §4All OFF§8 for a bare world, then enable one category at a time."
+            );
+        form.button("§4All systems OFF");
+        form.button("§aAll systems ON");
+        form.button(SCRIPT_TOGGLE_GROUPS.bears.title);
+        form.button(SCRIPT_TOGGLE_GROUPS.spawn.title);
+        form.button(SCRIPT_TOGGLE_GROUPS.infection.title);
+        form.button(SCRIPT_TOGGLE_GROUPS.perf.title);
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            const v = getPlayerSoundVolume(player);
+            if (!res || res.canceled || res.selection === 6) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * v });
+                return journalPowerToolsBack();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * v });
+            if (res.selection === 0) {
+                setAllScriptToggles(false);
+                try {
+                    saveAllProperties();
+                } catch {
+                    /* ignore */
+                }
+                player.sendMessage(
+                    CHAT_WARNING + "All script toggles OFF — journal + day counter still run."
+                );
+                return openScriptTogglesHub();
+            }
+            if (res.selection === 1) {
+                setAllScriptToggles(true);
+                try {
+                    saveAllProperties();
+                } catch {
+                    /* ignore */
+                }
+                player.sendMessage(CHAT_SUCCESS + "All script toggles ON.");
+                return openScriptTogglesHub();
+            }
+            if (res.selection === 2) return openScriptToggleCategoryMenu("bears");
+            if (res.selection === 3) return openScriptToggleCategoryMenu("spawn");
+            if (res.selection === 4) return openScriptToggleCategoryMenu("infection");
+            if (res.selection === 5) return openScriptToggleCategoryMenu("perf");
+            return openScriptTogglesHub();
         }).catch(() => journalPowerToolsBack());
+    }
+
+    function openScriptTogglesMenu() {
+        openScriptTogglesHub();
     }
 
     /**
@@ -8119,6 +8193,8 @@ export function showCodexBook(player, context) {
         form.button("§fSnow Storm");
         form.button("§fEmulsifier");
         form.button("§fSimulated players");
+        form.button("§fVillager suppress §8(script despawn)");
+        form.button("§fEntity query / village §8(perf)");
         form.button("§8Back");
 
         form.show(player).then((res) => {
@@ -8128,7 +8204,7 @@ export function showCodexBook(player, context) {
                 return onBack();
             }
 
-            if (res.selection === 14) {
+            if (res.selection === 16) {
                 const volumeMultiplier = getPlayerSoundVolume(player);
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
                 return onBack();
@@ -8151,6 +8227,10 @@ export function showCodexBook(player, context) {
                 case 11: return openSnowStormDebugMenu(settings, false, fromDevTools);
                 case 12: return openEmulsifierDebugMenu(settings, fromDevTools);
                 case 13: return openSimPlayersDebugMenu(settings, fromDevTools);
+                case 14:
+                    return openVillagerSuppressionDevMenu(player, () => openDebugMenu(fromDevTools));
+                case 15:
+                    return openEntityQueryDebugHub(player, () => openDebugMenu(fromDevTools));
                 default: return openDebugMenu(fromDevTools);
             }
         }).catch(() => onBack());

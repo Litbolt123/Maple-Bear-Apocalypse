@@ -8,6 +8,8 @@ import {
     getMaxBuffBearsNearPlayerCount,
     getMaxBuffBearsDimensionWideCount
 } from "./mb_balance.js";
+import { shouldPauseDayZeroAddonLoops } from "./mb_dayZeroPerfBisect.js";
+import { isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
 import { getBearSnapshot, invalidateBearSnapshots } from "./mb_bearSnapshot.js";
 import { isEntityValid } from "./mb_sharedCache.js";
 import { BUFF_BEAR_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID } from "./mb_spawnEntityIds.js";
@@ -218,6 +220,8 @@ export function initializeBuffBearOverflowCull() {
     overflowCullStarted = true;
     system.runInterval(() => {
         try {
+            if (!isScriptEnabled(SCRIPT_IDS.buffOverflowCull)) return;
+            if (shouldPauseDayZeroAddonLoops()) return;
             for (const dimId of ["overworld", "nether", "the_end"]) {
                 let dimension;
                 try {

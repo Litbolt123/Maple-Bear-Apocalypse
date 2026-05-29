@@ -1,0 +1,16 @@
+{
+	"format_version": "1.21.0",
+	"minecraft:single_block_feature": {
+		"description": {
+			"identifier": "mb:abandoned_settlement/ruin_dusted_block"
+		},
+		"places_block": "mb:dusted_dirt",
+		"enforce_placement_rules": false,
+		"enforce_survivability_rules": false,
+		"may_replace": [
+			"minecraft:grass",
+			"minecraft:grass_block",
+			"minecraft:dirt"
+		]
+	}
+}

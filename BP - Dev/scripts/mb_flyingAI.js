@@ -4,6 +4,12 @@ import { isDebugEnabled } from "./mb_codex.js";
 import { isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
 import { getWorldProperty } from "./mb_dynamicPropertyHandler.js";
 import { getBearSnapshot, getBearsOfType } from "./mb_bearSnapshot.js";
+import {
+    isAddonBearActivityDormant,
+    noteDormantAiLoopSkipped,
+    shouldDecimateZeroBearAiWake
+} from "./mb_entityQueryGate.js";
+import { registerBearAiStartCallback } from "./mb_bearAiBootstrap.js";
 import { getAiIntervalStretch } from "./mb_performanceProfile.js";
 
 // Debug helper functions
@@ -348,9 +354,20 @@ const targetCache = new Map(); // Map<entityId, {target: targetInfo, tick: numbe
 let aiLoopStartTick = system.currentTick;
 // Visit counter for player-count thrift: stretch effective interval without rescheduling.
 let flyingAIVisitCounter = 0;
+let flyingAIIntervalStarted = false;
 
-system.runInterval(() => {
+function startFlyingAIInterval() {
+    if (flyingAIIntervalStarted) return;
+    flyingAIIntervalStarted = true;
+    aiLoopStartTick = system.currentTick;
+
+    system.runInterval(() => {
     if (!isScriptEnabled(SCRIPT_IDS.flying)) return;
+    if (shouldDecimateZeroBearAiWake()) return;
+    if (isAddonBearActivityDormant()) {
+        noteDormantAiLoopSkipped();
+        return;
+    }
     const tick = system.currentTick;
     const ticksSinceStart = tick - aiLoopStartTick;
     const seenIds = new Set();
@@ -569,7 +586,10 @@ system.runInterval(() => {
             targetCache.delete(entityId);
         }
     }
-}, AI_TICK_INTERVAL); // Run every AI_TICK_INTERVAL ticks (reduced frequency for performance)
+    }, AI_TICK_INTERVAL);
+}
+
+registerBearAiStartCallback(startFlyingAIInterval);
 
 /** Set a flying bear to target a specific player (e.g. after being hit by that player). */
 export function setFlyingBearAngerTarget(flyingEntity, player) {

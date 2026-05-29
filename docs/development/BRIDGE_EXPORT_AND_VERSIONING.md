@@ -43,6 +43,8 @@ This updates:
 
 Then export **behavior** and **resource** packs from Bridge as usual.
 
+Before a **public** release (folding dev work into `BP/`): run **`npm run sync:bp-from-dev`** so all `BP/scripts/*.js` match dev except **`mb_buildConfig.js`**, then **`npm run check`**.
+
 ## Version: automatic vs manual
 
 | Field | What it shows | How to bump |

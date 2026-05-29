@@ -6,6 +6,330 @@ Running log of **what changed and why** (gameplay, scripts, assets, docs). Used 
 
 ---
 
+**Date:** 2026-05-19 (ABANDONED_SETTLEMENTS — vanilla egg lag note)
+
+- **Finding:** Removing all BP scripts still leaves villager egg/dispenser hitch — stall is mostly vanilla spawn cost, not JS.
+- **Doc:** **`docs/development/ABANDONED_SETTLEMENTS.md`** — new § *Villager spawn eggs and lag*.
+
+---
+
+**Date:** 2026-05-19 (Script toggles — all systems + bear cull + All OFF)
+
+- **User:** Turn off everything except journal + day counter; enable one-by-one; include bear cleanup loops.
+- **`mb_scriptToggles.js`:** Expanded **24** toggles (bear cull, buff overflow cull, infection/ground/mob conversion, perf, spawn metrics, HUD, emulsifier, villager suppress, work spread, etc.). **`setAllScriptToggles`**, **`areAllScriptTogglesOff`**, category groups.
+- **Wiring:** Intervals gated; **`shouldSleepDayZeroWorldWork`** respects script map; **`shouldPauseDayZeroAddonLoops`** when all toggles off.
+- **UI:** Developer Tools → Systems → **Script toggles** — hub with **All OFF / All ON** + 4 category submenus. Synced **`BP/`**.
+
+---
+
+**Date:** 2026-05-19 (Abandoned settlement worldgen — Content Log fixes)
+
+- **User:** Villages gone (`/locate` OK) but Content Log errors on load.
+- **`[FeatureRegistry][error]`:** Rule file `mb_abandoned_settlement_overworld.json` vs identifier `mb:abandoned_settlement_overworld` — Bedrock requires filename = id path after namespace. **Renamed** → `feature_rules/abandoned_settlement_overworld.json` (BP + BP - Dev).
+- **`[Json][error]`:** `minecraft:cobweb` unknown in deferred block resolution — Bedrock uses **`minecraft:web`**. Fixed `ruin_cobweb_block.json`.
+- **Unrelated:** wolf collar baby texture missing (RP/vanilla), API 2.6→2.7 promote (verbose), 372ms Watchdog on load (known pack init).
+
+---
+
+**Date:** 2026-05-19 (No villages worldgen + abandoned ruins + egg warnings)
+
+- **User:** Villager suppress works (eggs removed, no natural spawn); spamming eggs still hitches — want **stronger warnings**. Also **remove vanilla villages** and add a **custom settlement** structure.
+- **Egg warnings:** **`mb_villagerSpawnPolicy.js`** — per-player sliding window: action bar every block, bass sound, escalating chat (2/4/8/15), title at 5+/10+; **4+ egg cancels same tick** → bulk/dispenser warning to all players.
+- **No villages:** **`tools/generateNoVillageBiomeOverrides.js`** → **`BP/biomes/worldgen_no_village/`** (10 Mojang biomes, `minecraft:village_type` stripped). **`npm run generate:no-village-biomes`** to refresh.
+- **Replacement worldgen:** **`mb:abandoned_settlement/*`** features + **`mb_abandoned_settlement_overworld.json`** (~1/48 chunks, plains/savanna/taiga/meadow/desert) — mossy patch, barrel, cobwebs, dusted dirt. Docs: **`docs/development/ABANDONED_SETTLEMENTS.md`**. **New chunks only** for both village removal and ruins.
+- Synced **`BP/scripts/`** from dev; mirrored features/feature_rules to **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-05-20 (Villager suppress fix — eggs + villages still spawning)
+
+- **User:** Spawn rules + scripts did not block eggs or village villagers.
+- **Causes:** `getComponent("minecraft:is_baby")` truthy check skipped **all** removals; eggs often need **`itemUseOn`** not just `itemUse`; **structure villages ignore spawn rules**.
+- **Fix:** Correct baby check; **`itemUse` + `itemUseOn`** cancel; **`entitySpawn` remove** + **`kill` fallback**; **20t purge** (`getEntities` by type, one type/rotation); early **`import "./mb_villagerSpawnPolicy.js"`**; spawn rules use impossible biome tag. Synced **`BP/`**.
+
+---
+
+**Date:** 2026-05-20 (No villagers — spawn rules + eggs + script despawn)
+
+- **Design:** Abandoned-world direction — block employed villagers; wandering traders OK.
+- **BP:** Restored **`zombie_villager.sr.json`** from `_archived/spawnrules` (emptied `conditions`); added **`villager`**, **`villager_v2`**, **`zombie_villager_v2`** spawn rules in **`BP/spawn_rules/`** + **`BP - Dev/spawn_rules/`**.
+- **Scripts:** **`mb_villagerSpawnPolicy.js`** — cancel villager/zombie villager spawn eggs; remove adult villagers on `entitySpawn` (villages/dispensers). World prop **`mb_suppress_villagers`** (default on, `0` = allow for tests). **`mb_workSpread`** skips villager hooks when suppression on.
+
+---
+
+**Date:** 2026-05-20 (Bisect all-off — gate leftover world loops + status line)
+
+- **User:** All OFF still lags; are entity/world things really off?
+- **Answer:** Entity **logic** was off; several **world** timers still ran (bear cull, buff overflow cull, snow storm, dimension adapt loop, action bar, dev camp HUD, dusted-dirt/immunity cleanup). Bisect also **inactive** if day > 0 or `lastGlobalBearCount > 0`.
+- **Fix:** Those loops now respect **`shouldPauseDayZeroAddonLoops()`**. Entity-query log/HUD first line: **`getDayZeroBisectDebugOneLiner()`** (shows `ALL OFF — entity-blind` or why bisect is inactive). Synced **`BP/`**.
+
+---
+
+**Date:** 2026-05-20 (Day 0 bisect — entity-blind + one-at-a-time rows)
+
+- **User:** All-off still lagged; want entity-blind baseline, add hooks back one by one.
+- **Fix:** Split **entity** bisect rows (top of menu): `villager_listen`, `villager_quiet`, `villager_spawn`, `entity_queries`, `entity_hurt`, `entity_die`, `bear_entity_spawn`. All OFF = no spawn/die/hurt work, no `getEntities` (`entityBlind` skip). Menu tap enables **only** that row. Wall-clock backlog sampler still runs. Synced **`BP/`**.
+
+---
+
+**Date:** 2026-05-20 (Day 0 bisect “all off” still lagged — global minimal idle)
+
+- **User:** Bisect ON + **All systems OFF** on day 0 — lag unchanged vs full addon.
+- **Cause:** Bisect only gated 9 loops; **biome ambience** (`dimension.getBiome`), **emulsifier** `runInterval`s, and **villager quiet timers** still ran (with villager handler off, dispensers got **no** entity-query mute). Turning off **perf sampler** also disabled **wall-clock backlog** detection.
+- **Fix:** **`isDayZeroBisectAllSystemsSleeping()`** / **`shouldPauseDayZeroAddonLoops()`** — when every category is off: global defer, entity-query `bisectMinimal`, AI dormant, skip deferred pack services. New bisect toggles: **biome_ambience**, **spawn_emulsifier**, **infection_director**. Villager spawn always arms quiet timers; heavy drain still respects **villager_spawn**. Wall-clock sampler always runs (mob snap still bisect-gated). Synced **`BP/`**.
+
+---
+
+**Date:** 2026-05-20 (Day 0 perf bisect menu — find lag source)
+
+- **User:** A/B: no addon = no lag; addon = lag. Want per-script toggles like dev tools to pinpoint cause.
+- **Fix:** **`mb_dayZeroPerfBisect.js`** + Journal → Entity query → **Day 0 bisect**: bisect mode, all off/on, per-system RUN/sleep (infection, ground, villager spawn, perf, HUD, metrics, chunk, discovery, snow). Bisect off = normal addon. Synced **`BP/`**.
+
+---
+
+**Date:** 2026-05-20 (Day 0 zero-bear world dormant — A/B proved addon cost)
+
+- **User:** No lag without addon; lag with addon on/off Content log. Not leftover villagers.
+- **Fix:** **`isDayZeroZeroBearWorldDormant()`** — day 0, no MB bears: sleep infection/ground/HUD loops, perf sampler, spawn-metrics watch, entity-query HUD, **villager entitySpawn** (not just queries). Synced **`BP/`**.
+
+---
+
+**Date:** 2026-05-20 (Log L10726+ — @kill reset; villager die fast-path)
+
+- **User:** `@kill @e` between tests; still intermittent smoke/stall. Log: **29s** freeze (46511→~80 ticks), `entityQuiet=90t`, all `SKIP`, no `RUN` scans.
+- **Conclusion:** Not leftover entity count — tick stall on spawn + catch-up. **`main.js`:** skip mob-conversion **`entityDie`** work for villagers on day 0–3 zero-bear (`@kill` cleanup). Synced **`BP/`**.
+
+---
+
+**Date:** 2026-05-20 (Log L9643+ — 91s stall, stronger backlog defer)
+
+- **Logs:** 10:58:14→10:59:45 wall **91s**, game ticks **~80** (smoke/no villagers); wake `entityQuiet=74t`, all `SKIP`, no `villagerSpawn` RUN. Good runs: `entityQuiet=0`, no Watchdog.
+- **Fix:** Backlog also extends **`vilDefer`/pressure** via **`registerEngineBacklogHandler`**; threshold **2** ticks / **120ms** wall gap. Synced **`BP/`**.
+
+---
+
+**Date:** 2026-05-20 (Tick backlog quiet — dispenser stall before entities)
+
+- **User:** Friend says hitch is world script not entity; 12 dispenser villagers fine until scripts catch up; smoke/no entities then delayed spawn; no Content log.
+- **Model:** Vanilla can stall tick while spawning; scripts pause too, then **backlog** runs infection/ground/perf + villager drains together.
+- **Fix:** **`noteEngineTickBacklog`** in **`mb_entityQueryGate.js`** (from **`mb_performanceProfile`** when ≥3 ticks skipped in one wall-clock gap) extends entity quiet **before** `entitySpawn`. Synced **`BP/`**.
+
+---
+
+**Date:** 2026-05-20 (Villager — skip drain when pressure / quiet trace)
+
+- **User / logs (`ContentLog` L2449+):** 12 dispenser villagers fine; hitch on **second** wave when scripts “catch up.” Logs: one `batch=10` RUN, queries `SKIP`; no Watchdog during test — hitch = drain + Content Log trace spam (`SKIP` budget 16/tick).
+- **Fix:** **`noteVillagerEntitySpawn`** — if pressure or day-0 zero-bear, only bump quiet timers (once/tick), **no** `system.run` drain. **`traceEntityQuerySkip`** — no immediate `[ENTITY TRACE] SKIP` for `villagerMute` / `earlyZeroBear` etc. (stats only). Synced **`BP/`**.
+
+---
+
+**Date:** 2026-05-20 (Villager spawn — end-of-tick batch drain)
+
+- **User:** Big picture — villagers uniquely stress scripts; ignore them, or process one batch per tick not per entity.
+- **Logs (`ContentLog2026-05-28`):** Entity polls mostly **SKIP** (`villagerMute`/`villagerDefer`); cost was per-`entitySpawn` sync work + deferred finalize backlog, not resumed `getEntities`.
+- **Fix:** **`mb_workSpread.js`** — `entitySpawn` only increments **`villagerPendingSpawnCount`**; **`system.run`** drains **once per tick** (`drainVillagerSpawnsAfterTick`) for mute/defer/pressure/finalize. Spawn-egg **`itemUse`** pre-arms mute before entity exists. **Day 0–3 + zero bears:** drain extends quiet timers only — **no** `finalize`/spread/dev logs (fixes “even 3 eggs” hitch when scripts reacted). Synced **`BP/`**.
+
+---
+
+**Date:** 2026-05-20 (Entity query trace — journal Content log toggle)
+
+- **User:** More debugging for entity checks, same journal flag as villager spawn.
+- **Fix:** New **`mb_entityQueryTraceDev.js`** — `[ENTITY TRACE] RUN/SKIP` with category, reason, counts; wired through gate, **`queryEntitiesOneSpreadSection`**, mob cache, bear snapshot, spawn items, corrupt items. Hub: log trace dump + clear stats. Synced **`BP/`**.
+
+---
+
+**Date:** 2026-05-20 (Overnight hitch — load defer + villager sync trim)
+
+- **Logs:** 744ms Watchdog spike at pack load (before villagers); ongoing egg-session hitches.
+- **Fix:** **`main.js`** staggers infection director, cull, item registry, telemetry to **+40t** (avoids load spike). Villager **`entitySpawn`**: pressure path = counter + timers only (no location, no finalize, mute once/tick, no standdown extend spam). Dev log watch starts on **first** villager, not at import. Synced **`BP/`**.
+
+---
+
+**Date:** 2026-05-20 (Villager hitch fix — pressure ultra-light path)
+
+- **Logs:** `flush pending=29`, `skipSpread=false` on `countThisTick=4` during pressure → spread pump + warn storm after stall.
+- **Fix:** Pressure mode = **no** `system.run` finalize, no pending log, counter-based pressure window (no array). **Always skip spread** when pressure/session active (incl. count 4). Flush logs throttled/off under pressure; removed sync spread warn + expensive `deferPolls` in log line. Synced **`BP/`**.
+
+---
+
+**Date:** 2026-05-20 (Entity quiet HUD + pressure finalize throttle)
+
+- **User:** 30 eggs OK then hitch; `mute=0` while `vil` still high — thought queries resumed at ~5s after first egg.
+- **Clarify:** Mute extends **per egg** (~5s each); pause between eggs can show `mute=0` while `vilDefer`/`pressure` still block polls. Hitch at 30 was `flush pending=27` (script backlog), not queries resuming.
+- **Fix:** HUD **`entityQuiet=`** = max(per-egg mute, vil/pressure/session). Finalize throttled to every **8t** during pressure. Synced **`BP/`**.
+
+---
+
+**Date:** 2026-05-20 (Post-villager entity-query mute ~5s, mining exception)
+
+- **User:** Skip entity checks 3–5s after villager spawn; keep mining AI if mining MB present.
+- **Fix:** **`extendVillagerEntityQueryMute(100t)`** on each adult villager spawn; gate blocks broad **`getEntities`** / snapshot / mob cache; **`mining*`** categories allowed when **`lastKnownMiningBearCount > 0`**. Mining AI uses **`shouldAllowMiningAiLoop()`** + cached counts during mute. **`shouldDeferVillageBurst`** includes mute. Synced **`BP/`**.
+
+---
+
+**Date:** 2026-05-20 (Villager reentry hitch — skip spread backlog)
+
+- **User:** 10 eggs fast OK; 1–2 eggs a few seconds later → intermittent hitch. Logs: `countThisTick=1`, `reentry=1`, `pressure=399t`, many spread lines while `deferPolls=true`.
+- **Cause:** Each egg queued a **multi-tick spread job**; **reentry** forced **full 10s defer** even when pressure still active; sync path extended defer/standdown on every `entitySpawn`.
+- **Fix:** Skip spread pipeline when pressure/defer/session active (record pressure inline). **Reentry** uses drip unless burst timers expired and pressure off. Coalesce spread jobs same tick. Slim `entitySpawn` path; rate-limit routine spawn logs. Synced **`BP/`**.
+
+---
+
+**Date:** 2026-05-20 (Villager spawn log — flush was not “48 in one tick”)
+
+- **User:** Did **not** spawn 48 eggs at once; old log `tick=27968 count=48 flush=1` was misleading.
+- **Cause:** **`flush`** used **`villagerSpawnsSinceLastLog`** (all adults since last log line) but printed it as **`count=`** on **`lastBatchTick`** — looked like a 48-adult same-tick batch. **`mega=1`** could also appear on flush totals.
+- **Fix:** Log **`countThisTick`** for normal defer lines; flush shows **`pending=`** + **`tickSpan=`** + **`lastBatchTick`**. **`mega=1`** only when **`countThisTick ≥ 8`**. Synced **`BP/`**; **`PERFORMANCE_DEBUG.md`** updated.
+
+---
+
+**Date:** 2026-05-20 (Mega-batch villager spawn — same-tick 8+ adults)
+
+- **Fix:** **`VILLAGER_MEGA_BATCH_ADULTS` (8+)** on **`countThisTick`** → max defer on spawn tick, **no spread queue**, bulk pressure record. Ultra (16+) longer session. Per-spawn work trimmed after 12th in tick. Chunk-edge mob-cache clear skipped during session/heavy tick. Synced **`BP/`**.
+
+---
+
+**Date:** 2026-05-20 (Global entity-query gate — early days + villager defer)
+
+- **User:** Villagers should not cause this; audit every `getEntities` / snapshot path; be careful on starting days.
+- **Fix:** Central **`shouldSkipExpensiveEntityQueries()`** in **`mb_entityQueryGate.js`** (villager defer, standdown, **day 0–3 + zero bears**). **`safeQueryEntitiesNear()`** gates **`queryEntitiesOneSpreadSection`**. Bear snapshot: no unscoped dimension scans on early days; **`getOrRefresh`** unified gate. Patched mining/buff/torpedo/storm/spawn metrics/telemetry/main dev list-bears. Adult baby skip unchanged. Synced **`BP/`**.
+
+---
+
+**Date:** 2026-05-20 (Adult-only villager burst + logging restore)
+
+- **User:** Baby villager eggs OK, adult eggs / many-at-once still spike; journal entity-query log seemed dead during tests.
+- **Cause:** Babies share `villager_v2` but lighter vanilla AI — addon ran full burst pipeline for them too. `[ENTITY QUERY]` periodic log was **skipped entirely** while `deferPolls=true`. Log dedupe blocked flush+defer same tick.
+- **Fix:** Skip addon burst for **baby** villagers (`isBaby` / `is_baby` / `ageable`). Adults only: heavier same-tick defer scaling, no mob-cache clear when batch ≥3, 10t spread slices, pressure on ≥3 adults. Entity-query log still runs during defer (~4s). `[VILLAGER SPAWN]` emitted from `finalize` (not only spread step). Synced **`BP/`**.
+
+---
+
+**Date:** 2026-05-20 (Villager finalize — fastPace read-only fix)
+
+- **Bug:** `TypeError: 'fastPace' is read-only` in `finalizeVillagerSpawnBatch` when reentry tried to assign `const fastPace`.
+- **Fix:** `useFullDefer = fastPace || reentrySpawn || count >= 2` passed to `applyVillagerDeferGates`. Synced **`BP/`**.
+
+---
+
+**Date:** 2026-05-20 (Lazy bear AI bootstrap — addon script load on day 0)
+
+- **User:** Vanilla world, any villager rate = no spikes; with addon = hitches. Not vanilla — **our pack**. Logs showed `deferPolls=true`, `mobSkip=true`, stale snapshots — entity sweeps already off; hitch was **addon `runInterval` overhead** (mining/flying/buff/torpedo/infected waking every 2–6 ticks even with zero bears).
+- **Fix:** **`mb_bearAiBootstrap.js`** — bear AI intervals **do not register** until **day 2+** or first **MB bear** `entitySpawn`. Sync villager defer on spawn tick (before `finalize`); **reentry** forces full defer (no drip); dedupe duplicate `[VILLAGER SPAWN]` flush lines; pause perf wall-clock sample + entity-query periodic log during villager defer. Synced **`BP/`**.
+
+---
+
+**Date:** 2026-05-20 (Villager reentry + village session — cold spawn after pause)
+
+- **User:** 6 eggs fast sometimes fine; **2 eggs after 5s** lags; village walk-in? Scripts on day 0?
+- **Cause:** After quiet gap, defer/pressure/`S` expire → next spawn **cold-starts** (mob-cache clear) while many villagers already loaded; village = same **`entitySpawn`** burst per chunk, not a scan.
+- **Fix:** **`reentry=1`** when gap &gt;100t; skip mob-cache clear on reentry/session; **`VILLAGER_ADDON_SESSION`** (~20s) keeps `deferPolls`; mob-cache clear cooldown 300t. Docs updated.
+
+---
+
+**Date:** 2026-05-20 (Zero-bear AI sleep — no snapshot probes day 0–1)
+
+- **User:** Still lags spawning many villagers standing still; which scripts query entities? Mining AI etc. should not run until bears/day warrant it.
+- **Fix:** Day 0–1 + **0 bears** → **no 80t probe** (`isAddonBearActivityDormant` always dormant); bear AI intervals wake **1/40 ticks**; mining skips `getBearSnapshotsForDimensions` when count 0; perf mob snapshot skipped. Audit table in **`PERFORMANCE_DEBUG.md`**. Synced **`BP/`**.
+
+---
+
+**Date:** 2026-05-20 (Villager spawn work spread pipeline)
+
+- **User:** Spread addon work across ticks when villagers batch-spawn — not all on 1–5 ticks.
+- **Fix:** After spawn batch: **defer gates immediately**; **pressure** → **mob cache clear** → **log** on separate slices every **`VILLAGER_SPAWN_WORK_SPREAD_INTERVAL` (5t)**; **`isVillagerSpawnWorkSpreading()`** blocks polls for **`S=`** window (~60t + 3t per villager). Queued batches run slices back-to-back. Synced **`BP/`**.
+
+---
+
+**Date:** 2026-05-20 (Fast-paced villager eggs — batch defer on next tick)
+
+- **User:** Slow placement OK; **&lt;1s apart** lag returns (batch load); scripts dislike batches.
+- **Log:** `vilDefer=60t` on fast drip; `sync count=2` at hitch; `pressure=400t` after 4th spawn.
+- **Fix:** **`entitySpawn`** only increments counter (sync); defer/pressure/**`clearMobCache`** once per tick via **`system.run`**. **&lt;20t** since last spawn → full **200t** defer (not drip). Drip extends **`until + 60t`**, not `tick + 60`. Infection + ground-decay skip during defer. Synced **`BP/`**.
+
+---
+
+**Date:** 2026-05-20 (Villager spawn log — hitch-safe)
+
+- **User:** During lag spikes, Content Log shows **fewer** villager spawns than eggs placed; only **1–2** lines during spike then speed returns.
+- **Cause:** Batched log used **`system.run`** (next tick); engine hitch delays/skips ticks — **`entitySpawn`** may batch when simulation catches up.
+- **Fix:** **`sync=1`** log on same-tick **`count≥2`**; **`flush=1`** watchdog if pending spawns &gt;3t without defer log; **`session=`** total. Documented in **`PERFORMANCE_DEBUG.md`**.
+
+---
+
+**Date:** 2026-05-20 (Villager recovery pressure + probe off during defer)
+
+- **User:** Paced eggs (~0.5s) lag by 6–7 villagers; afterward **1–2** eggs still spike (sensitivity).
+- **Cause:** Each egg reset full 10s defer + standdown; **80t probe** woke mining AI for snapshot passes; chunk-edge **`clearMobCache`** while flying; no quiet period after a session.
+- **Fix:** **Drip extend** (+60t) when already deferred + single spawn; **pressure mode** (≥4 spawns in 30s → **20s** `pressure=` quiet, extends on more spawns); no probe during villager defer; skip mob-cache clear on chunk cross during defer/pressure; spawn log shows `pressure=` / `recent=`. Synced **`BP/`**.
+
+---
+
+**Date:** 2026-05-20 (Villager defer — flat 10s; spawn-tick cache clear)
+
+- **User:** Any villager spawn → **~10s** defer (vanilla batches only on village load); noticed **all scripts pause** during lag spike.
+- **Change:** **`VILLAGER_SPAWN_DEFER_TICKS` = 200** on every villager/trader spawn (+20t per extra in same tick, cap 400); **`clearMobCache`** moved to **`system.run`** (next tick) when defer starts — less work on `entitySpawn`. **`isAddonBearActivityDormant`** also respects villager defer. Docs: engine hitch on same-tick bursts is **not** addon defer — game tick stalls. Synced **`BP/`**.
+
+---
+
+**Date:** 2026-05-20 (Villager log analysis — more dormant loop gates)
+
+- **Log (`ContentLog2026-05-27`, L1117+):** Defer working (`deferPolls=true`, `mobSkip=true`); worst line **`count=7`** → `vilDefer=232t`. Many **`count=1`** eggs over ~2 min with **`chunkEdge=true`**. **`dormSkips`** still ~50/2s (mining/flying/torpedo wake every tick, early return only).
+- **Fix:** **`mb_buffAI.js`**, **`mb_infectedAI.js`** — `isAddonBearActivityDormant()` early return; **`main.js`** ground fast/slow skip during **`shouldDeferVillageBurst`**; debug HUD shows **`batch=`** per tick; **`isHeavyVillagerSpawnTick()`** (≥5). Synced **`BP/`**.
+
+---
+
+**Date:** 2026-05-20 (Bulk villager spawn — batch handler; always Content Log)
+
+- **User:** 50 villagers at once fine in **vanilla**, still spikes with addon — confirms addon per-spawn work, not vanilla AI alone.
+- **Cause:** Each egg fired `clearMobCache`, standdown extend, and dev `console.warn` separately (50× in one tick).
+- **Fix:** **One** cache clear + **one** `[VILLAGER SPAWN]` Content Log line per tick (`count=N`); longer defer scales with batch size; `getBearSnapshotsForDimensions` / perf mob snap / snow trail skip during villager defer.
+
+---
+
+**Date:** 2026-05-20 (Sprint-fly villager lag + debug HUD/log fixes)
+
+- **Repro:** 5 villagers placed normally OK; **sprint-flying** while placing eggs → lag returns; afterward even **2** villagers hitch (recovery lag).
+- **Cause:** During villager/chunk **defer**, mob cache still ran spread `getEntities` when cache empty; bear snapshot refreshed with no cache; **post-defer burst** of typed snapshot queries; chunk scans queued while flying.
+- **Fix:** Defer → return empty/stale (no mob-cache build); extend **zero-bear standdown** on each villager spawn; **clearMobCache** on villager/chunk cross; skip **new chunk scan enqueue** during villager defer. **HUD** shortened (`Q0 S120 V80 d C`). **Log:** per-player interval + chat line on enable + log each villager spawn when log on.
+
+---
+
+**Date:** 2026-05-20 (Entity-query debug HUD — journal)
+
+- **Journal → Debug → Entity query / village** (dev pack): HUD on action bar (bears, standdown, villager defer, skip counters) + optional Content log every 2s; Systems menu shortcut. **`mb_entityQueryDebugDev.js`**, slot **`ENTITY_QUERY`** in **`mb_actionBarHud.js`**.
+
+---
+
+**Date:** 2026-05-20 (Villager lag — zero-bear standdown; follow-up)
+
+- **User:** First fix did **not** help; lag with **only 3** villager spawn eggs (not same-tick burst).
+- **Root cause (broader):** With **no Maple Bears** loaded, scripts still refreshed **`mb_bearSnapshot.js`** (**21 typed `getEntities` per dimension**) every few ticks from mining/flying/torpedo/perf/metrics loops. Location-scoped queries still stress the engine when villagers are nearby.
+- **Fix:** **`mb_entityQueryGate.js`** — after confirmed **0 bears**, **~10s standdown** skips snapshot/mob-cache queries; slow probe every **80t**; wake on bear spawn. **Mob cache** uses **`monster`** family only. **Any** villager/trader spawn defers heavy polls **~8s** (not ≥3 same tick). Mining/flying/torpedo/dimension-adaptation loops bail when dormant. Synced **`BP/`** via **`sync:bp-from-dev`**.
+
+---
+
+**Date:** 2026-05-20 (Villager bulk load — tick freeze fix, superseded in part)
+
+- **Repro (user):** Release **beta.4**, day **0**, **LAGGY** tier — walking into a village or spawning **15–20 villagers** at once caused server tick freeze (sounds continue, blocks catch up). **50 villagers in vanilla** = fine. Cows in bulk = fine.
+- **Cause:** **`mb_sharedCache.js`** mob cache queried **`families: ["mob", "villager"]`** within **128 blocks**; **`mb_miningAI.js`** also swept that cache every **20t** for target cleanup.
+- **Fix (partial):** Mob cache **`mob` only** + exclude villager types; mining coordination uses **`world.getEntity(id)`**. See **2026-05-20 standdown** above for the fix that addresses **few** villagers with **0 bears**.
+
+---
+
+**Date:** 2026-05-19 (`sync:bp-from-dev` — merge dev scripts to release BP)
+
+- **`tools/syncBpFromDev.js`** + **`npm run sync:bp-from-dev`**: copies all `BP - Dev/scripts/*.js` → `BP/scripts/` except **`mb_buildConfig.js`**. **`--dry-run`** supported. Documented in **`AGENTS.md`**, **`docs/releasing.md`**, ship checklist.
+- Synced **`mb_propertyMigration.js`** + **`mb_snowPlacement.js`** (were line-ending-only drift).
+
+---
+
+**Date:** 2026-05-19 (Release assets — BP/RP only on GitHub)
+
+- **Policy:** GitHub Release **download assets** = **`BP` + `RP`** zips only. **`BP - Dev` / `RP - Dev`** stay in the repo for Bridge/maintainers — **no** dev zips on the Release page.
+- **`tools/packageRelease.js`**, **`.github/workflows/release.yml`**, **`docs/releasing.md`**, **`docs/RELEASE_BODY.md`**, **`AGENTS.md`**, **`UNRELEASED_DRAFT.md`** aligned.
+
+---
+
 **Date:** 2026-05-19 (Release bullets drafted — next beta)
 
 - **`docs/development/releases/UNRELEASED_DRAFT.md`** — full player + dev + ship checklist for next beta (perf, buff dual-cap, torpedo duds, mining fixes).
