@@ -1,0 +1,42 @@
+{
+	"format_version": "1.21.10",
+	"minecraft:weighted_random_feature": {
+		"description": {
+			"identifier": "mb:weighted_infected_floor_plants"
+		},
+		"features": [
+			[
+				"mb:place_infected_short_grass",
+				12
+			],
+			[
+				"mb:place_infected_tall_grass",
+				4
+			],
+			[
+				"mb:place_infected_fern",
+				4
+			],
+			[
+				"mb:place_infected_large_fern",
+				2
+			],
+			[
+				"mb:place_infected_brown_mushroom",
+				2
+			],
+			[
+				"mb:place_infected_red_mushroom",
+				1
+			],
+			[
+				"mb:place_infected_red_shrub",
+				1
+			],
+			[
+				"mb:place_infected_leaf_litter",
+				3
+			]
+		]
+	}
+}

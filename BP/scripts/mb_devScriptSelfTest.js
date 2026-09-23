@@ -6,7 +6,7 @@
 
 import { world, system } from "@minecraft/server";
 import { getAddonDifficultyState } from "./mb_dynamicPropertyHandler.js";
-import { getInfectionRate, ENTITY_TYPE_CAPS } from "./mb_balance.js";
+import { getInfectionRate, getLeafSnowConvertChance, getGreenerySpreadChance, getGreeneryNeighborSpreadChance, getBlockSpreadProgress, getBlockSpreadSpeedMultiplier, getBlockSpreadDifficultyMultiplier, ENTITY_TYPE_CAPS, getInfectedTypeCap } from "./mb_balance.js";
 import { isScriptEnabled, SCRIPT_IDS, isDustStormsEnabled } from "./mb_scriptToggles.js";
 import { refreshSpawnLoadMetrics, getSpawnLoadDebugSnapshot } from "./mb_spawnLoadMetrics.js";
 import { getCurrentDay } from "./mb_dayTracker.js";
@@ -14,7 +14,7 @@ import { getActiveStormCount, summonStorm, endStorm } from "./mb_snowStorm.js";
 import { SPAWN_CONFIGS } from "./mb_spawnConfigs.js";
 import { getBearSnapshot, invalidateBearSnapshots, ALL_MB_BEAR_TYPES } from "./mb_bearSnapshot.js";
 import { isEntityValid } from "./mb_sharedCache.js";
-import { getInfectionDirectorSpawnModifiers } from "./mb_infectionDirector.js";
+import { getInfectionDirectorSpawnModifiers, getWorldInfectionSpreadMult } from "./mb_infectionDirector.js";
 import { getAbandonedVillageSelfTestLines } from "./mb_abandonedVillageWorldgen.js";
 import { getInfectionWriteQueueSnapshot } from "./mb_infectionWriteQueue.js";
 import { getDustedDirtCacheStats } from "./mb_spawnController.js";
@@ -46,7 +46,10 @@ const SELF_TEST_MODULE_IMPORTS = [
     "./mb_dynamicPropertyHandler.js",
     "./mb_exposureSpawnPressure.js",
     "./mb_flyingAI.js",
+    "./mb_grassInfection.js",
     "./mb_infectedAI.js",
+    "./mb_infectedFoliage.js",
+    "./mb_infectedVegetation.js",
     "./mb_infectionDirector.js",
     "./mb_infectionAudio.js",
     "./mb_infectionExposureLos.js",
@@ -54,6 +57,7 @@ const SELF_TEST_MODULE_IMPORTS = [
     "./mb_itemFinder.js",
     "./mb_itemRegistry.js",
     "./mb_journalWhatsNew.js",
+    "./mb_leafInfection.js",
     "./mb_mainMobConversion.js",
     "./mb_miningAI.js",
     "./mb_miningBlockList.js",
@@ -110,7 +114,8 @@ export async function runInGameScriptSelfTest(player) {
 
         try {
             const diff = getAddonDifficultyState();
-            push(`§7Addon difficulty §f${diff?.hitsBase ?? "?"} §7hits base §8(${typeof diff?.hitsBase})`);
+            const nPlayers = world.getAllPlayers().length;
+            push(`§7Addon difficulty §f${diff?.hitsBase ?? "?"} §7hits · spawn x§f${Number(diff?.spawnMultiplier ?? 1).toFixed(2)} §7· infected cap §f${getInfectedTypeCap(nPlayers, diff?.spawnMultiplier)} §8(${nPlayers}p)`);
         } catch (e) {
             push(`§cAddon difficulty: §f${e?.message || e}`);
         }
@@ -123,6 +128,10 @@ export async function runInGameScriptSelfTest(player) {
             );
             const dir = getInfectionDirectorSpawnModifiers(getCurrentDay());
             push(`§7Director §f${dir.stageId} §7ch x§f${dir.chanceMult.toFixed(3)} §7att+§f${dir.attemptBonus} §7esc§f${dir.loadEscalated ? "y" : "n"}`);
+            const day = getCurrentDay();
+            const loc = player?.location;
+            const wmult = getWorldInfectionSpreadMult(day, player?.dimension, loc?.x, loc?.z);
+            push(`§7World vegetation §fspd=${getBlockSpreadSpeedMultiplier().toFixed(2)} §7diff=§f${getBlockSpreadDifficultyMultiplier().toFixed(2)} §7s=${getBlockSpreadProgress(day).toFixed(3)} §7leaves=${getLeafSnowConvertChance(day).toFixed(3)} §7grass=§f${getGreenerySpreadChance(day).toFixed(3)} §7dirt→grass=§f${getGreeneryNeighborSpreadChance(day).toFixed(3)} §7x§f${wmult.toFixed(3)}`);
         } catch (e) {
             push(`§cSpawn load snapshot: §f${e?.message || e}`);
         }

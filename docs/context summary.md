@@ -6,19 +6,976 @@ Running log of **what changed and why** (gameplay, scripts, assets, docs). Used 
 
 ---
 
----
+## 2026-09-23 — Testing baseline: cloud PR #6 plus local infection progress
+
+- Combined the cloud write queue, shared ambient sample, and ground-check round-robin with the local pack work (dusty plants, firefly off forest scatter, podzol → dusty dirt, air grass was worldgen).
+- Not a release. No tag. Public pack semver stays **beta.5**.
 
 ## 2026-09-23 — Ground-check round-robin (fast path, 2+ players)
 
 - Infected-ground fast loop calls `spreadPlayersForWork(..., forceRoundRobin)` when the world has 2+ players. One on-ground player per pass after day 3. Solo unchanged. Does not touch the write queue, ambient index, or storm scale.
-- Checklist section Change C in `docs/development/testing/infection-spread-efficiency-check.md`. PR #6 stays draft.
+- Checklist section Change C in `docs/development/testing/infection-spread-efficiency-check.md`.
 
 ## 2026-09-23 — Infection spread efficiency (Change A + B only)
 
-- **Change A:** Kill `spreadDustedDirt` writes and storm snow placement go through `mb_infectionWriteQueue.js`. One `system.runJob` generator (`Generator<void, void, void>`, Script API 2.10.0) drains until empty. Dust slice is 24 so a ≤20-block kill finishes in one resume. Storm placement count and duration stay on the day curve (~8.7× at day 100). No `fillBlocks`, no per-block tick, no `clearJob` while work remains.
-- **Change B:** Ground ambient pressure samples `dustedDirtByCell` once per 32-block player pocket per ground-check, shared by that pocket. LOS, the 100-block threshold, and per-player timers stay.
-- Mirrored in `BP - Dev/scripts` and `BP/scripts`. `mb_buildConfig.js` untouched. Not published.
-- Playtest gate: `docs/development/testing/infection-spread-efficiency-check.md`. In-game self-test prints queue depth. No Bedrock multiplayer run in this environment.
+- **Change A:** Kill `spreadDustedDirt` writes and storm snow placement go through `mb_infectionWriteQueue.js`. One `system.runJob` generator drains until empty. Dust slice is 24 so a ≤20-block kill finishes in one resume. Storm placement count stays on the day curve.
+- **Change B:** Ground ambient pressure samples once per 32-block player pocket. Line-of-sight and per-player timers stay.
+
+## 2026-09-23 — Obsidian Bedrock docs index vs disk
+
+- **Asked:** Check if the vault needs an update.
+- **Disk copy:** current (`--check` exit 0). bedrock.dev **1.26.50.4**, Stirante **2.10.0**.
+- **Vault:** standing notes [[Areas/Minecraft Bedrock]] / Memories / Atlas lesson were still on August 2.9.0 / 26.45. Updated those. Dated logs left as history.
+
+## 2026-09-19 — Firefly off forest scatter; podzol → dusty dirt; air grass was worldgen
+
+- **Asked:** Firefly bushes should not spawn naturally in forests (rivers only if they do). Tall grass in the air was worldgen, not scripts. Podzol should turn into dusty dirt for now.
+- **Done:** Dropped firefly from `weighted_infected_floor_plants`. Vanilla firefly by water still converts. `dustedGroundIdForVanilla` → `mb:dusted_dirt`. Unique dusty-podzol block kept in the pack. Journal **What's new** `0.9.0-beta.5.10`.
+- **Verify:** Fully exit. New forest chunks: no dusty firefly bushes. Podzol patch becomes dusty dirt. New chunks for ground grass (old air plants stay until new gen).
+
+## 2026-09-19 — Dusty grass was spawning in the air
+
+- **Playtest (August screenshot):** Cream tall grass floating next to a birch on a dusty dirt patch, not on the ground.
+- **Cause:** VAN is `infected_biome`, so floor plants run at tree-top heightmap. Tall grass worldgen ignored placement rules. Convert treated leftover tops as new bottoms.
+- **Done:** `enforce_placement_rules` on tall/large fern. Search **-y** to soil. Convert requires soil; footprint airs orphans. Journal **What's new** `0.9.0-beta.5.9`. KEEP grass look unchanged.
+- **Verify:** Fully exit. New chunks: grass on the lawn. Old floaters pop when you stand near them.
+
+## 2026-09-19 — Playtest log: 5.8 loaded; stale podzol recipe warning
+
+- **Playtest (August content log):** First rejoin still **Beta 5.3**. Second rejoin **Beta 5.8**. JOIN retries, 2.6→2.10, fly/fizz, Buff AI duplicate skip, abandoned-village LEFT/JOIN = expected. New: duplicate crafting_table recipe `dusted_podzol_from_podzol` vs leftover `dusted_dirt_from_podzol`.
+- **Cause:** `sync:bridge` / `sync:dev-to-minecraft` copied but never deleted dest files removed from git (also `dusted_dirt_from_coarse_dirt`).
+- **Done:** `tools/copyPackTree.js` prune. Removed those two recipes + leftover `block_culling/infected_leaves.json` from Bridge and Minecraft Dev packs.
+- **Still open:** mushroom-fields / giant-taiga crawl speed (August has not confirmed).
+
+## 2026-09-19 — Mycelium/podzol biomes crawl slower; mushrooms resist (not a hideout)
+
+- **Asked:** Spread should take longer in biomes with mycelium and podzol. Mushrooms could be the bane of the infection. Maybe.
+- **Done:** Mycelium ×0.45 like podzol. Mushroom fields + giant/old-growth taiga extra ×0.55 on vine, foliage, and kill-burst (`getBiome` once per death). Vanilla brown/red mushrooms extra ×0.4 vs grass. Journal **What's new** `0.9.0-beta.5.8`. Those biomes stay **Safe by design** (not infected replace). Mushrooms purifying neighbors is **parked** (“Maybe”).
+- **Verify:** Fully exit. Mushroom island / giant taiga crawl slower than plains. Vanilla mushrooms convert slower than grass. Playtest pending (August).
+
+## 2026-09-19 — Infected vines were a cream cage, not vanilla planes
+
+- **Playtest (August screenshot):** Infected vines under a tree looked broken — cream box, not vines.
+- **Cause:** Four-wall geo always on; convert dropped `vine_direction_bits`; powder bake turned the gray vine tile solid cream.
+- **Done:** Direction bones + copied bits. White tint of vanilla vine.png. Twisting/weeping are cross plants. Journal **What's new** `0.9.0-beta.5.7`.
+- **Verify:** Fully exit. Vines on a trunk should look like vanilla vines, white.
+
+## 2026-09-19 — Podzol texture, no coarse-dirt infect, tall grass pair, leaf dust finish
+
+- **Playtest (August):** Infected podzol looked like dusty dirt. Coarse dirt should stay clean. Tall grass **breaks** on convert (ferns OK). Screenshot: cream tree with green/mid-stage leaves still stuck.
+- **Done:** `mb:dusted_podzol` (own powder-mixed podzol atlas). Coarse dirt off the vine / kill-burst / craft. Double tall grass: detect `upper_block_bit` 1, do not air the top first. Leaf drain: dust-advance the column, keep under-max sources, cap 256. Journal **What's new** `0.9.0-beta.5.6`.
+- **Verify:** Fully exit. Podzol → dusty podzol; coarse dirt stays. VAN tall grass → 2-block dusty plant. Mid-gray leaves keep going to cream.
+
+## 2026-09-19 — Day 100 trees must climb, not fill in one hit
+
+- **Asked:** On day 100, trees were almost instantly infected when hit from the ground. Climb up from the stump if that is how it started; if it starts from the top, pace down.
+- **Cause:** Full-column walk converted every touching log/leaf in one drain. ±4 Y hops and newly-converted cascade stacked on ~100% day-100 chance. Remembered logs in the same XZ each added another frontier.
+- **Done:** One frontier vanilla per column per drain. Infer up vs down. Face hops only. No cascade. Dedup known sources/scans by XZ. Journal **What's new** `0.9.0-beta.5.5`.
+- **Verify:** Fully exit. Day 100 oak next to dusty dirt should climb the trunk, then leaves. Powder on the lid should crawl down. Playtest pending (August).
+
+## 2026-09-19 — Podzol infects slower; giant taiga stays off infected replace
+
+- **Asked:** Slower spread through podzol (dirt+gravel mix). Confirm mutated taiga is not replaced by infected biomes on purpose.
+- **Fact:** Coarse dirt is the dirt+gravel craft. Podzol is the giant/old-growth taiga floor. `mega_taiga` / `redwood_taiga_mutated` (and hills) are **Safe by design** — not on `replace_biomes`. Regular taiga is replaced.
+- **Done:** Vine + kill-burst podzol chance ×0.45. Journal **What's new** `0.9.0-beta.5.4`.
+- **Verify:** Fully exit. Podzol next to dusted dirt crawls slower than grass. Giant taiga chunks stay vanilla biome overlay.
+
+## 2026-09-19 — Double-plant JSON rejected: 1.26.40 schema (AO, then use_efficiency)
+
+- **Playtest (August content log):** After `ambient_occlusion: 0`, same two blocks — `destructible_by_mining: invalid numeric` and `use_efficiency` not in schema. Features unknown; RP no registry. What's new **Beta 5.3**. JOIN retry / fly / 2.6→2.10 still expected.
+- **Cause:** Format 1.26.40 mining object has no `use_efficiency` (copied from 1.26.10). Whole block rejected.
+- **Done:** Drop `use_efficiency`. Switch `tag:*` to `minecraft:tags` on those two so the next 1.26.20 kill is skipped. Generator matches.
+- **Verify:** Fully exit. Those mining/unknown-block/`blocks.json` lines should be gone.
+
+## 2026-09-19 — Double-plant JSON rejected: ambient_occlusion boolean invalid on 1.26.40
+
+- **Playtest (August content log):** After dropping `is_experimental`, `infected_tall_grass` / `infected_large_fern` — `material_instances *: invalid string` and `ambient_occlusion: invalid numeric value`. Features unknown; RP texture no registry. JOIN retry / fly sound / 2.6→2.10 still expected. Log still said What's new **5.2** on that join (pack on disk is **5.3** after the obsidian sync).
+- **Cause:** Format 1.26.20+ requires `ambient_occlusion` as a float 0.0–10.0. `false` (copied from 1.26.10 plants) rejects the whole block.
+- **Done:** `ambient_occlusion: 0` on those two blocks + foliage generator for tall. 1.26.10 plants unchanged.
+- **Verify:** Fully exit. Those material/unknown-block/`blocks.json` errors should be gone. What's new should read **Beta 5.3**.
+
+## 2026-09-19 — Mining and buff chew obsidian (slow); survival-unbreakable stays closed
+
+- **Asked:** Obsidian (and everything except survival-unbreakable like bedrock and the ancient city portal) breakable by mining bears and buff bears, slower than most blocks. Follow-up: buff smash should be a **lower chance** than stone; mining about **5 seconds**.
+- **Cause:** `UNBREAKABLE_BLOCKS` listed diamond-slow blocks. Mining `isBreakableBlock` is a blacklist, so that was immunity. First pass used the same ~2.4s chew for mining and buff smash.
+- **Done:** Mining chew **100 ticks (~5s)**. Buff smash **12%** per hit (`rollBuffSlowBreak`); miss stops the column. Explode/torpedo skip slow. Unbreakable = bedrock/portals/reinforced_deepslate/etc. Journal **What's new** `0.9.0-beta.5.3`.
+- **Verify:** Fully exit. Mining ~5s per obsidian. Buff smash often fails on obsidian, sometimes pops. Playtest pending (August).
+
+## 2026-09-19 — Double-plant JSON rejected: is_experimental not in 1.26.40 schema
+
+- **Playtest (August content log):** `infected_tall_grass` / `infected_large_fern` — `is_experimental` not in schema; features unknown/invalid block; RP `blocks.json` texture with no registry entry.
+- **Cause:** Format 1.26.40 (needed for `minecraft:multi_block`) rejects that description field. Block never registers, so worldgen cannot place it.
+- **Done:** Removed the field from those two blocks and the foliage generator. JOIN retry / fly sound / 2.6→2.10 promotion unchanged expected noise.
+- **Verify:** Fully exit. Those four errors should be gone. Playtest pending.
+
+## 2026-09-19 — Player goal / keep-playing loop (Aiden)
+
+- **Asked:** Aiden (game design degree path): MBA needs a **player goal**. Not solvable by an obsidian cube. Help that does not guarantee survival. Fight/struggle vs one-shot. Too hard vs too easy. Keep people playing with a loop (explore — e.g. heavy core / trial chamber as a *class*, not a ticket).
+- **Done:** Standing note `docs/design/PLAYER_GOAL_AND_LOOP.md`. Wired into DESIGN_VISION, items master plan, idea brainstorm. Vault + lessons. **Not implemented.**
+- **Open:** Pick a first loop piece later (August). Emulsifier / safer biomes / Day 25 victory sit in tension with the cube — keep them as help, not a win button.
+
+## 2026-09-19 — Dusted leaves look KEEP (playtest)
+
+- **Playtest (August screenshot + quote):** “The dusted leaves look much better.” Dusty VAN lawn, pale trunks, brown dusty litter plate on the ground (not torn cream slabs). Canopy in the shot is still green — this is a **look** KEEP, not a sign-off that tree hops filled every hole.
+- **Done:** Wrote KEEP into the leaf-litter lesson (repo + vault). Do not restyle dusty leaves / litter after this.
+- **Still open:** cream holes beside canopy; gray→cream climb; trunk climb; double tall grass; friend hitch.
+
+## 2026-09-19 — Cream canopy left green holes; any-stage hops + max face check
+
+- **Playtest (August screenshot):** Mostly cream oak with vanilla green leaves still in the canopy. Spec: any infection stage can infect healthy neighbors; when a block becomes fully infected, check the six faces.
+- **Cause:** Known leaf sources were deleted at max dust, so cream leaves stopped hopping. Neighbor hops shuffled far offsets and returned after one success. Column walk cannot see a green leaf in the next XZ column.
+- **Done:** Faces-first vanilla convert at any dust. On reaching max, always check six faces. Keep cream/max-dust sources until no uninfected faces. Same for logs. Journal **What's new** `0.9.0-beta.5.2`. No per-leaf ticks.
+- **Verify:** Fully exit. Green holes next to cream should fill. Playtest pending (August).
+
+## 2026-09-19 — Some canopy leaves froze at gray, never cream
+
+- **Playtest (August screenshot):** Partly dusty trees; some leaves never reached max white. Night VAN + mining bears.
+- **Cause:** Dust advance only ran when the neighbor hop failed; far healthy leaves always won. Column budget started at the stump. Known leaves expired while still gray.
+- **Done:** Independent dust climb; process the hit leaf first; keep sources until cream. No per-leaf ticks.
+- **Verify:** Fully exit. Gray patches should keep going cream.
+
+## 2026-09-19 — Dusty leaf litter looked like a torn cream slab
+
+- **Playtest (August screenshot):** Infected leaf litter broken — wanted brownish like a leaf still, white like the “snow” (powder).
+- **Cause:** `geometry.'snow'_layer` is 32×32; litter texture is 16×16 so UVs tore. Bake also full-remapped the grayscale cutout to cream (vanilla uses dry_foliage brown tint).
+- **Done:** Thin 16×16 leaf-plane geo. Bake keeps holes, brown×dry-foliage, powder on highlights. Synced packs.
+- **Playtest (August 2026-09-19):** “The dusted leaves look much better.” **KEEP.**
+
+## 2026-09-19 — Script lag is shared; friend-only hitch is client
+
+- **Asked (August):** He is on a stronger PC. Doesn’t script lag affect everyone, not just one person?
+- **Answer:** Yes. Behavior-pack scripts run on the host tick. If that tick stalls, everyone rubber-bands, including the host. Friend-only hitch = his machine drawing/meshing dusty blocks, not a private script lag.
+
+## 2026-09-19 — Trunks stopped at the stump; friend lagged on 5 chunks
+
+- **Playtest (August):** Grass still as good as before. Tree trunks dusted from the **bottom** and did not climb. Leaves still weak. Friend lagging in the same world; August not. Friend **5 chunks** vs August **32**. Older MBA was not laggy for the friend.
+- **Cause (trees):** Column walk was only 3 up from the ray hit (often the stump or the canopy lid), top-down so the base converted last, hops had no straight-up, wood scan skipped vanilla canopy leaves. Lawn dirt drain still infected the stump.
+- **Cause (friend hitch):** Scripts run on the host (August was fine). New pack converts a lot of grass → many custom-block updates to guests. Guest render distance does not cut those packets. Older pack converted less.
+- **Done:** Full-tree expand, bottom→top climb, remembered log/leaf sources, straight-up hops. MP: always rotate vegetation extras; tighter dirt/tree convert caps. Synced packs. Changelog tree + MP bullets.
+- **Verify:** Both fully exit. VAN oak next to dusty dirt should climb stump → trunk → leaves. Two-player hitch should ease; lawn should stay alive. Playtest pending.
+
+## 2026-09-19 — Tree/leaf spread stopped on the canopy lid
+
+- **Playtest (August):** Grass spreading still good. Trees and especially leaves not as expected.
+- **Cause:** Downward rays stop on the first solid leaf (healthy canopy). Grass plants are passable so the lawn ray still hits dirt. Wood scan skipped when it hit leaves.
+- **Done:** Walk the column after a tree hit (leaves + trunk + dusted dirt). No `minecraft:tick` back. Synced packs.
+- **Verify:** August playtests a VAN tree next to dusty dirt after a full exit.
+
+## 2026-09-19 — Infected double tall grass (and large fern)
+
+- **Asked:** Make an infected double tall grass. Any other plant blocks needed?
+- **Cause:** `mb:infected_tall_grass` was a 1-block stub (`tall: true` unused) using only the bottom TGA. Vanilla is two blocks (`upper_block_bit`).
+- **Done:** `minecraft:multi_block` (2 parts up) for tall grass + large fern. Top Samples TGA + powder. Convert and emulsifier restore both halves. Floor scatter uses `multi_block_feature`.
+- **Also needed later (not this turn):** flowers / double flowers (sunflower, lilac, rose bush, peony, pitcher); `minecraft:bush`; sweet berry; azalea shrubs; dead bush (red shrub covers some); hanging roots / glow lichen / moss carpet; dripleaf. Flowers were parked on purpose (`mb_grassInfection.js`: “Flowers/crops later”). Water plants stay out (powder must not sit on kelp).
+- **Verify:** August playtests VAN 2-block dusty grass.
+
+## 2026-09-19 — Dusty grass plants: vanilla blades, powder color, thinner base
+
+- **Asked (screenshot):** Grass *plants* see-glitchy. Match vanilla grass, powder/“snow” colors, slightly more see-through at the bottom.
+- **Cause:** Vanilla TGA is a blade cutout with a **filled** base (green hides on the lawn). Cream on a cross looked like two walls. Wiki: `geometry.cross` + two-sided `alpha_test` flickers.
+- **Done:** Cross plants `alpha_test_single_sided`, `face_dimming: false`. Textures keep Samples holes + snow_layer remap; `fade_plant_base` drops the filled clump between stem columns. Regenerated RP/RP-Dev textures + BP/BP-Dev foliage JSON.
+- **Playtest (August 2026-09-19):** **Spreading works.** Close-up dusty grass: **keep** — “That looks a lot better, and fits the feel of the addon.”
+
+## 2026-09-19 — Solo vs multiplayer are two design levels
+
+- **Asked:** Whenever we change the addon, consider single-player and multiplayer. Solo can spend more (one player, one set). MP multiplies work, so more sharing/optimization.
+- **Done:** Standing fact in Memories, AGENTS.md, `mb_workSpread.js` header, lessons, roadmap. No new throttle this turn.
+- **Open:** MP spread/load still untested.
+
+## 2026-09-19 — onTick subscription without minecraft:tick (playtest)
+
+- **Asked / playtest:** New world load content log: every infected leaf/log/wood subscribed to `onTick` but missing `minecraft:tick`.
+- **Cause:** JSON ticks were dropped for hitch; script custom components still registered `onTick`. Engine requires the JSON component if you subscribe.
+- **Done:** Removed `onTick` / `onRandomTick` from `mb:infected_oak_leaf` and `mb:infected_wood`. Player scans unchanged. Do not put JSON ticks back.
+- **Verify:** August playtest 2026-09-19 — world-load `[Blocks][error] onTick` gone. Same session: **spreading works** (VAN lawn dirt + dusty plants).
+
+## 2026-09-16 — Optimization research applied (not rigid)
+
+- **Asked:** Deep research, other people's thoughts, apply where it fits. Smooth, still good, not broken or too rigid.
+- **Sources:** Bedrock Wiki add-on performance (SirLich et al.), Wiki avoid `runCommand`, Mojang `system.runJob` time-slicing, nox7 pathfinder `runJob`, Jayly watchdog thresholds.
+- **Done:** Load-aware vegetation extras (leaf+grass always). Cheaper biome-tint and powder scans. `spawnParticle` on stain/place FX. `textures_list.json` generator. Mining A* `runJob` not applied (would stall bears without a continuation).
+- **Paused for morning (August 2026-09-16 night):** keep implementing from the roadmap “still open” list — mining A* `runJob` with a continuation so bears do not look stuck; leftover `/particle` `runCommand` on death/explosion FX; playtest quiet VAN vs busy dusty forest. Do not freeze infection. Multiplayer still untested.
+
+## 2026-09-16 — Version changelog for post-beta.5 work
+
+- **Asked:** All added/changed work in the version changelog for releases and Dev.
+- **Done:** Unreleased **v0.9.0-beta.5.1** notes in `docs/PLAYER_CHANGELOG.md` + `docs/development/releases/UNRELEASED_DRAFT.md`. In-game What's new bumped to `0.9.0-beta.5.1` (dusty plants, nylium, emulsifier, fire, HUD/hitch). Dev pack label `beta.5.1`. Public pack semver stays **beta.5** until tag. `RELEASE_BODY.md` still last GitHub tag (beta.4) with a pointer. Lesson: write those files the same turn, bump `PLAYER_CHANGELOG_VERSION`.
+- **Verify:** Journal → What's new after a full exit.
+
+## 2026-09-16 — Older Maple Bears / infected were fire-immune
+
+- **Asked:** Day 20 infected burns (correct). Day 4/8/13 etc. should not be immune to fire and lava. All infected entities.
+- **Cause:** `"minecraft:fire_immune": false` still registers the component; engine treats presence as immune. Day 20 infected omitted it.
+- **Done:** Removed the component from all Maple Bear family entity JSON that had it (infected, mb, flying, mining, torpedo, buff). Synced packs.
+- **Verify:** August playtests overworld fire/lava on day 4/8/13 infected vs day 20.
+
+## 2026-09-16 — Nylium + nether foliage infection
+
+- **Asked:** Warped/crimson nylium should infect like grass. Nether foliage too (roots, sprouts, fungus, vines).
+- **Done:** Nylium on living-ground convert. Seven dusty nether plants (convert only). Nether purify → netherrack/nylium, never overworld grass. Synced after check.
+- **Verify:** August playtests a nether forest day 2+ and an emulsifier there.
+
+## 2026-09-16 — Emulsifier: leaves can vanish; dirt can become grass
+
+- **Asked:** Leaves during purify should have a chance to disappear. Infected dirt should have a chance to turn back into grass. Do we infect only grass blocks, or dirt too? Goal: anything living can be infected.
+- **Decision:** Both grass_block **and** dirt-like living soils (dirt, podzol, mycelium, moss, farmland, paths). Shade dirt is how infection reaches trees. Stone/sand stay out.
+- **Done:** ~35% leaves/walkable plants → air. ~45% open-sky dusted dirt → grass_block (else dirt). Logs stay restore. Synced after check.
+- **Verify:** August playtests emulsifier on a VAN lawn + canopy vs a cave.
+
+## 2026-09-16 — Infected vines / foliage + biome floor plants
+
+- **Asked:** Infected vines and other infected foliage (firefly bushes, mushrooms, mushroom blocks, leaf litter). Also generate infected grass plants in infected biomes as worldgen features.
+- **Failed path:** Greenery used to become powder; snow infected biomes have no vanilla grass features.
+- **Done:** 13 `mb:infected_*` blocks (grass, ferns, firefly bush, mushrooms, red shrub, leaf litter, vines, mushroom cubes/stem). Cream textures. No `minecraft:tick`. Convert from vanilla day 2+ via player scan. Scatter `mb:infected_floor_plants` on `infected_biome` except ocean. Emulsifier restores vanilla. Synced Bridge + Minecraft Dev.
+- **Verify:** August playtests new chunks + convert + purify. Vines/mushroom cubes are convert-only (not floor scatter).
+
+## 2026-09-16 — Emulsifier: powder layers purify to air
+
+- **Asked:** Do not replace `"snow"` layers with vanilla Minecraft snow when the emulsifier purifies. Replace with nothing (air).
+- **Cause:** `neutralizeCorruptedBlock` used `minecraft:snow_layer` as the “safe” detox for `mb:snow_layer`.
+- **Done:** Powder layers → `minecraft:air` + unregister spawn tile. Dirt/leaves/wood unchanged.
+- **Verify:** August playtests a fueled emulsifier on powder plates.
+
+## 2026-09-16 — Day 100+ banners / fat action bars off-screen
+
+- **Asked:** After 100/101 days (and anything with that big an action bar), the banner goes off the screen. Make everything fit.
+- **Cause:** Title was `!!!!!!!!!! Day 100 (+75 past victory)`; sunrise bar was a long intensify sentence; merge HUD had no glyph cap.
+- **Done:** Cap on-screen bangs at 5; `+N past victory` is a subtitle. Short sunrise/welcome bars. Merge drops extra HUD then clips to ~48 visible glyphs. Title clip ~18. Synced `BP/` from Dev.
+- **Verify:** August playtests day 100/101 sunrise (and stacked infection HUD). Chat can stay long.
+
+## 2026-09-16 — Netherite emulsifier tick stalls
+
+- **Asked:** One netherite-fueled emulsifier: lag spikes, delayed block break, mobs stuck then catch up (with the dusty-forest spread lag).
+- **Cause:** Forced every-slice dome scan (ring wrap = always pending) + huge getBlock budget + convert-timeout waves + saveAllProperties every 10t.
+- **Done:** Caps (320 ops, 6 queue, 40 pending), netherite interval 2, no per-tick persist, no netherite tick burn. Synced BP scripts.
+- **Verify:** August playtests one netherite machine in a dusty forest after full exit.
+
+## 2026-09-16 — Block-spread scale lag: stop ticking every infected leaf/log
+
+- **Asked:** When infection spreading through blocks gets large, things get laggy. Can we help.
+- **Cause:** Every infected leaf/wood had `minecraft:tick` (same fail class as ticking all dusted_dirt). Cost grows with converted forest, not with the player scan.
+- **Done:** Generator no longer emits tick. Player-centric leaf front scan + wood scan cap 4. `npm run check` passed.
+- **Verify:** August playtests a large dusty forest after Bridge + Minecraft Dev sync. Front near the player should still creep.
+
+## 2026-09-15 — Powdery Journal look keep; blank plates + ActionForm feel tomorrow
+
+- **Asked / result:** August: blocky dusted mockups are “just like that.” Next: **blank** versions (no baked-in words) so we can write our own copy. Same / similar **ActionForm** journal experience, new look, maybe layout changes to the info. **Do tomorrow.** Not wiring tonight.
+- **Parked:** `docs/design/journal-ui/` — keep current labeled mockups as style refs; generate empty book plates then CustomForm + ActionForm fallback.
+
+## 2026-09-15 — Powdery Journal art: blocky dust, no world BG
+
+- **Asked / result:** August: dusted pass was too hyperrealistic. Needs more Minecraft-blocky like `snow_book` / `mb_snow` / snow layer. Dry white dust, not real snow. Book UI only — no landscape behind it.
+- **Done:** Regenerated `docs/design/journal-ui/powdery-journal-*.png` (pixel dust, dark void). Basic journal files unchanged. Vault copy.
+- **Verify:** August keep / more dust / still too painted.
+
+## 2026-09-15 — Powdery Journal book art: more MBA snow
+
+- **Asked / result:** August: first three book mockups look good **for the basic journal**. Powdery Journal needs a lot more “snow” powder/dust. Palette from dusted journal icon (`snow_book.png`), snow item (`mb_snow.png`), and snow layer (`'snow'_layer.png`).
+- **Done:** Kept clean mockups as `docs/design/journal-ui/basic-journal-*.png`. Regenerated `powdery-journal-*.png` with warm cream powder drifts (not ice-blue). Vault copy + README. Still not in `RP/textures/`.
+- **Verify:** August looks at the dusted trio next to `snow_book` / `mb_snow` / snow layer. Keep / more powder / less. Wiring still waits.
+
+## 2026-09-15 — Powdery Journal book art (look-first)
+
+- **Asked:** Generate original pixel-art book UI mockups from August's three vanilla Book and Quill references — art only, no CustomForm wiring yet.
+- **Done:** Three PNGs in `docs/design/journal-ui/` (contents spread, closed cover, reading spread) + vault `Projects/Maple Bear Apocalypse/design/journal-ui/`. README index. Not in `RP/textures/` until look approved.
+- **Follow-up:** Clean look kept for **basic journal**; Powdery got a second dusted pass (section above).
+- **Verify:** August reviews PNGs next to references — keep / change leather, dust, TOC wording. In-game wiring waits for approval pass.
+
+## 2026-09-15 — World open: blocks.json swarm (script export)
+
+- **Asked / result:** August reopened the world and got swarmed by `blocks.json` “does not exist in the registry” for every infected leaf/log plus `mb:snow_layer`.
+- **Cause:** `npm run sync:biome-registry` regenerated `mb_biomeReplaceRegistry.js` without `isInfectedComponentBiomeAt`. Content log: `SyntaxError: Could not find export 'isInfectedComponentBiomeAt'` → main.js failed → custom blocks never registered.
+- **Done:** Restored the export in `tools/syncBiomeReplaceRegistry.cjs` (regen-safe). Synced Bridge + Minecraft Dev packs.
+- **Verify:** **Playtest 2026-09-15 (August):** “All good now I think.” Healthy Dev load (no missing-export SyntaxError, no `blocks.json` swarm). JOIN retries / Buff AI duplicate skip / `normal` sound still existing noise.
+
+## 2026-09-15 — Dappled Forest snow replace + red shrubs
+
+- **Asked:** Are red shrubs covered? Include missed systems, including snow replace list for Dappled Forest.
+- **Red shrubs:** Yes — greenery convert to powder, storm snow/destruct, mining walk-through. Added leaf litter + brown mushroom to that same plant pass (dappled forest floor).
+- **Done:** `minecraft:dappled_forest` on snow infected `replace_biomes` (small/medium/large, BP + Dev). Catalog stub + `npm run sync:biome-registry`. VAN overlay still oak forest only. Spawn scripts unchanged (dusted dirt).
+- **Verify:** Fully exit to menu. New chunks. Biome checker LIST/SNW. Powder a red shrub day 2+.
+
+## 2026-09-15 — Dappled Forest biome replace / spawn? No
+
+- **Asked:** Did we also replace the Dappled Forest biome, change spawn scripts, or miss other 26.50 systems besides poplar blocks?
+- **Answer (superseded same day):** Block infection only at first. August then asked for the snow replace pass — see section above.
+
+## 2026-09-15 — Playtest: 26.50 new world loads
+
+- **Asked / result:** August: everything seems to be loading correctly. Fresh world (intro not seen → sequence completed, journal given). Full self-test 22/22, storm harness, `diff=1.00` on vegetation line. Day 0 spread 0.
+- **Existing noise (not bugs):** JOIN retries 1–3; `No sound found for block type 'normal'`; Content Log `ON Â·`; server 2.6→2.10 promote.
+- **Still open:** poplar powder convert on day 2+; Hard vs Easy spread feel.
+
+## 2026-09-15 — Custom journal UI? Not yet
+
+- **Asked:** Do we have a custom journal UI yet? Would be a thing to do soon.
+- **Answer:** No. Powdery Journal is still `@minecraft/server-ui` **ActionFormData** / **ModalFormData** (`mb_codex.js`). No `CustomForm`. RP `ui/` is how-to-play JSON, not the journal. Parked plan: pilot one screen as CustomForm on 26.10+ with form fallback.
+
+## 2026-09-15 — 26.50 Dappled Forest poplar infection
+
+- **Asked:** 26.5 released; is the addon still okay? Add dappled forest wood/leaves to infection and other block systems. Pasted a healthy Dev content log (self-test 22/22, server 2.6→2.10 promote).
+- **Tried:** Confirmed existing noise (JOIN retries, vanilla `normal`/`terracotta` sounds). Wired poplar through the vegetation generator + preview Samples PNGs. Storm/snow/mining lists + red_shrub / shelf_mushroom.
+- **Verify:** Fully exit to menu. Powder poplar leaves/logs day 2+.
+
+## 2026-09-15 — Journal difficulty scales block spread
+
+- **Asked:** Make block infection spread follow Journal → Settings Addon Difficulty if it did not already.
+- **Tried:** Confirmed it did not — difficulty already scaled spawn, hits, timer, mining, torpedo, storm start day. Leaf/wood/grass used day curve × `BLOCK_SPREAD_CHANCE_MULT` × dev speed × director/storm only.
+- **Done:** `blockSpreadMultiplier` 0.7 / 1 / 1.3 on `getAddonDifficultyState`; `getBlockSpreadDifficultyMultiplier` in `blockSpreadChance`; kill-stain chance in `spreadDustedDirt`. Cheats Settings label + Dev speed menu + self-test `diff=`.
+- **Verify:** Fully exit to menu. Normal day-2 `leaves` ~0.040; Easy ~0.028; Hard ~0.052. Self-test vegetation line shows `diff=`.
+
+## 2026-09-15 — Beta 5 → could we ship Beta 6?
+
+- **Asked:** What improved since Beta 5, and could we release Beta 6?
+- **Tried:** Compared pack version (`0.9.0-beta.5`), `PLAYER_CHANGELOG`, git (`ef84823` / `9a19284`), and the Aug 30–Sep 2 infection pass still sitting dirty on disk.
+- **Outcome:** Beta 5 is still the labeled ship (Patreon BP+RP, no GitHub tag). Working tree has a full infection-world drop (VAN biome, Fancy leaves, wood/nether/grass spread, slower play curve, emulsifier, livestock) — enough for Beta 6 after commit + version bump. Did **not** bump or export.
+- **Open:** Multiplayer spread/load still untested; sheep texture still Compoohter; August must say go before tagging/export.
+
+## 2026-09-02 — More performance work later (open)
+
+- **Asked:** Mark that August wants even more performance improvements in the future.
+- **Done:** Standing fact in vault Memories + Open loops. Roadmap `PERFORMANCE_OPTIMIZATION_ROADMAP.md` has a Later note. Not a current build slice.
+- **Open:** Multiplayer spread/load still untested; wait for August to pick the next perf slice.
+
+## 2026-09-02 — Dev tool for block spread speed
+
+- **Asked:** Quick Developer Tools control for spread speed, in a good category.
+- **Done:** Journal → Developer Tools → Infection & players → Block spread speed. World property `mb_block_spread_speed_mult` (0 pause / 1 play / 8 testing fire). Mob conversion unchanged.
+- **Verify:** Fully exit to menu. Self-test line shows `spd=`.
+
+## 2026-09-01 — Block spread chances doubled (2% → 4% at day 2)
+
+- **Asked:** Bump the play-curve %s up by half; 2% should become 4%.
+- **Done:** `BLOCK_SPREAD_CHANCE_MULT = 2` on leaf/wood/grass chances. Knots and mob `getInfectionRate` unchanged.
+- **Verify:** Fully exit to menu. Day 2 canopy convert ~4%. Self-test `leaves` ~0.040.
+
+## 2026-09-01 — Block spread slowed to a play curve (cap day 100)
+
+- **Asked:** Testing sped-up spreading is done (single player). Make it much slower. Ramp 2→20, 20→25, then slower to 50 and later milestones, cap day 100. MP still needs load testing.
+- **Failed:** Leaf/wood/grass used `getInfectionRate` (full by day 20).
+- **Done:** `getBlockSpreadProgress` in `mb_balance.js`. Mobs still use `getInfectionRate`.
+- **Verify:** Fully exit to menu. Day 2 should creep.
+
+## 2026-09-01 — Infected logs craft into 2 planks
+
+- **Asked:** Infected logs should only craft into 2 planks instead of 4 (decayed).
+- **Failed:** Mining dropped a vanilla log (4 planks).
+- **Done:** Infected log/wood/stripped drop themselves; recipe yields 2 matching planks. Wart still drops vanilla.
+- **Verify:** Fully exit to menu. Mine infected oak log → craft → 2 oak planks.
+
+## 2026-09-01 — Playtest: infected leaf look is how August wants it
+
+- **Asked:** Check the 180° UV / both-faces inner slabs.
+- **Worked (August ~1636, 82, 23):** No fighting. Far wall and sides show. Doubled-up inner texture looks nice — **keep**.
+- **Keep:** `alpha_test_single_sided_to_opaque` + six inner slabs (both faces, 180° UV), no leaf-vs-leaf cull.
+
+## 2026-09-01 — Far leaf wall empty after inward-plane pass
+
+- **Asked:** So close — no fighting, sides are there; the opposite face you look through has no texture (~1638, 76, 17).
+- **Failed:** Inner slabs used the same UV as the near face (holes lined up head-on). Only one face per slab.
+- **Done:** Both faces on each inner slab, 180° UV so far solids fill near holes. Still single-sided, no leaf cull.
+- **Verify:** Fully exit to menu. Through a hole: far wall of that cube, not empty sky.
+
+## 2026-09-01 — Leaf interior flicker + emulsifier zone per-tick cache
+
+- **Asked:** Apply the CodeRabbit per-tick detox-zone cache. Look-through is fixed; flickering/fighting textures inside clumps are back (~1638, 76, 24). Research a fix.
+- **Failed:** `alpha_test_to_opaque` on custom cubes disables backface culling (Learn) — both sides of a face share a plane, so clumps z-fight. Leaf-to-leaf culling would kill Fancy stacking. Negative-size inner cube stayed hollow.
+- **Done:** Per-tick cache on `getActiveEmulsifierZonesForDimension` (load/persist stale machines at most once per dimension per tick). Leaves: `alpha_test_single_sided_to_opaque` + six inward planes, no leaf-vs-leaf cull. Regenerated 44 leaves.
+- **Verify:** Fully exit to menu. Same clump: no interior fight; still see far wall and stacking.
+
+## 2026-09-01 — Infected leaves must densify down a chain like Fancy
+
+- **Asked:** Leaves are better, but not like normal Minecraft. A longer/denser chain should show less through (screenshots ~1638, 75, 25 vs vanilla green).
+- **Failed:** `mb:culling.infected_leaves` / `culling_layer.leaves` hid the next cube’s near face, so holes never filled. Fast-style, not Fancy.
+- **Done:** Two-sided `alpha_test_to_opaque`, no leaf-vs-leaf cull, slightly inset cube. Regenerated all 44 leaves. Deleted `block_culling/infected_leaves.json`.
+- **Verify:** Fully exit to menu. Same thick-clump view — extra leaves should fill holes like vanilla Fancy. Soup (interior grid) may return; density is the ask.
+
+## 2026-09-01 — Looking through a leaf still hollow (inner cube failed)
+
+- **Asked:** Other side of leaf blocks still see-through (~1282, 73, -66). Fix it. Thought we had this.
+- **Failed:** Inner inverted cube + `alpha_test_single_sided` — inner faces are backfaces from outside, so still hollow. Single-sided cannot show the far wall.
+- **Done:** Two-sided `alpha_test_to_opaque` on a cube. **Leaf-to-leaf culling later failed density** — see the Fancy-chain section above. All 44 leaves. No inner cube.
+- **Verify:** Fully exit to menu. One leaf in air: far wall through a hole. Canopy should not soup.
+
+## 2026-09-01 — Emulsifier particle load thins when the dome is busy
+
+- **Asked:** Lots of dusted dirt / cleanse particles lag. Fewer particles when there is a lot of emulsifying.
+- **Failed:** Leaf every-other only. Dirt still puffed every cell.
+- **Done:** Queue-size skip 2/4/8, puffs per cell 3→1, longer refresh, 36 particles/tick cap. Convert delay unchanged.
+- **Verify:** Fully exit to menu. Small patch still puffs; big dome sparser.
+
+## 2026-09-01 — Infected leaf Fancy method is the interior-soup glitch
+
+- **Asked:** Infected oak leaves have the overlapping-interior glitch again (~1297, 71, -21). Fix it without making holes have no other side.
+- **Failed:** `alpha_test_to_opaque` on custom cubes (vanilla Fancy does not transfer). Single-sided alone has no far wall through a hole.
+- **Done:** `alpha_test_single_sided` + inner inverted cube on shared leaf geo. All 44 leaves regenerated. Hole RGB already filled.
+- **Verify:** Fully exit to menu. Dusty canopy: no interior grid; through a hole the far wall still shows.
+
+## 2026-09-01 — Brainstorm: detox orb / condensed "snow" emulsifier fuel
+
+- **Asked:** Park for later — mix fuel + "snow" into a detox substance/item (maybe a detox orb) that the emulsifier burns (same amounts, snow required). Also condensed "snow" by combining powder together. Brainstorm only.
+- **Done:** Logged in `docs/development/planning/IDEA_BRAINSTORM.md` (Later brainstorms), `MBA_ITEMS_MASTER_PLAN.md` open decision 5. Not implemented. Fold condensed "snow" into the existing dense-snow plan, not a second chain.
+
+## 2026-09-01 — Emulsifier dirt particles, leaf particle density, no spread in dome
+
+- **Asked:** Dusted-dirt purify particles must sit above the dirt. Leaf purify particles only every other leaf (lag). Snow and infected blocks must not spread inside the emulsifier radius.
+- **Failed:** Dirt particles at `y + 1.0`. Every leaf spawned particles. No-spawn cylinder did not stop vine/powder/wood/leaf spread. grass/snow cannot import spawnController (cycle).
+- **Done:** Dirt particles `y + 1.5`. Leaf particles checkerboard even `x+y+z` only (still convert all). Same purify dome blocks powder placement and infection spread. Grass/snow wired via register callbacks.
+- **Verify:** Fully exit to menu. Fuel a machine in dusty forest — puffs above dirt, half the canopy particles, infection does not creep into the dome.
+
+## 2026-09-01 — Leaf other side transparent when looking through
+
+- **Asked:** Some leaf textures are transparent on the other side when you look through them. Fix every leaf type.
+- **Failed:** `alpha_test_single_sided` culls the far face through a hole.
+- **Done:** All 44 infected leaves `alpha_test_to_opaque` (vanilla leaf method). No inner cube. Regenerated via `generateInfectedVegetationPack.js`.
+- **Verify:** Fully exit to menu. Look through a hole in any species/stage — far side still leafy.
+
+## 2026-09-01 — Emulsifier should purify any infected block
+
+- **Asked:** The emulsifier should purify any infected block in its radius.
+- **Failed:** Scan walked the dome but only queued dusted dirt and powder. Leaves/logs skipped.
+- **Done:** Queue + restore infected leaves (all stages/species) and wood (logs/wood/stripped/wart). Same ~20s particle delay. Dirt→dirt, powder→vanilla snow.
+- **Verify:** Fully exit to menu. Machine on, fueled, next to dusty ground + infected tree — those blocks should go vanilla after the delay.
+
+## 2026-09-01 — Hills should not be safe from infection
+
+- **Asked:** Hills should not be safe. Scan a bit more if that is what it takes.
+- **Failed:** Vine only ±1 Y. Footprint Y −2…+1. Ridge/valley missed. Terrace counted as no front.
+- **Done:** One-cell vine still; climb/drop up to 4 in the chosen column. Footprint ±8 Y, longer down-ray, wood/leaf ±2–3 height. Still no tick on every dirt.
+- **Verify:** Fully exit to menu. Day 2+. Dusty front against a hill should crawl the slope.
+
+## 2026-09-01 — Trees on dirt never picked up infection
+
+- **Asked:** Trees should spread even from slightly offset. No grass under a tree (just dirt), so it cannot spread even when surrounded by infected blocks.
+- **Failed:** Vine only converted `grass_block`. Dirt under trunks blocked by log cover. Known-source queue dropped cells that did not touch grass. Wood/leaves were 6-face only; wood hop ran only after a grass convert.
+- **Done:** Dirt-like vine convert; logs/leaves allowed as cover; horizontal diagonals; keep sources next to dirt/wood/leaves; drain always hops wood/leaves (visit cap 8); wood/leaf edge-diagonals. Decay BFS still 6-face. Still no tick on every dirt.
+- **Verify:** Fully exit to menu. Day 2+. Forest edge — dirt under an offset trunk should dust, then the tree.
+
+## 2026-09-01 — Ground infection grew in blotches, not a vine
+
+- **Asked:** Spreading in huge blotches, not growing like a vine.
+- **Failed:** Every face converted in one pass; new dirt was drained the same tick (flood fill). Place/mob snow also rolled all neighbors immediately.
+- **Done:** One random cardinal (then slope) per attempt. New cells wait ~40t. Drain cap 3 vine steps, round-robin. Seeds still convert under snow.
+- **Verify:** Fully exit to menu. Day 2+. One dusty cell or a short snow strip — tendril, not a disk.
+
+## 2026-09-01 — Infected mob snow / dirt must join known-source spread
+
+- **Asked:** Same as player-placed: infected mobs spreading snow and dusted dirt should already be in the system so they keep rolling neighboring faces.
+- **Failed:** Trails used `applyInfectionSnowLayer` (notify), but death/conversion/buff/torpedo/spawn snow used raw `setType` (no remember). Kill-spread dusted dirt `setType` did not remember.
+- **Done:** `notifySnowLayerPlaced` always remembers + orifice-spreads. Mob snow paths use `applyInfectionSnowLayer`. Kill-spread dusted dirt calls `handlePlayerPlacedInfectionBlock`.
+- **Verify:** Fully exit to menu. Day 2+. Walk an infected pig/bear on grass; death snow; conversion — adjacent grass should start converting, not only the cell they painted.
+
+## 2026-09-01 — Placed snow converted under but did not spread
+
+- **Asked:** Random chance per orifice. Dusted dirt is one-shot (no stages). Placed snow / dirt should be prioritized (scripts already know them). Snow on grass converted underneath, then no spread; only random other patches moved.
+- **Failed:** `playerPlaceBlock` `setType` under snow, never rolled neighbors. Cap 1–2. Scan randomly sampled interiors.
+- **Done:** Remember player-placed snow/dirt. Retry ~40t. Independent roll on every face + slope. One-shot grass→dusted dirt. Drain known sources even when the canopy scan slice waits.
+- **Verify:** Fully exit to menu. Journal day 2+. Place snow on grass — under converts, then neighbors start converting.
+
+## 2026-09-01 — Ground spread playtest fail (~967, 68, -308)
+
+- **Asked:** Why dusted dirt is not spreading across grass like infected leaves. Screenshot: small creative dusty island, abrupt green edge. Finish that before more infected overworld blocks (detailed like dusted dirt, not a white overlay).
+- **Why not:** `mb:dusted_dirt` has no `minecraft:tick`. Leaves hop because each infected leaf ticks every 100–180t. Ground only ran on the 40t player scan, which used `getBlocks` (custom `mb:` includeTypes often empty; plains grass iterator missed a 12-block island) plus 8 random rays, slower chance, `noHop`, cap 2. Day 0–1 is still 0 for both.
+- **Done:** Local `getBlock` walk around the player + crosshair + underfoot. Neighbor chance = leaf chance. Hop on. Cap 8. Still no tick on every dirt. Extra infected block variants not started.
+- **Verify:** Fully exit to menu. Journal day 2+. Look at a dusty/green edge — grass_block should turn dusty in a few seconds.
+
+## 2026-09-01 — Session wrap-up + Bedrock docs review
+
+- **Asked:** Wrap up and review all vegetation work this chat. Also review Bedrock docs in Obsidian.
+- **MBA shipped (Dev packs synced):** leaf rate slowed; blast dust 0–3 by distance; logs infect grass; any infected neighbor infects any convertible neighbor (cross-species leaves); dusted-dirt **edge** sampling into `grass_block` at `0.04 + r * 0.20` (~60% of leaves), cap 2. Still no tick on every dusted_dirt. Nether stems/warts opaque. Engine leaf id `azalea_leaves_flowered`.
+- **Awaiting August playtest:** lawn creep, cross-species canopy, log/dirt → leaves, blast gradient, azalea Json gone on rejoin.
+- **Parked:** sheep texture (Compoohter); other host biomes; bamboo / mushroom stems.
+- **Bedrock docs (Obsidian):** Index is [[Areas/Minecraft Bedrock docs]] — files stay on disk at `C:\Users\Augus\Projects\minecraft-bedrock-docs`, not in the vault. `node update.mjs --check --json` 2026-09-01: current. Learn / wiki / bedrock.dev git unchanged. bedrock.dev stable **1.26.40.5**. Stirante **2.9.0** (627 pages). Latest run note: [[Atlas/Minecraft Bedrock docs/Latest update]]. Harbor Settings / tray still the manual UI. Do not dump that tree into OneDrive.
+
+## 2026-09-01 — Dusted dirt ground pace
+
+- **Asked:** Confirm dusted dirt spreads on the ground. Smaller than leaves, still noticeable.
+- **Failed:** Volume sample grabbed dusty interiors (no grass beside them). Chance matched leaves.
+- **Done:** Sample the grass/dirt **edge**. Chance `0.04 + r * 0.20`. Cap 2 per scan.
+- **Verify:** Fully exit to menu. Day 2+ dusty/green lawn edge.
+
+## 2026-09-01 — Any infected vegetation infects any neighbor
+
+- **Asked:** Other leaf types should infect other leaf types. Any infected thing should infect anything else.
+- **Failed:** Infected leaves only advanced the same species. Logs and dirt did not hop into leaves.
+- **Done:** Cross-species leaf convert/advance. Dusty logs and dirt also infect neighboring leaves and wood.
+- **Verify:** Fully exit to menu. Infected oak next to vanilla birch. Infected log next to oak leaves. Dusted dirt next to a bush.
+
+## 2026-09-01 — Dusted dirt into grass_block
+
+- **Asked:** Dusted dirt must spread on the ground, especially into grass_block, like leaves.
+- **Done:** Volume-sample dusty cells. Leaf neighbor chance. One hop from a new dusty cell. No tick on every dirt.
+- **Verify:** Fully exit to menu. Day 2+ dusty/green lawn edge.
+
+## 2026-08-31 — Infected logs dust grass
+
+- **Asked:** Infected logs should infect grass and grass_block.
+- **Done:** Wood is a grass source. Wood ticks call `tryInfectGrassAround`.
+- **Verify:** Fully exit to menu. Infected log on grass day 2+.
+
+## 2026-08-31 — Harbor manual Bedrock docs check / pull
+
+- **Asked:** Manual pull and check in one of August’s apps.
+- **Done:** Harbor Settings → Bedrock creator docs and tray → Bedrock docs. `node update.mjs --check --json`. Docs stay at `C:\Users\Augus\Projects\minecraft-bedrock-docs`.
+- **Verify:** Harbor Check now, or `--check --json` exit 0 when current.
+
+## 2026-08-31 — Personal Bedrock creator docs (vault + disk)
+
+- **Asked:** Local copy of Learn / Script API / wiki.bedrock.dev / bedrock.dev / Stirante, plus incremental updates.
+- **Done:** `C:\Users\Augus\Projects\minecraft-bedrock-docs`. Vault index: `Areas/Minecraft Bedrock docs.md`. `node update.mjs` (git pull + hashes). Weekly Monday 9:00 task. Do not grep-guess JSON when that copy has the page.
+- **Verify:** Incremental run ~9s, all unchanged.
+
+## 2026-08-31 — Playtest: blast is binary white vs green
+
+- **Asked (August, ~1006, 75, -491):** Explosion mostly good. Want a level gradient farther out. Right now some blocks go full white and neighbors stay fine.
+- **Failed:** Whole sphere jumped to Snow. Snow spray had no falloff.
+- **Done:** Dust 0–3 by distance. Ground: powder → dusted dirt → green.
+- **Verify:** Fully exit to menu. Blast under a tree on grass.
+
+## 2026-08-31 — Playtest: leaf spread too fast
+
+- **Asked:** Spreading through leaves too quickly. Make it as fast as before.
+- **Cause:** Every leaf type now ticks/converts at the old oak-only neighbor chance (`0.10 + r * 0.55`). Leaf ticks also tried wood/grass every time.
+- **Done:** Neighbor `0.07 + r * 0.32`. Wood/grass from leaves only on a spread roll. Wood chain keeps `0.10 + r * 0.55`.
+- **Verify:** Fully exit to menu. Canopy creeps like the oak test, not a flash.
+
+## 2026-08-31 — Playtest: unknown flowering_azalea_leaves
+
+- **Content Log (August):** `Unknown block during Deferred BlockDescriptor resolution: minecraft:flowering_azalea_leaves`. Also the usual `"normal"` sound inform (known engine noise).
+- **Cause:** Java leaf id in generated canopy-dust attach list. Bedrock is `minecraft:azalea_leaves_flowered`.
+- **Done:** Species table + generator check against `data/bedrock_blocks.json`. Storm/mining JS lists use the Bedrock id.
+- **Verify:** Fully exit to menu, rejoin. That Json error should be gone.
+
+## 2026-08-31 — Lang sentinels for vegetation generate
+
+- **CodeRabbit:** Fragile splice between oak-leaves and cow spawn-egg lang keys. Other review items were already fixed or outside this pass.
+- **Done:** `## BEGIN/END infected vegetation` sentinels. Generator throws if missing.
+
+## 2026-08-31 — Wood chain, nether opaque, snow drops, buff blast
+
+- **Asked:** Logs infect neighboring logs (from leaves too). All log/leaf types including nether. Dusted blocks drop `"snow"` (leaves 2×). Buff explosions instantly infect. No bamboo/mushroom stems. Nether trees are **not** leaves and not transparent.
+- **Done:** Wood-to-wood hop from leaf convert + wood ticks. Crimson/warped stem/hyphae/stripped + wart blocks as opaque full cubes (Samples). Nether snow/wood scans. Leaf loot 30% snow, wood/wart/dirt 15%. `infectVegetationInBlast` on torpedo and buff (radius 6 after breaks).
+- **Verify (August):** Fully exit to menu. Trunk next to infected log dusts. Nether powder on stem/wart is solid cream, not cutout. Leaf mine drops snow more than dirt. Buff blast Snow-stages nearby trees.
+
+## 2026-08-31 — Planned pass: grass, all leaves, wood, torpedo, sheep
+
+- **Asked:** Do all parked work. Sheep wool must use **snow_layer top** as the main look.
+- **Done:** Dusted-dirt neighbor creep tuned (no dirt ticks). All listed leaf types 0–3 from Samples + oak render. Logs/wood/stripped infect from neighbors (no vanilla-log ticks). Torpedo blast (not duds) Snow-stages leaves in radius 5. Sheep PNG retiled from snow_layer UP 16x16.
+- **Verify (August):** Fully exit to menu. Grass edge, creative leaf stages, a log next to infected leaves, a live torpedo under trees, `/summon mb:infected_sheep` beside a snow layer.
+
+## 2026-08-31 — Infected sheep texture: muddy (Compoohter remake next time)
+
+- **Playtest (August, ~808, 65, -446):** Infected sheep looks muddy / dirt-covered, not infected. Entity is fine.
+- **Parked:** Compoohter remakes `RP - Dev/textures/entity/infected_sheep.png` (keep Samples UV). Match pig/cow infection language (cream powder, still a sheep). Do not add more brown noise.
+- **Verify:** After remake, summon next to infected pig and cow. August says it reads infected.
+
+## 2026-08-31 — Next pass: dusted dirt spread more naturally
+
+- **Asked:** Make sure dusted dirt spreads too naturally. Next pass — late IRL, stop for the night.
+- **Parked:** Tune `mb_grassInfection.js` / `getGreeneryNeighborSpreadChance` so the grass edge creeps like leaves. Do not tick every dusted_dirt. Also queued: other leaf types (Samples cutout + oak render + oak 0–3), birch stages 1–3, **infect wood** later, **torpedo blast** instantly sets leaves in radius 5 to Snow stage (skip duds).
+- **Verify:** After the next pass, day 2+ stand at a VAN grass / dusted-dirt edge — the floor should fill in, not sit forever.
+
+## 2026-08-31 — Leaf stage names: only the last is Snow
+
+- **Asked:** Rename the leaves — only the last look is whiteish.
+- **Done:** Display names only. IDs unchanged. 0 Infected Oak Leaves, 1 (Dusted), 2 (Faded), 3 (Snow). Same pattern for other leaf types later.
+- **Verify:** Fully exit to menu. Creative: last one says Snow, not White.
+
+## 2026-08-31 — Next leaf types clone oak; Samples cutouts only
+
+- **Asked:** Cover other leaf types next time. Birch see-through should use the oak render fix. Cutouts from Samples GitHub. Whitening = what already works on oak.
+- **Decision:** Do not invent a second leaf renderer. Recipe: Samples TGA per species + oak geo/`alpha_test_single_sided` + oak stages 0–2 foliage / 3 snow-cream. Birch still needs stages 1–3. Other host biomes still wait.
+- **Verify:** Next leaf pass follows `docs/lessons.md` **Infected leaves: Samples cutout + oak render + oak whitening**.
+
+## 2026-08-31 — Fourth oak stage: snow-layer cream, no biome tint
+
+- **Asked:** VAN stages look good; LIST / normal biomes stay too green. Maybe a 4th white stage matching the `"Snow"` layer palette.
+- **Cause:** `default_foliage` on 0–2 is required for VAN. The same tint keeps LIST green. White + that tint = lime.
+- **Done:** `mb:infected_oak_leaves_3` — oak cutouts remapped to snow_layer cream, **no** `tint_method`. `LEAF_DUST_MAX = 3`. Stages 0–2 unchanged.
+- **Verify (August):** Fully exit to menu. Place `_3` in LIST forest next to powder — cream, not green. 0–2 still follow the biome.
+
+## 2026-08-31 — Sample worldgen snow; birch gets VAN white tint
+
+- **Asked:** Birch in infected biomes should pick up the dusty white tint (oak does, birch does not). Worldgen / non-player powder on leaves does not trigger scripts; player-placed does. Other host biomes later — wait for August.
+- **Cause:** `foliage_appearance` hex only tints `default_foliage`. Birch uses `birch_foliage`. Feature/`setType` snow never fires `onPlace`. The canopy backup was 6 random rays without `force`.
+- **Done:** Sample nearby snow layers (volume + columns) and convert under them with `force` (still day 2+). `mb:infected_birch_leaves` (birch cutout + `default_foliage`) in infected biomes. Oak stages `_1`/`_2` keep foliage tint (public BP JSON was stale).
+- **Playtest (August, 2026-08-31, ~807, 96, -354):** Three creative stages in VAN — “Much better.” Dusty biome tint, 0→1→2 getting whiter, cutouts OK. Did **not** confirm worldgen-snow convert or birch canopies from this shot (background trees still mixed green + powder).
+
+## 2026-08-31 — Stage 1–2 must biome-tint; VAN convert looked invisible
+
+- **Asked:** Base infected oak follows biome color; `_1`/`_2` do not. VAN vanilla oaks + custom foliage tint is the look. Day 20 + snow on leaves did not seem to infect.
+- **Cause:** `_1`/`_2` had no `default_foliage` (anti-lime bake). Stage 0 = exact oak + tint, so VAN convert looks like vanilla oak still sitting there.
+- **Done:** Foliage tint on all three. Grayscale oak, `_1`/`_2` paler. Snow above an infected leaf advances on tick.
+- **Playtest (August, 2026-08-31):** Pass. Creative `_2` / `_1` / 0 in VAN match the dusty oak tint and get paler. Keep `default_foliage` on all three.
+
+## 2026-08-30 — Snow item + snow_layer toward dusted-dirt palette
+
+- **Asked:** Clarify lang vs commands. Recolor `"Snow"` like dusted dirt and `'snow'_layer`.
+- **Lang:** Display names in `en_US.lang` do not change `/summon` / `/give` IDs and do not affect scripts.
+- **Done:** Remapped `mb_snow.png` and `'snow'_layer.png` from dusted-dirt crust + layer grain.
+- **Verify (August):** Fully exit to menu. Powder item and placed layers look dusty cream, not vanilla white.
+
+## 2026-08-30 — Playtest: leaf geo material_instance blanked all three blocks
+
+- **Asked:** Content Log + blank infected leaves (no textures, blocks still there).
+- **Cause:** `material_instance` on cubes is invalid. Geometry failed to validate, so `geometry.infected_oak_leaves` was missing.
+- **Done:** One inset cube again. Stage 0 = oak TGA + foliage tint. `_1`/`_2` = baked green + white on the PNG, no engine tint. Three block IDs stay.
+- **Verify (August):** Fully exit to menu. No geometry errors. Stage 0 next to LIST oaks. `_1`/`_2` whiter, not blank.
+
+## 2026-08-30 — Three infected leaf blocks; white overlay not foliage-tinted
+
+- **Asked:** Very similar to vanilla, with an infected white tint that grows stronger. OK with 3 blocks if permutations fail outside VAN (LIST forest).
+- **Cause:** White on the same `default_foliage` TGA becomes lime in LIST. Darken made it muddy. One-block dust states swap the whole texture.
+- **Done:** `mb:infected_oak_leaves` / `_1` / `_2`. Exact oak base + untinted white overlay (30 / 68 / 110 specks). Convert advances block ID. Face dimming on. No inner cube.
+- **Verify (August):** Fully exit to menu. LIST stage 0 matches neighboring oaks plus light powder. `_1`/`_2` get whiter, not lime.
+
+## 2026-08-30 — Playtest: LIST infected leaves still not vanilla (too dark)
+
+- **Asked:** Two LIST forest screenshots (~9870/9875). Still not right. Make them very similar to vanilla leaf blocks.
+- **Cause:** Darken 0.74 after the lime pass dropped stage-0 luma to ~107 vs Samples oak ~144. `face_dimming: false` flattened faces. Neighboring LIST oaks stayed vanilla-bright.
+- **Done:** Stage 0 = exact `leaves_oak.tga` (0 opaque RGB diffs, 84 holes, luma 144). Stages 1–2 light dust lerp only. `face_dimming: true`. Keep single-sided + no inner cube.
+- **Verify (August):** Fully exit to menu. Converted / creative infected leaves next to vanilla oaks should match green and holes. Stage 2 slightly dustier.
+
+## 2026-08-30 — Playtest: LIST infected leaves were neon lime
+
+- **Asked:** Way too bright / bright green. LIST forest screenshot vs vanilla oaks.
+- **Cause:** Last TGA rebuild used darken 0.92-1.0 + white lerp. LIST default_foliage (bright green) x light flesh = neon lime. Same class as ghost-pale VAN.
+- **Done:** Darken 0.74/0.78/0.82. Stage 0 luma ~107 vs vanilla oak ~144. Holes still 84. Three stages stay, just darker/dustier.
+- **Verify (August):** Fully exit to menu. LIST converted canopy darker than neighboring oaks, not brighter.
+
+
+## 2026-08-30 — Infected cap (3p + journal) and ocean-base spawn tiles
+
+- **Asked:** Infected Maple Bear cap must work with 3 players and Journal Easy/Normal/Hard. Ocean base: spawn system preferred a mine under the base vs water around them.
+- **Cause:** Family cap 17 ignored players and difficulty. Over water, stone samples marked underground; 3-player Y down 10 hit the mine; mining cave pass preferred it.
+- **Done:** `getInfectedTypeCap`. Ocean detect, seafloor-first tiles, skip mining stone pass over water.
+- **Verify (August):** Fully exit to menu. 3p Normal can exceed 17 infected nearby. Hard/Easy shift the cap. Ocean platform: seafloor around, not the mine.
+
+
+## 2026-08-30 — Leaf Fancy holes + three whitening textures
+
+- **Asked:** 3 stages / 3 textures getting more white (or 3 leaf blocks). Screenshots of LIST forest vs vanilla oak — custom dusty leaves lost Fancy translucency (solid patches vs holey oak).
+- **Cause:** Texture alpha already matched Samples oak. The **inner flipped cube** filled holes (you see inner walls). Not a missing cutout mask.
+- **Done:** One block, `mb:dust` **0–2** (state 3 aliases texture 2). Drop inner cube; keep inset single cube + `alpha_test_single_sided`. Rebuild three textures from Samples TGA. Conversion still outside VAN.
+- **Verify (August):** Fully exit to menu. LIST vs vanilla oak: same holes. Stages 0->1->2 get whiter. VAN white/dust stay.
+
+---
+
+## 2026-08-30 — Storms must not spawn ocean cows
+
+- **Asked:** Old update — snow storm in ocean spawned a bunch of cows. Keep that fixed here.
+- **Cause:** Land snow-infected biome IDs also replaced oceans (no `ocean` tag) so livestock JSON `!= ocean` missed. Storms boost script tiles on seafloor.
+- **Done:** `mb:infected_biome_*_ocean` tagged `ocean`. Livestock JSON skip works. Spawn controller never script-spawns livestock.
+- **Verify (August):** Fully exit to menu. New ocean chunks. Storm at sea — no cow herds in water. Bears still on seafloor.
+
+---
+
+## 2026-08-30 — Playtest: conversion must run outside VAN
+
+- **Asked:** Conversion should run outside VAN (correction). VAN white/dust stay.
+- **Failed:** Biome-gating oak/grass convert to VAN / infected biomes.
+- **Done:** Removed `isVanillaInfectedBiomeAt` / `isInfectedComponentBiomeAt` from convert paths. LIST and river overflow convert again.
+- **Verify (August):** Fully exit to menu. VAN still dusty. LIST oaks next to VAN convert (cutouts, not opaque cubes).
+
+---
+
+## 2026-08-30 — Playtest: VAN white is good; do not spread into LIST
+
+- **Asked:** VAN canopy looks good white-wise. Infection was converting trees outside VAN (`forest LIST`). That is the change.
+- **Failed:** Neighbor/scan convert with no biome gate (overflow oaks were meant to convert later).
+- **Done:** Oak/birch → infected only when `getBiome` is VAN. Grass neighbor/scan only inside infected biomes. VAN look untouched.
+- **Verify (August):** Fully exit to menu. VAN still dusty. LIST oaks stay vanilla. Old LIST converts stay until broken.
+
+---
+
+## 2026-08-30 — Playtest: opaque leaves were painted cubes
+
+- **Asked:** Leaves too translucent → we used `opaque`. August: they are not like vanilla leaves at all; wants vanilla look but dustier.
+- **Failed:** `opaque` + no inner shell = solid dark-green cubes.
+- **Done:** Restored `alpha_test_single_sided` + inner flipped cube. Dustier cutout TGA (holes stay oak). Dust 0–3 kept.
+- **Verify (August):** Fully exit to menu. Converted leaves should have oak holes + powder, not solid cubes.
+
+---
+
+## 2026-08-30 — Infected leaves render opaque
+
+- **Asked:** Leaves too translucent. Change render — more opaque.
+- **Failed (already):** two-sided / `alpha_test_to_opaque` = black holes.
+- **Done:** `opaque` + one inset cube, no inner shell. Dust stages and foliage tint kept.
+- **Verify (August):** Fully exit to menu. Creative leaf not see-through. VAN converted canopy denser.
+
+---
+
+## 2026-08-30 — No powder on kelp in the ocean
+
+- **Asked:** Screenshot of a white powder plate on kelp underwater. Do not spawn that in the ocean.
+- **Cause:** Kelp was in `SNOW_REPLACEABLE_BLOCKS`. Storms used kelp as surface and replaced it. Infected biomes can replace ocean chunks; bears still spawn on seafloor dirt.
+- **Done:** Water plants out of replaceable. Placement helpers refuse water/kelp. Storms skip kelp as surface. No script-delete of existing plates. Bears unchanged.
+- **Verify (August):** Fully exit to menu. New kelp — no new plates. Land powder still works.
+
+---
+
+## 2026-08-30 — Infected leaves whiten in stages 0–3
+
+- **Asked:** Leaves should whiten in stages, like they looked before. Not one dusty block.
+- **Done:** `mb:dust` 0–3. Convert at 0; powder/neighbors/tick advance toward 3. Stage 3 paler, not ghost wash. Keep single-sided cutouts.
+- **Verify (August):** Fully exit to menu. VAN day 2+: new converts oak-like, then paler. Creative place starts at 0.
+
+---
+
+## 2026-08-30 — No script remove for livestock in water
+
+- **Asked:** Do not script-remove infected pigs that spawn in water. Prevent natural spawn only. Keep Maple Bears on ocean-floor dirt.
+- **Failed:** `entitySpawn` remove + conversion skip in liquid.
+- **Done:** Removed those script paths. JSON spawn rules stay (surface-only, water prevent, no underground). Spawn controller still scans through water for bears.
+- **Verify (August):** Fully exit to menu. No pigs naturally spawning in ocean; bears still down there.
+
+---
+
+## 2026-08-30 — No livestock in water; leaves are not whitening stages
+
+- **Asked:** Playtester saw infected pigs in an ocean. Do infected leaves get whiter as they infect more (stages/gradients)?
+- **Leaves:** No. One dusty block. Canopy mix = unconverted oak + converted dusty + worldgen tree weights. Do not brighten toward white (ghostly-leaf lesson). Stages would be a new feature.
+- **Pigs:** JSON spawn on seafloor dusted dirt in replaced-ocean infected biomes (`spawns_underground` + no ocean tag). Surface-only rules + water prevent + spawn-time remove. Conversion also skips water. Bear ocean-floor spawns unchanged.
+- **Verify (August):** Fully exit to menu. Infected coast/ocean — no pigs in water. Land livestock still spawn. Leaves stay one dusty look.
+
+---
+
+## 2026-08-30 — Storm powder infects blocks under it
+
+- **Asked:** Storm-placed “snow” should infect viable blocks underneath — the powder is the substance.
+- **Was:** `setType` does not fire `onPlace`. Storms skipped grass_block columns and plants, so powder rarely landed on lawns/canopies.
+- **Done:** `applyInfectionSnowLayer` + `tryInfectUnderSnow({ force: true })`. Storms place powder on grass/leaves (air above or replace plant). Day 0–1 still 0. No tick on every snow_layer.
+- **Verify (August):** Storm on VAN — leaves under powder convert; grass under powder becomes dusted_dirt.
+
+---
+
+## 2026-08-30 — Darker infected leaves + dirt→grass neighbor spread
+
+- **Asked:** Leaves less ghost-like (pale / translucent). Dusted dirt should spread into grass around it like leaves do.
+- **Playtest:** No load errors after sugar_cane/reeds fix.
+- **Leaves:** Less dust/cream, darken 0.78, keep cutout + foliage tint. Do not change render method.
+- **Grass:** Dirt→adjacent grass uses `getGreeneryNeighborSpreadChance` and all neighbor offsets (`knownAdjacent`). Still no tick on every dusted_dirt. Cap 2.
+- **Verify (August):** VAN converted canopy not ghostly. Day 2+ stand at a dirt/grass edge — floor creeps.
+
+---
+
+## 2026-08-30 — Playtest log: sugar_cane Json error on join
+
+- **Asked:** Content Log after reloading Dev pack (world vegetation / join).
+- **Read:** Pack loaded (`0.9.0-beta.5`). JOIN retries 1–2 then success — existing, not a bug. Abandoned-village LEFT/JOIN and spawn/intro informs — expected. `[Sound] No sound found for block type 'normal'` — vanilla engine; our `RP/blocks.json` does not use `normal`.
+- **Real error:** `Unknown block during Deferred BlockDescriptor resolution: minecraft:sugar_cane` from infected oak `may_replace` (Java ID; Bedrock is `minecraft:reeds`).
+- **Done:** Removed `sugar_cane` from all three oak tree features (Dev + public). Kept `reeds`.
+- **Verify (August):** Exit to menu, rejoin — Json error gone. Vegetation self-test still pending (this log did not run it).
+
+---
+
+## 2026-08-30 — World vegetation infection on the world stack
+
+- **Asked:** World infection (leaves/grass) should integrate into the existing world system.
+- **Was:** Private 40-tick scan; day tables only; no work-spread / director / storm reservoir.
+- **Done:** `claimSpreadSlice("leaf_infection")` + village-burst defer. `getWorldInfectionSpreadMult` = director day-band × storm reservoir (not load-escalated spawn). Bisect + self-test line.
+- **Verify:** Script self-test World vegetation. Day 2+ VAN; storm vs no storm; load should slow scans.
+- **Open:** Playtest pending.
+
+---
+
+## 2026-08-30 — Infected sheep + multiplayer vegetation scans
+
+- **Asked:** Infected sheep from Bedrock Samples sheep, using the same infected-vs-vanilla delta as pig/cow. World infection must stay cheap with multiple players.
+- **Tried:** Samples `sheep.tga` (not `.png`). First texture pass stayed vanilla-white; rebuilt with beige wash + maroon necrotic patches + powder specks like pig/cow.
+- **Done:** `mb:infected_sheep` (hostile livestock, no baby/shear/eat_block). Conversion pig/cow/sheep via `isInfectedLivestock`. Restored missing `convertCowToInfectedCow` in Dev. Vegetation: always one clustered player per leaf/grass interval after day 3; fewer rays/neighbor checks.
+- **Verify (August):** `/summon mb:infected_sheep`; bear-kill a sheep after day 2; journal entry; look vs pig/cow. Two players in VAN after day 3 should not hitch on grass spread.
+- **Open:** Playtest still pending.
+
+---
+
+## 2026-08-30 — Grass and grass_block infection over days
+
+- **Asked:** Living greenery should infect over time like leaves. Grass plants and grass_block. No spread on starting days; very slow; day 20–25 visible in 5–10s, not fire.
+- **Done:** `mb_grassInfection.js` + `getGreenerySpreadChance`. Player scan, cap 1, must touch infection. Grass_block → dusted_dirt; grass/fern → powder. Wired into the leaf watch. Flowers/crops later.
+- **Verify:** Journal day 0–1 vs 2+ vs 20. `/time set` does not change addon day.
+
+---
+
+## 2026-08-30 — Playtest: trees cut off at river biome
+
+- **Asked:** Shore tree in VAN stopped filling once it hit river. Trees that generate should finish fully, like vanilla.
+- **Cause:** `may_replace` lacked water. Custom `mb:infected_oak_leaves` as worldgen canopy does not overflow into the next biome.
+- **Done:** Vanilla-like `may_replace` / `may_grow_through` on all three extra oaks. Worldgen canopies are `minecraft:oak_leaves`; infection still converts after. Synced after copy to `BP/`.
+- **Verify:** New VAN/river chunks. Old shoreline trees stay as they generated.
+
+---
+
+## 2026-08-30 — Playtest: worldgen canopy snow did not infect
+
+- **Asked:** Generated snow on trees only infected after replacing it. Do not make every new chunk look like infection just started; time it; days should push spread.
+- **Cause:** `onPlace` skips worldgen. Scan was at foot Y, not canopy.
+- **Done:** Downward canopy rays. Convert/spread use `getInfectionRate` (off before day 2). `mb_balance.js` helpers. Synced.
+- **Verify:** Day 2+ VAN, stand on ground under snowy oaks. Day 0–1 powder should sit.
+
+---
+
+- **Asked:** Looks so good. Make sure gradients do not bring back the old texture glitches.
+- **Kept:** `alpha_test_single_sided`, inner flipped cube, AO/face_dimming off, foliage tint.
+- **Done:** Hole pixels were a=0 but RGB black (mipmap fringe). Builder now bleeds nearest leaf color into holes. Rebuilt PNG. Synced.
+- **Verify:** Walk around a leaf vs a log; no black sparkle on cutouts.
+
+---
+
+- **Asked:** Content Log on reload after leaf-loot/spread work.
+- **Not bugs:** JOIN retries 1–3 (`player found = false`); abandoned-village spawn/leave lines; `@minecraft/server` promote 2.6 → 2.9 (FFG/world).
+- **Real errors:** `minecraft:custom_components` not valid from 1.21.90; `infected_oak_leaves` parse failed; unknown block; custom components unused.
+- **Done:** V2 component keys (`mb:infected_oak_leaf`, `mb:snow_infects_leaves`). `queued_ticking` → `minecraft:tick`. Synced.
+- **Verify:** Fully exit to menu. No block_definitions errors. Infected Oak Leaves in creative.
+
+---
+
+## 2026-08-30 — Infected leaves: oak loot, snow/neighbor spread, foliage tint
+
+- **Asked:** Leaves should not drop without Silk Touch (act like oak). Infection should spread through leaves over time. Snow on a leaf converts it. Custom fully-infected trees stand out with almost no gradient (not sure how to fix yet).
+- **Samples / wiki:** Vanilla oak loot is hardcoded; custom `minecraft:loot` is **ignored on Silk Touch** (block always drops). Shears need `match_tool`. Custom blocks can use `tint_method: default_foliage` (1.21.80+).
+- **Done:** Loot = shears drop block, else sapling/sticks/apple. `mb_leafInfection.js` — snow on oak/birch converts; infected leaves tick-spread to neighbors; player-placed persist. Texture keeps most of Samples oak + light dust; foliage tint. Extra trees mostly vanilla oaks again (7/2/1). Synced.
+- **Gradient (honest):** We cannot copy vanilla’s leaf shader. Mixing biome tint + oak-colored texture + converting from snowy tops over time is the gradient. A painted-only cube will always look flat when the whole tree is converted. Playtest still pending August.
+
+---
+
+## 2026-08-30 — Playtest: hollow leaves; few custom trees; more canopy snow
+
+- **Asked:** Flicker gone, but no inside texture (see straight through). Not many custom-leaf trees. More snow on trees.
+- **Done:** Inner flipped-face cube in `geometry.infected_oak_leaves`. Weights 2/7/1 toward custom dusty oaks. More tree scatter; more canopy-dust searches. Synced.
+- **Verify:** Creative look-through. New chunks for spawn mix + powder.
+
+---
+
+## 2026-08-30 — Playtest: log looks black through custom leaves; flicker while moving
+
+- **Asked:** Still rendering funny when moving. Screenshot: oak log behind leaves is black in the cutouts.
+- **Cause:** `alpha_test_to_opaque` draws unlit backfaces through holes. Texture alpha was already clean.
+- **Done:** `alpha_test_single_sided` + slightly inset leaf geometry. Synced Bridge + Minecraft.
+- **Verify:** Walk around a leaf-in-front-of-log in creative.
+
+---
+
+## 2026-08-30 — Playtest: custom leaf flicker; more top dust; vanilla oak canopy
+
+- **Asked:** Thanks, texture is better. Still flickering. More snow_layer on trees. Normal trees more uniform like vanilla.
+- **Done:** `alpha_test_to_opaque` on infected oak leaves. Search-down canopy dust (more often, on the real top). Vanilla oak `variation_chance` including 1/1 top layer. Bare = oak trunk, not acacia. Synced Bridge + Minecraft.
+- **Verify:** Creative leaf cluster (RP reload). New chunks for tree shape + more powder.
+
+---
+
+## 2026-08-30 — Playtest: VAN trees look better; fix dust z-fight and palette
+
+- **Asked:** Previous load/teleport issues are fixed. Screenshot: z-fighting on custom white leaves; take palette from dusted_dirt/snow; texture better; normal trees with leaf color + dust **on top** only, not all around. No extra density.
+- **Cause:** `mb:snow_layer` inside tree canopies (thin slabs in leaf/log cells). Foliage `#F0F2F4` + bleached custom leaves = harsh white.
+- **Done:** Oak-shaped trees; snow removed from canopies; canopy-top dust scatter; rebuilt infected oak leaves from dusted_dirt grain; foliage `#C4C0B4`; density restored. Synced Bridge + Minecraft.
+- **Verify:** New chunks. Powder only on tops. Custom leaves dusty tan, not static.
+
+---
+
+## 2026-08-30 — Playtest: empty VAN, dark oaks, broken biome TP
+
+- **Asked:** Screenshots — coastal VAN with no trees; forested VAN with dark-green vanilla oaks (wanted white); biome teleporter broken (unknown biome / chunk not ticking). Have it `/locate` before TP.
+- **Playtest (August, Test #98):** VAN id is real. Custom infected trees mostly missing (chunks from before FeatureRegistry fix). Foliage tint was dark olive. Teleporter located the forest (~-1964, -1436) then read getBiome before the chunk ticked.
+- **Done:** `/locate biome` then TP to Y 180, wait for ticking chunk, surface land. Hub no longer treats unloaded as “not on replace list.” Client foliage `#F0F2F4`. Denser tree scatter; snow/dead bush `after_surface_pass`. Synced Bridge + Minecraft.
+- **Verify:** Exit to menu, reload. White oaks on existing VAN after RP reload. Teleport should land then show VAN, not unknown. Custom dusty/bare trees: **new chunks**.
+
+---
+
+## 2026-08-30 — FeatureRegistry errors on Maple Bear Test #98 first load
+
+- **Asked:** Content Log errors on first load (thanks). World Maple Bear Test #98.
+- **Not bugs:** `[JOIN MAIN] Retry 1/2: player found = false` — existing join-timing retries; player is valid on retry 3. Infection/intro/FFG inform lines are normal.
+- **Real errors:** Feature rule identifier ≠ filename (`*_rule` vs file without `_rule`); `scatter_chance` 1/1 invalid; `acacia_trunk` missing required `trunk_lean` so all three infected oak tree features failed to register.
+- **Done:** Identifiers match filenames. Dropped 1/1 scatter_chance on forest trees. Added `trunk_lean` to partial/full/bare trees. Mirrored `BP/` + `BP - Dev/`. `npm run sync:bridge` + `sync:dev-to-minecraft`.
+- **Verify:** Fully exit to menu, reload. FeatureRegistry should be clean. **New chunks** for trees. In-game VAN look still pending August.
+
+---
+
+## 2026-08-30 — Sync GitHub packs into both Bridge projects
+
+- **Asked:** Edit the Bridge folders (`Maple Bear Apocalypse` and `Maple Bear Apocalypse - Dev`) and the GitHub repo.
+- **Done:** `tools/syncRepoToBridge.js` + `npm run sync:bridge`. Copied GitHub `BP`/`RP` → release Bridge, `BP - Dev`/`RP - Dev` → Dev Bridge `BP`/`RP`. Also `npm run sync:dev-to-minecraft`. Dev `mb_buildConfig.js` still full developer tools.
+- **Verify:** Refresh/compile in Bridge; fully exit Minecraft to menu, then reload. New chunks for the infected forest.
+
+---
+
+## 2026-08-30 — Biome checker teleport + locate id
+
+- **Asked:** Teleport to nearest chosen biome from the checker; Dev pack only for testing; what name to `/locate`. **Follow-up:** biome checker stays Dev.
+- **Answer:** ID is **`mb:infected_vanilla_forest`**. `/locate biome mb:infected_vanilla_forest` works on current Bedrock (cheats). Old “Java-only” note was wrong.
+- **Done:** Dev Biome checker → **Teleport to biome**. Explicit `pinInReleaseAdmin: false`. Standing fact in vault Memories + People/August. Script file still in `BP/` for parity; menu/HUD never show on public.
+- **Honest pack split:** Infected-vanilla **worldgen JSON** is in both packs. The **checker** is Dev-tools only. Load **BP - Dev + RP - Dev** to test the UI.
+- **Verify:** In-game still pending August.
+
+---
+
+## 2026-08-30 — Obsidian is the shared brain after playtests; portrait of August
+
+- **Asked:** Always write findings in Obsidian, especially after August tests what works / does not. Learn how he talks and asks so the whole AI codebase compounds.
+- **Done:** Vault [[People/August]] (voice / how he asks). Standing rule in [[Memories]] + [[Atlas/How agents use this vault]] + [[Atlas/Lessons]] (playtest → vault same turn). Infected vanilla tree mix still **awaiting his in-game pass/fail**.
+- **Do not:** Treat repo `docs/lessons.md` or chat as enough.
+
+---
+
+## 2026-08-30 — Infected vanilla trees: partial / whole / bare + ground powder
+
+- **Asked:** Trees and other things partly or wholly covered in “snow” (infection powder); bare trees eaten away by the infection.
+- **Tried:** One fully dusty oak; a partial-tree JSON write inserted a stray `" marvin"` (invalid). Fixed, then added weighted variants.
+- **Done:** `mb:weighted_infected_oak_trees` — partial (green + dusty + `mb:snow_layer` in canopy), full dusty, bare stripped oak. Ground snow-layer + dead-bush scatter on tag `infected_vanilla`. Mirrored to `BP - Dev/`. Doc: `docs/design/INFECTED_VANILLA_BIOMES.md`.
+- **Verify:** JSON valid. **In-game still pending August** (new forest chunks, biome checker `VAN`).
+
+---
+
+## 2026-08-30 — Infected oak leaves (dusty vanilla canopy)
+
+- **Asked:** Infected leaves from Bedrock Samples oak leaves, white/dusty like dusted_dirt and snow layers. Remember Samples as the vanilla dump.
+- **Done:** `mb:infected_oak_leaves` block + texture (Samples `leaves_oak.tga` + dust/snow palette). Tree feature `mb:infected_oak_tree` in `infected_vanilla` biomes. Marked https://github.com/Mojang/bedrock-samples in vault `Memories.md`.
+- **Verify:** Creative place the block; new forest chunks should mix green oaks with dusty white canopies.
+
+---
+
+## 2026-08-30 — Infected vanilla forest test biome
+
+- **Asked:** Compoohter wants infected vanilla biomes *and* the existing snow/dusted infected biomes. Start with one test, not a full roll-out.
+- **Done:** Added `mb:infected_vanilla_forest` (replaces 12% of `minecraft:forest`, grass + `forest` tags so oak trees still generate). Snow infected biomes unchanged. Biome checker HUD: `VAN` vs `SNW`. Docs: `docs/design/INFECTED_VANILLA_BIOMES.md`.
+- **Verify:** New world / new forest chunks. Trees + sickly grass + infection fog, id `mb:infected_vanilla_forest`. Old chunks will not show it.
+
+---
+
+## 2026-08-15 — Structure inbox folder for owner-authored builds
+
+- Added **`structures-inbox/`** at repo root (`villages/`, `camps/`, `bunkers/`, `other/`) with README + notes template. Drop zone for custom `.mcstructure` files — **not** live `BP/structures/` until wired.
+- Linked from `docs/README.md`, `docs/ORGANIZATION.md`, `VILLAGE_STRUCTURE_COLLAB_GUIDE.md`, and `FFG_WORLDGEN_HANDOFF_MBA_IMPROVEMENTS.md`.
+
+---
+
+## 2026-08-14 — FFG worldgen generator / fingerprint notes merged
+
+- Expanded **`docs/development/FFG_WORLDGEN_HANDOFF_MBA_IMPROVEMENTS.md`** with the second FFG brief: generated (not hand-authored) JSON, `gen_biomes.py` / `gen_mobs.py`, terrain adaptation (`none` / `beard_thin` / `bury` / sky / ocean), Python mcstructure helpers + palette sanitize, NPC fingerprint uniqueness, add-camp / add-plant recipes, burned constraints.
+- Noted that **MBA structure art waits** for owner-authored `.mcstructure` files; those become the visual standard. Engineering loop is documented now; do not invent buildings.
+- Do not re-enable script camp / foliage placement (`ffg_naturalSpawn` equivalent).
+
+---
+
+## 2026-07-27 — FFG worldgen handoff → MBA improvements doc
+
+- Added **`docs/development/FFG_WORLDGEN_HANDOFF_MBA_IMPROVEMENTS.md`** — distills Food and Farming Galore worldgen lessons (jigsaw camps, feature_rules foliage, scatter schema, entity backup scripts, naming) into MBA copy/avoid checklist and improvement ideas.
+- Linked from **`docs/README.md`** under Villages & structures.
+- Cross-references existing MBA village/jigsaw docs (`ABANDONED_VILLAGE_STRUCTURES`, `VILLAGE_STRUCTURE_COLLAB_GUIDE`, `WORLD_SETUP`).
+
+---
+
+## 2026-07-19 — Max snow level Content Log also default OFF
+
+- `[SNOW] … achieved new max snow level` and `[LOAD] Loaded max snow level` gated behind **Debug Menu → Main Script → Infection** (same toggle as bear hits / major; default OFF).
+
+## 2026-07-19 — Dev: infection hit logs toggleable + Debug Menu colors
+
+- **Always-on Content Log** for Maple Bear hits and major infection (dev pack `console.log`/`warn`) now gated behind **Debug Menu → Main Script → Infection** (default **OFF**; Toggle All also enables it).
+- **Debug Menu** toggle buttons had lost `§a`/`§c` (showed bare `c`/`a` with no green/red) — restored on all category toggle rows in `mb_codex.js`.
+- Synced scripts `BP - Dev/` → `BP/` (`mb_buildConfig.js` skipped).
 
 ## 2026-07-16 — Git commit v0.9.0-beta.5 (label only, no Bridge export)
 

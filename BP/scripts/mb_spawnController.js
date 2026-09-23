@@ -11,6 +11,8 @@ import { getCurrentDay, isMilestoneDay } from "./mb_dayTracker.js";
 import { isDebugEnabled, getPlayerSoundVolume, getStormParticleDensity } from "./mb_codex.js";
 import { isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
 import { getStormSpawnTiles, getStormReservoirSpawnChanceMult } from "./mb_snowStorm.js";
+import { applyInfectionSnowLayer, registerInfectionDetoxGuard } from "./mb_snowPlacement.js";
+import { registerGrassInfectionDetoxGuard, restoreInfectedFoliageToVanilla, isDustedGroundId } from "./mb_grassInfection.js";
 import { STORM_PARTICLE_PASS_THROUGH } from "./mb_blockLists.js";
 import { hasInfectionExposureLineOfSight } from "./mb_infectionExposureLos.js";
 import {
@@ -38,6 +40,17 @@ import {
 } from "./mb_spawnMobilityCamp.js";
 import { ACTION_BAR_SLOT, setHudActionBarSegment, clearHudActionBarSegment, getHudActiveSegmentCount } from "./mb_actionBarHud.js";
 import { INCLUDE_FULL_DEVELOPER_TOOLS } from "./mb_buildConfig.js";
+import {
+    isInfectedLeafId,
+    isInfectedWoodId,
+    vanillaLeafIdForInfected,
+    vanillaWoodIdForInfected
+} from "./mb_infectedVegetation.js";
+import {
+    isInfectedFoliageId,
+    isInfectedFoliageWalkable,
+    vanillaFoliageIdForInfected
+} from "./mb_infectedFoliage.js";
 import { getAllPlayersIncludingSim, isSimFullBehaviorEnabled, areSimPlayersEnabled, isSimulatedPlayer } from "./mb_simPlayers.js";
 import { getStormTouchSpawnChanceMult } from "./mb_exposureSpawnPressure.js";
 import { getInfectionDirectorSpawnModifiers } from "./mb_infectionDirector.js";
@@ -60,10 +73,14 @@ import {
     TORPEDO_TYPE,
     ENTITY_TYPE_CAPS,
     NATURAL_BUFF_SPAWN_COOLDOWN_TICKS,
+    getInfectedTypeCap,
+    getMaxMiningBearsNearPlayerCount,
+    getMaxMiningBearsDimensionWideCount,
+    EMULSIFIER_LEAF_VANISH_CHANCE,
+    EMULSIFIER_DIRT_TO_GRASS_CHANCE
 } from "./mb_balance.js";
 import { isBuffBearSpawnBlocked } from "./mb_buffCap.js";
 import { isMiningBearSpawnBlocked } from "./mb_miningCap.js";
-import { getMaxMiningBearsNearPlayerCount, getMaxMiningBearsDimensionWideCount } from "./mb_balance.js";
 import { getPlayerCountInDimension } from "./mb_buffCap.js";
 import {
     TINY_BEAR_ID,
@@ -84,7 +101,8 @@ import {
     MINING_BEAR_ID,
     MINING_BEAR_DAY20_ID,
     TORPEDO_BEAR_ID,
-    TORPEDO_BEAR_DAY20_ID
+    TORPEDO_BEAR_DAY20_ID,
+    isInfectedLivestock
 } from "./mb_spawnEntityIds.js";
 import { SPAWN_CONFIGS, SPAWN_CONFIG_DISPLAY_NAMES } from "./mb_spawnConfigs.js";
 
@@ -704,10 +722,10 @@ const EMULSIFIER_FUEL_STATS = {
         performance: 2.5,
         permanent: true,
         maxFuelUnits: 1,
-        scanIntervalNormal: 1,
-        scanIntervalQuiet: 5,
-        scanIntervalMax: 20,
-        firstScanBudgetMult: 2.2
+        scanIntervalNormal: 2,
+        scanIntervalQuiet: 8,
+        scanIntervalMax: 24,
+        firstScanBudgetMult: 1.3
     }
 };
 
@@ -717,6 +735,10 @@ const EMULSIFIER_DEFAULTS = {
 };
 
 let emulsifierZoneCache = null;
+/** Per-tick snapshot of fueled zones so spread/powder checks do not reload+persist every call. */
+let activeEmulsifierZonesTick = -1;
+/** @type {Map<string, object[]>} */
+const activeEmulsifierZonesByDimension = new Map();
 /** One-time: align block `mb:active` with saved zones after addon update / world load. */
 let emulsifierMachineVisualBootstrapped = false;
 let lastEmulsifierEmptyCacheReloadTick = -999999;
@@ -1016,6 +1038,8 @@ function getVillageScanStaggerTicks(totalPlayerCount = 1) {
 export function clearEmulsifierZoneCache() {
     emulsifierZoneCache = null;
     emulsifierInitialLoadAttempts = 0;
+    activeEmulsifierZonesTick = -1;
+    activeEmulsifierZonesByDimension.clear();
 }
 
 function loadEmulsifierZones() {
@@ -1182,6 +1206,11 @@ function advanceZoneFuelQueue(zone, elapsed) {
     if (!queue || queue.length === 0) return null;
     let entry = getCurrentFuelFromQueue(zone);
     if (!entry) return null;
+    const statsNow = getFuelStats(entry.fuelType);
+    if (statsNow.permanent) {
+        zone.lastUpdatedTick = system.currentTick;
+        return statsNow;
+    }
     entry.ticksRemaining = Math.max(0, Math.floor((entry.ticksRemaining ?? 0) - elapsed));
     zone.lastUpdatedTick = system.currentTick;
     while (entry.ticksRemaining <= 0) {
@@ -1238,6 +1267,13 @@ function isZoneMachinePresent(zone, dimension = null) {
 
 function getActiveEmulsifierZonesForDimension(dimensionId) {
     const now = system.currentTick;
+    if (activeEmulsifierZonesTick !== now) {
+        activeEmulsifierZonesTick = now;
+        activeEmulsifierZonesByDimension.clear();
+    }
+    const cached = activeEmulsifierZonesByDimension.get(dimensionId);
+    if (cached) return cached;
+
     const zones = loadEmulsifierZones();
     let changed = false;
     // Remove zones whose machine block is gone (block broken → stop output)
@@ -1255,6 +1291,7 @@ function getActiveEmulsifierZonesForDimension(dimensionId) {
         return zoneHasFuel(z);
     });
     if (changed) saveEmulsifierZones();
+    activeEmulsifierZonesByDimension.set(dimensionId, activeZones);
     return activeZones;
 }
 
@@ -1273,6 +1310,52 @@ export function isInsideEmulsifierNoSpawnZone(dimensionId, location) {
     }
     return false;
 }
+
+function zoneDetoxPowerRadius(zone) {
+    const fuelType = getZoneCurrentFuelType(zone);
+    const fuelStats = fuelType ? getFuelStats(fuelType) : null;
+    if (!fuelStats) return 0;
+    const baseRadius = getEmulsifierDetoxBaseRadius();
+    return Math.max(3, fuelStats.radius ?? Math.floor(baseRadius * fuelStats.performance));
+}
+
+/**
+ * Same dome the machine purifies: sphere of fuel radius, clipped 10 below.
+ * Infection powder / leaves / wood / dirt must not spread here.
+ * @param {string} dimensionId
+ * @param {{ x: number, y: number, z: number }} location
+ */
+export function isInsideEmulsifierDetoxZone(dimensionId, location) {
+    if (!dimensionId || !location) return false;
+    const x = location.x;
+    const y = location.y;
+    const z = location.z;
+    for (const zone of getActiveEmulsifierZonesForDimension(dimensionId)) {
+        const powerRadius = zoneDetoxPowerRadius(zone);
+        if (!(powerRadius > 0)) continue;
+        const maxDown = Math.min(10, powerRadius);
+        const dx = x - (zone.x ?? 0);
+        const dy = y - (zone.y ?? 0);
+        const dz = z - (zone.z ?? 0);
+        if (dy < -maxDown || dy > powerRadius) continue;
+        if ((dx * dx + dy * dy + dz * dz) <= powerRadius * powerRadius) return true;
+    }
+    return false;
+}
+
+export function isInfectionSpreadBlockedAt(block) {
+    if (!block?.location) return false;
+    try {
+        const dimId = block.dimension?.id;
+        if (!dimId) return false;
+        return isInsideEmulsifierDetoxZone(dimId, block.location);
+    } catch {
+        return false;
+    }
+}
+
+registerInfectionDetoxGuard(isInsideEmulsifierDetoxZone);
+registerGrassInfectionDetoxGuard(isInfectionSpreadBlockedAt);
 
 /** Run extensive emulsifier diagnostics for the debug menu. Returns a plain object for display. */
 export function getEmulsifierDebugInfo() {
@@ -2122,7 +2205,7 @@ function isValidTargetBlock(typeId, dimensionId = null) {
         return false;
     }
     
-    if (typeId === TARGET_BLOCK || typeId === TARGET_BLOCK_2) {
+    if (typeId === TARGET_BLOCK || typeId === TARGET_BLOCK_2 || isDustedGroundId(typeId)) {
         return true;
     }
     // Dimension-specific blocks
@@ -3749,8 +3832,17 @@ export function countNearbyDustedDirtBlocks(center, dimension, radius, limit = 1
 // Blocks currently being "worked on" by Emulsifier (delay before conversion)
 const pendingEmulsifierConversions = new Map(); // key -> { dimId, x, y, z, blockType, lastSpawnTick }
 const EMULSIFIER_CONVERSION_DELAY_TICKS = 400; // ~20 sec of particles before transform
+/** Hard cap on getBlock ops per machine per process slice (netherite radius 30 used to spend 1.5k–6k). */
+const EMULSIFIER_OPS_BUDGET_CAP = 320;
+/** Convert timeouts that fire together stall the sim (delayed breaks, mobs freeze then catch up). */
+const EMULSIFIER_QUEUE_PER_ZONE = 6;
+const EMULSIFIER_PENDING_MAX = 40;
 // White dust particle lifetime ~6 sec = 120 ticks; spawn new batch before first fades
 const EMULSIFIER_PARTICLE_INTERVAL_BY_DENSITY = [120, 80, 50]; // Less=120, Medium=80, More=50 ticks
+/** Max mb:white_dust_particle calls per game tick (queue + refresh + complete share this). */
+const EMULSIFIER_PARTICLE_CALL_CAP = 36;
+let emulsifierParticleCapTick = -1;
+let emulsifierParticleCallsThisTick = 0;
 const EMULSIFIER_RUN_SOUND_ID = "mb.emulsifier_run";
 /** ~4.5s between ambient loops per machine (active + fueled). */
 const EMULSIFIER_RUN_SOUND_INTERVAL_TICKS = 90;
@@ -3793,19 +3885,175 @@ function playSoundAtLocation(dimId, x, y, z, soundId, volume = 0.5, maxDist = 24
     } catch { }
 }
 
+function isEmulsifierPurifyTarget(typeId) {
+    if (!typeId) return false;
+    return typeId === TARGET_BLOCK
+        || typeId === TARGET_BLOCK_2
+        || isDustedGroundId(typeId)
+        || isInfectedLeafId(typeId)
+        || isInfectedWoodId(typeId)
+        || isInfectedFoliageId(typeId);
+}
+
+function isFluidOrWaterPlantId(typeId) {
+    if (!typeId || typeof typeId !== "string") return false;
+    const id = typeId.toLowerCase();
+    return id === "minecraft:water"
+        || id === "minecraft:flowing_water"
+        || id === "minecraft:lava"
+        || id === "minecraft:flowing_lava"
+        || id.includes("kelp")
+        || id.includes("seagrass")
+        || id.includes("sea_pickle")
+        || id === "minecraft:waterlily"
+        || id === "minecraft:lily_pad";
+}
+
+function isEmulsifierOpenLawnCover(block) {
+    if (!block) return false;
+    try {
+        if (block.isAir) return true;
+    } catch {
+        /* older engine */
+    }
+    const id = block.typeId;
+    if (!id) return false;
+    if (isFluidOrWaterPlantId(id)) return false;
+    if (id === "minecraft:snow_layer" || id === "mb:snow_layer") return true;
+    if (isInfectedFoliageWalkable(id) || isInfectedLeafId(id)) return true;
+    if (STORM_PARTICLE_PASS_THROUGH.has(id)) return true;
+    return id.includes("leaves");
+}
+
+function dustedDirtCanPurifyToGrass(dimension, x, y, z) {
+    try {
+        const a1 = dimension.getBlock({ x, y: y + 1, z });
+        const a2 = dimension.getBlock({ x, y: y + 2, z });
+        return isEmulsifierOpenLawnCover(a1) && isEmulsifierOpenLawnCover(a2);
+    } catch {
+        return false;
+    }
+}
+
+function guessNetherNyliumRestore(dimension, x, y, z) {
+    let warped = 0;
+    let crimson = 0;
+    for (let dx = -2; dx <= 2; dx++) {
+        for (let dz = -2; dz <= 2; dz++) {
+            for (let dy = -1; dy <= 1; dy++) {
+                if (dx === 0 && dy === 0 && dz === 0) continue;
+                try {
+                    const n = dimension.getBlock({ x: x + dx, y: y + dy, z: z + dz });
+                    const id = n?.typeId || "";
+                    if (id.includes("warped")) warped++;
+                    if (id.includes("crimson")) crimson++;
+                } catch {
+                    /* ignore */
+                }
+            }
+        }
+    }
+    if (warped === 0 && crimson === 0) return "minecraft:netherrack";
+    return warped >= crimson ? "minecraft:warped_nylium" : "minecraft:crimson_nylium";
+}
+
+function purifyDustedDirtRestoreId(dimension, x, y, z) {
+    const dimId = dimension?.id || "";
+    if (dimId === "minecraft:nether") {
+        const open = dustedDirtCanPurifyToGrass(dimension, x, y, z);
+        if (open && Math.random() < EMULSIFIER_DIRT_TO_GRASS_CHANCE) {
+            return guessNetherNyliumRestore(dimension, x, y, z);
+        }
+        return "minecraft:netherrack";
+    }
+    const toGrass = dustedDirtCanPurifyToGrass(dimension, x, y, z)
+        && Math.random() < EMULSIFIER_DIRT_TO_GRASS_CHANCE;
+    return toGrass ? "minecraft:grass_block" : "minecraft:dirt";
+}
+
+function restoreVanillaLeaf(block, vanillaId) {
+    let persistent = false;
+    try {
+        persistent = block.permutation.getState("persistent_bit") === true;
+    } catch {
+        /* missing */
+    }
+    try {
+        block.setPermutation(BlockPermutation.resolve(vanillaId, { persistent_bit: persistent }));
+        return true;
+    } catch {
+        try {
+            block.setType(vanillaId);
+            return true;
+        } catch {
+            return false;
+        }
+    }
+}
+
+function restoreVanillaWood(block, vanillaId) {
+    let axis = "y";
+    try {
+        const a = block.permutation.getState("mb:axis");
+        if (a === "x" || a === "y" || a === "z") axis = a;
+    } catch {
+        /* missing */
+    }
+    try {
+        block.setPermutation(BlockPermutation.resolve(vanillaId, { pillar_axis: axis }));
+        return true;
+    } catch {
+        try {
+            block.setType(vanillaId);
+            return true;
+        } catch {
+            return false;
+        }
+    }
+}
+
 function neutralizeCorruptedBlock(dimension, x, y, z) {
     try {
         const block = dimension.getBlock({ x, y, z });
         if (!block) return false;
-        if (block.typeId === "mb:dusted_dirt") {
-            block.setType("minecraft:dirt");
+        const id = block.typeId;
+        if (isDustedGroundId(id)) {
+            if (id === "mb:dusted_podzol") {
+                block.setType("minecraft:podzol");
+            } else {
+                block.setType(purifyDustedDirtRestoreId(dimension, x, y, z));
+            }
             unregisterDustedDirtBlock(x, y, z);
             return true;
         }
-        if (block.typeId === "mb:snow_layer") {
-            // Convert dangerous corrupted layer into harmless vanilla snow.
-            block.setType("minecraft:snow_layer");
+        if (id === "mb:snow_layer") {
+            // Infection powder is not winter snow — purify leaves empty air.
+            block.setType("minecraft:air");
+            unregisterDustedDirtBlock(x, y, z);
             return true;
+        }
+        if (isInfectedLeafId(id)) {
+            if (Math.random() < EMULSIFIER_LEAF_VANISH_CHANCE) {
+                block.setType("minecraft:air");
+                return true;
+            }
+            const vanilla = vanillaLeafIdForInfected(id);
+            if (!vanilla) return false;
+            return restoreVanillaLeaf(block, vanilla);
+        }
+        if (isInfectedWoodId(id)) {
+            const vanilla = vanillaWoodIdForInfected(id);
+            if (!vanilla) return false;
+            return restoreVanillaWood(block, vanilla);
+        }
+        if (isInfectedFoliageId(id)) {
+            if (isInfectedFoliageWalkable(id) && Math.random() < EMULSIFIER_LEAF_VANISH_CHANCE) {
+                block.setType("minecraft:air");
+                return true;
+            }
+            const vanilla = vanillaFoliageIdForInfected(id);
+            if (!vanilla) return false;
+            return restoreInfectedFoliageToVanilla(block, vanilla);
         }
     } catch {
         // Ignore unloaded chunks / block errors
@@ -3813,32 +4061,84 @@ function neutralizeCorruptedBlock(dimension, x, y, z) {
     return false;
 }
 
+/**
+ * Thin puffs when many cells are queued. Convert delay is unchanged.
+ * skipMod 1 = every cell (leaves still checkerboard). Higher = sparser field.
+ */
+function emulsifierParticleLoad() {
+    const n = pendingEmulsifierConversions.size;
+    if (n <= 24) return { skipMod: 1, countMax: 3, intervalMul: 1 };
+    if (n <= 64) return { skipMod: 2, countMax: 2, intervalMul: 1.5 };
+    if (n <= 128) return { skipMod: 4, countMax: 1, intervalMul: 2 };
+    return { skipMod: 8, countMax: 1, intervalMul: 3 };
+}
+
+function claimEmulsifierParticleCall() {
+    const t = system.currentTick;
+    if (t !== emulsifierParticleCapTick) {
+        emulsifierParticleCapTick = t;
+        emulsifierParticleCallsThisTick = 0;
+    }
+    if (emulsifierParticleCallsThisTick >= EMULSIFIER_PARTICLE_CALL_CAP) return false;
+    emulsifierParticleCallsThisTick++;
+    return true;
+}
+
+function emulsifierParticleCount(density) {
+    const fromDensity = Math.max(1, Math.min(3, (Number(density) || 0) + 1));
+    return Math.min(fromDensity, emulsifierParticleLoad().countMax);
+}
+
+function emulsifierParticleInterval(density) {
+    const base = EMULSIFIER_PARTICLE_INTERVAL_BY_DENSITY[Math.min(2, Math.max(0, Number(density) || 0))] ?? 80;
+    return Math.floor(base * emulsifierParticleLoad().intervalMul);
+}
+
+function shouldSpawnEmulsifierParticles(blockType, x, y, z) {
+    const sum = Math.floor(x) + Math.floor(y) + Math.floor(z);
+    if (isInfectedLeafId(blockType) && (sum & 1) === 1) return false;
+    const skipMod = emulsifierParticleLoad().skipMod;
+    if (skipMod > 1) {
+        const m = ((sum % skipMod) + skipMod) % skipMod;
+        if (m !== 0) return false;
+    }
+    return true;
+}
+
 function spawnEmulsifierParticlesAt(dimension, x, y, z, blockType, count = 3) {
-    if (count < 1) return;
+    if (count < 1) return false;
+    if (!shouldSpawnEmulsifierParticles(blockType, x, y, z)) return false;
     const cx = x + 0.5;
     const cz = z + 0.5;
-    const isSnow = blockType === "mb:snow_layer";
-    const cy = isSnow ? y + 0.5 : y + 1.5; // Snow: at block level; dusted_dirt: one block above
+    let cy;
+    if (isDustedGroundId(blockType)) cy = y + 1.5;
+    else if (blockType === "mb:snow_layer" || isInfectedLeafId(blockType) || isInfectedFoliageId(blockType)) cy = y + 0.5;
+    else cy = y + 1.0;
     const positions = [
         { x: cx, y: cy, z: cz },
         { x: cx + 0.3, y: cy, z: cz },
         { x: cx, y: cy, z: cz + 0.3 }
     ];
+    let spawned = false;
     try {
         for (let i = 0; i < Math.min(count, positions.length); i++) {
+            if (!claimEmulsifierParticleCall()) return spawned;
             dimension.spawnParticle("mb:white_dust_particle", positions[i]);
+            spawned = true;
         }
     } catch { }
+    return spawned;
 }
 
-/** Queue a block for delayed conversion: spawn dust particles (persistent until transform), play working sound, convert after delay. Uses same targets as spawn (TARGET_BLOCK, TARGET_BLOCK_2). */
+/** Queue a block for delayed conversion: particles, working sound, then restore vanilla (powder layers → air). */
 function queueEmulsifierConversion(dimension, dimId, x, y, z) {
+    if (pendingEmulsifierConversions.size >= EMULSIFIER_PENDING_MAX) return false;
     const key = `${dimId},${x},${y},${z}`;
     if (pendingEmulsifierConversions.has(key)) return false;
     let blockType;
     try {
         const block = dimension.getBlock({ x, y, z });
-        if (!block || (block.typeId !== TARGET_BLOCK && block.typeId !== TARGET_BLOCK_2)) return false;
+        if (!block || !isEmulsifierPurifyTarget(block.typeId)) return false;
         blockType = block.typeId;
     } catch {
         return false;
@@ -3846,8 +4146,7 @@ function queueEmulsifierConversion(dimension, dimId, x, y, z) {
     const now = system.currentTick;
     pendingEmulsifierConversions.set(key, { dimId, x, y, z, blockType, lastSpawnTick: now });
     const density = typeof getStormParticleDensity === "function" ? (getStormParticleDensity(dimension) ?? 0) : 1;
-    const particleCount = Math.max(1, Math.min(3, density + 1));
-    spawnEmulsifierParticlesAt(dimension, x, y, z, blockType, particleCount);
+    spawnEmulsifierParticlesAt(dimension, x, y, z, blockType, emulsifierParticleCount(density));
     playSoundAtLocation(dimId, x, y, z, "block.enchantment_table.use", 0.35, 20);
 
     system.runTimeout(() => {
@@ -3856,8 +4155,7 @@ function queueEmulsifierConversion(dimension, dimId, x, y, z) {
             const dim = world.getDimension(dimId);
             if (neutralizeCorruptedBlock(dim, x, y, z)) {
                 const density = typeof getStormParticleDensity === "function" ? (getStormParticleDensity(dim) ?? 0) : 1;
-                const particleCount = Math.max(1, Math.min(3, density + 1));
-                spawnEmulsifierParticlesAt(dim, x, y, z, blockType, particleCount);
+                spawnEmulsifierParticlesAt(dim, x, y, z, blockType, emulsifierParticleCount(density));
                 playSoundAtLocation(dimId, x, y, z, "block.composter.fill_success", 0.25, 20);
             }
         } catch { }
@@ -3875,7 +4173,11 @@ function canDetoxFlowThrough(block) {
     return false;
 }
 
-/** Get dusted_dirt/snow_layer blocks reachable by air path from machine (detox flows through air/foliage like dust storm; walls block). */
+function isSolidInfectedPurifyTarget(typeId) {
+    return isDustedGroundId(typeId) || isInfectedWoodId(typeId);
+}
+
+/** Infected blocks reachable by air/foliage from the machine. Solid dusty dirt / logs stop the flow. */
 function getReachableCorruptedBlocks(dimension, cx, cy, cz, maxRadius, maxAirVisits = 8000) {
     const result = [];
     const airVisited = new Set();
@@ -3901,15 +4203,15 @@ function getReachableCorruptedBlocks(dimension, cx, cy, cz, maxRadius, maxAirVis
             const block = dimension.getBlock(pos);
             if (!block) continue;
             const typeId = block.typeId;
-            if (typeId === "mb:dusted_dirt" || typeId === "mb:snow_layer") {
+            if (isEmulsifierPurifyTarget(typeId)) {
                 const ckey = `${pos.x},${pos.y},${pos.z}`;
                 if (!corruptedSeen.has(ckey)) {
                     corruptedSeen.add(ckey);
                     result.push({ x: pos.x, y: pos.y, z: pos.z });
                 }
-                continue;
+                if (isSolidInfectedPurifyTarget(typeId)) continue;
             }
-            if (!canDetoxFlowThrough(block)) continue;
+            if (!isEmulsifierPurifyTarget(typeId) && !canDetoxFlowThrough(block)) continue;
             for (const [dx, dy, dz] of dirs) {
                 const nx = pos.x + dx;
                 const ny = pos.y + dy;
@@ -3939,7 +4241,7 @@ function processEmulsifierZones() {
         }
     }
     const dbg = (cat, ...args) => { if (typeof isDebugEnabled === "function" && isDebugEnabled("emulsifier", cat)) console.warn("[EMULSIFIER DEBUG]", cat, ...args); };
-    let changed = false;
+    let persistZones = false;
     const now = system.currentTick;
     const baseRadius = getEmulsifierDetoxBaseRadius();
     dbg("general", "processEmulsifierZones start tick=", now, "zones=", zones.length, "baseRadius=", baseRadius);
@@ -3953,7 +4255,7 @@ function processEmulsifierZones() {
             if (!isZoneMachinePresent(zone, dim)) {
                 emulsifierRunSoundLastTick.delete(emulsifierRunSoundKey(zone));
                 zones.splice(i, 1);
-                changed = true;
+                persistZones = true;
             }
         } catch {
             continue;
@@ -3987,11 +4289,10 @@ function processEmulsifierZones() {
         if (!fuelStats) {
             zone.active = false;
             emulsifierRunSoundLastTick.delete(emulsifierRunSoundKey(zone));
-            changed = true;
+            persistZones = true;
             scheduleSyncEmulsifierMachineBlockVisual(zone.dimension, zone.x, zone.y, zone.z, false);
             continue;
         }
-        changed = true;
         maybePlayEmulsifierRunningSound(zone, now, dimension);
 
         const powerRadius = Math.max(3, fuelStats.radius ?? Math.floor(baseRadius * fuelStats.performance));
@@ -3999,8 +4300,10 @@ function processEmulsifierZones() {
         const zoneY = Math.floor(zone.y);
         const zoneZ = Math.floor(zone.z);
 
-        // Per-fuel scan pacing: first scan = fast (interval 1); then steady then slowly slower; never stop until fuel runs out.
-        // If we have pending scan work (mid-ring resume), use interval=1 so we don't get stuck on phase skip.
+        // Per-fuel scan pacing. Do not force interval=1 for the whole unfinished
+        // netherite sphere — scanRing wraps 0..radius so "pending" was always true
+        // and every 10t spent a 1.5k–6k getBlock budget (tick stall: delayed breaks,
+        // mobs freeze then catch up). Only hurry the in-progress ring resume.
         const lastDetox = zone.lastDetoxTick;
         const quietTicks = typeof lastDetox === "number" ? Math.max(0, now - lastDetox) : 0;
         const isFirstScan = zone.firstScanDone !== true;
@@ -4013,9 +4316,10 @@ function processEmulsifierZones() {
             else if (quietTicks > 150) interval = quiet;
             else interval = normal;
         }
-        // Use interval=1 whenever the dome isn't fully done: rings 0..powerRadius (including the last ring), so we don't get stuck at phase 6/16 only running every 20 ticks when on ring 30.
-        const hasPendingScan = (zone.scanRing ?? 0) <= powerRadius;
-        if (hasPendingScan) interval = 1;
+        const midRingResume = zone.scanDx != null || (zone.scanLayerIndex ?? 0) > 0;
+        if (isFirstScan || midRingResume) {
+            interval = Math.min(interval, Math.max(1, fuelStats.scanIntervalNormal ?? 2));
+        }
         const phase = (zoneX + zoneZ + now) % interval;
         if (phase !== 0) {
             dbg("purification", "skip zone (phase):", zoneX, zoneZ, "interval=", interval, "phase=", phase);
@@ -4036,12 +4340,17 @@ function processEmulsifierZones() {
             zone.scanLayerIndex = 0;
             zone.scanDx = null;
             zone.scanDz = null;
-            changed = true;
+            persistZones = true;
         }
         const searching = isFirstScan || typeof lastDetox !== "number" || quietTicks > 150;
         const baseBudget = 700 + Math.floor(300 * fuelStats.performance);
         const firstMult = Math.max(1, fuelStats.firstScanBudgetMult ?? 1.8);
         let opsBudget = Math.floor(baseBudget * (searching ? 2 : 1) * (isFirstScan ? firstMult : 1));
+        opsBudget = Math.min(opsBudget, EMULSIFIER_OPS_BUDGET_CAP);
+        if (pendingEmulsifierConversions.size >= EMULSIFIER_PENDING_MAX) {
+            dbg("purification", "skip zone (pending cap)", pendingEmulsifierConversions.size);
+            continue;
+        }
         dbg("purification", "zone scan", zoneX, zoneY, zoneZ, "powerRadius=", powerRadius, "interval=", interval, "firstScan=", isFirstScan, "searching=", searching, "budget=", opsBudget);
 
         // Same layer order for first and later scans: bottom to top (0..totalLayers-1) so we don't over-prioritize the machine's y and under-scan below/above.
@@ -4101,19 +4410,20 @@ function processEmulsifierZones() {
                     }
                     if (queueEmulsifierConversion(dimension, dimId, wx, wy, wz)) {
                         zone.lastDetoxTick = now;
-                        changed = true;
                         queuedThisZone++;
                         dbg("purification", "queued conversion", wx, wy, wz);
                     }
                     positionsChecked++;
                     opsBudget--;
-                    if (opsBudget <= 0) {
+                    const hitQueueCap = queuedThisZone >= EMULSIFIER_QUEUE_PER_ZONE
+                        || pendingEmulsifierConversions.size >= EMULSIFIER_PENDING_MAX;
+                    if (opsBudget <= 0 || hitQueueCap) {
                         zone.scanRing = currentRing;
                         zone.scanLayerIndex = ii;
                         zone.scanDx = dx;
                         zone.scanDz = dz;
                         completedRing = false;
-                        changed = true;
+                        opsBudget = 0;
                     }
                 }
             }
@@ -4123,7 +4433,6 @@ function processEmulsifierZones() {
             zone.scanLayerIndex = 0;
             zone.scanDx = null;
             zone.scanDz = null;
-            changed = true;
         }
         let sampleSummary = "";
         if (logPurification && sampleTypeCounts.size > 0) {
@@ -4145,8 +4454,8 @@ function processEmulsifierZones() {
         );
     }
 
-    if (changed) {
-        dbg("persistence", "saveEmulsifierZones (changed=true)");
+    if (persistZones) {
+        dbg("persistence", "saveEmulsifierZones (machine/fuel state)");
         saveEmulsifierZones();
     }
 }
@@ -4262,6 +4571,79 @@ function isAirOrWater(block) {
            typeId === "minecraft:flowing_water";
 }
 
+function isWaterTypeId(typeId) {
+    return typeId === "minecraft:water" || typeId === "minecraft:flowing_water";
+}
+
+/**
+ * Ocean / water-base: player is over open water (offsets miss the platform).
+ * Used so spawn tiles prefer seafloor around the base, not a player-made mine.
+ */
+function detectOverWaterSeafloor(dimension, cx, cy, cz, dimYMax) {
+    const cols = [[6, 0], [-6, 0], [0, 6], [0, -6], [10, 8], [-10, -8]];
+    let waterCols = 0;
+    let seafloorY = null;
+    for (const [dx, dz] of cols) {
+        let water = 0;
+        for (let y = Math.min(cy + 3, dimYMax); y >= Math.max(cy - 40, -64); y--) {
+            let block;
+            try {
+                block = dimension.getBlock({ x: cx + dx, y, z: cz + dz });
+            } catch {
+                break;
+            }
+            if (!block) continue;
+            const id = block.typeId;
+            if (isWaterTypeId(id)) {
+                water++;
+                continue;
+            }
+            if (isAir(block)) continue;
+            if (water >= 2) {
+                waterCols++;
+                if (seafloorY === null || y > seafloorY) seafloorY = y;
+            }
+            break;
+        }
+    }
+    return { overWater: waterCols >= 2, seafloorY };
+}
+
+let oceanDetectCache = { tick: -1, key: "", result: { overWater: false, seafloorY: null } };
+
+function detectOverWaterSeafloorCached(dimension, cx, cy, cz, dimYMax) {
+    const tick = system.currentTick;
+    const key = `${dimension?.id || ""}:${cx}:${cy}:${cz}`;
+    if (oceanDetectCache.tick === tick && oceanDetectCache.key === key) {
+        return oceanDetectCache.result;
+    }
+    const result = detectOverWaterSeafloor(dimension, cx, cy, cz, dimYMax);
+    oceanDetectCache = { tick, key, result };
+    return result;
+}
+
+function preferOceanFloorTiles(dimension, tiles, limit) {
+    if (!Array.isArray(tiles) || tiles.length < 2) return tiles;
+    const ocean = [];
+    const other = [];
+    for (const t of tiles) {
+        let above = null;
+        try {
+            above = dimension.getBlock({ x: t.x, y: t.y + 1, z: t.z });
+        } catch {
+            /* ignore */
+        }
+        if (above && isWaterTypeId(above.typeId)) ocean.push(t);
+        else other.push(t);
+    }
+    if (ocean.length === 0) return tiles;
+    const oceanKeep = Math.min(limit, Math.max(ocean.length, Math.floor(limit * 0.75)));
+    const mixed = ocean.slice(0, oceanKeep);
+    const room = Math.max(0, limit - mixed.length);
+    if (room > 0) mixed.push(...other.slice(0, room));
+    return mixed;
+}
+
 function scanAroundDustedDirt(dimension, centerX, centerY, centerZ, seen, candidates, blockQueryCount, limit) {
     // When we find a dusted_dirt or snow_layer block, check nearby blocks (10x10 area) for more patches
     // This helps find clusters of both dusted_dirt and snow_layer blocks without much performance cost
@@ -4352,6 +4734,7 @@ function collectMiningSpawnTiles(dimension, center, minDistance, maxDistance, li
     const cy = Math.floor(center.y);
     const cz = Math.floor(center.z);
     const dimYMax = getDimensionYBounds(dimension.id).max;
+    const oceanCtx = detectOverWaterSeafloorCached(dimension, cx, cy, cz, dimYMax);
     const minSq = minDistance * minDistance;
     const maxSq = maxDistance * maxDistance;
     const candidates = [];
@@ -4405,10 +4788,11 @@ function collectMiningSpawnTiles(dimension, center, minDistance, maxDistance, li
     candidates.push(...dustedTiles);
     dustedTiles.forEach(t => seen.add(`${t.x},${t.y},${t.z}`));
     
-    // Then, collect stone/deepslate blocks in caves (40% from stone/deepslate)
-    // Only collect if we need more tiles and have budget remaining
+    // Then, collect stone/deepslate blocks in caves (40% from stone/deepslate).
+    // Skip this pass over open water — a player-made mine under an ocean base
+    // would otherwise consume the budget while seafloor tiles sit unused.
     let blockQueryCount = 0;
-    if (candidates.length < limit && blockQueryCount < stoneBudget) {
+    if (!oceanCtx.overWater && candidates.length < limit && blockQueryCount < stoneBudget) {
         const xStart = cx - maxDistance;
         const xEnd = cx + maxDistance;
         const zStart = cz - maxDistance;
@@ -4584,6 +4968,9 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
     const dimensionId = dimension.id;
     const isNetherOrEnd = dimensionId === "minecraft:nether" || dimensionId === "minecraft:the_end";
     const dimYMax = getDimensionYBounds(dimensionId).max;
+    const oceanCtx = isNetherOrEnd
+        ? { overWater: false, seafloorY: null }
+        : detectOverWaterSeafloorCached(dimension, cx, cy, cz, dimYMax);
     const adaptiveDiscoveryRadiusBase = getAdaptiveDiscoveryRadius(totalPlayerCount, isTightGroup, isIsolated, false, scanLoadCount);
     
     // Use scaled query limit based on player count (reduces lag with multiple players)
@@ -4696,7 +5083,8 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
             }
             continue; // Don't use for spawning this run, but block stays in cache
         }
-        if (Math.abs(dy) > 30) {
+        const maxVertDown = oceanCtx.overWater ? 48 : 30;
+        if (dy > 30 || dy < -maxVertDown) {
             cacheTooFarVertically++;
             continue; // Too far vertically
         }
@@ -4713,6 +5101,9 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
                     blockQueryCount++;
                     if (blockQueryCount < queryLimit) {
                         if (isAirOrWater(blockAbove) && isAirOrWater(blockTwoAbove)) {
+                        if (oceanCtx.overWater && blockAbove && !isWaterTypeId(blockAbove.typeId)) {
+                            continue;
+                        }
                         const tileKey = `${value.x},${value.y},${value.z}`;
                         if (!seen.has(tileKey)) {
                             seen.add(tileKey);
@@ -5329,11 +5720,28 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
         }
     }
     
+    if (oceanCtx.overWater) {
+        isUnderground = false;
+        isAboveGround = false;
+        if (oceanCtx.seafloorY != null) {
+            surfaceYLevel = oceanCtx.seafloorY;
+        }
+    }
+    
     // Adjust Y range based on environment detection (STRICT range if above ground)
     let yRangeUp, yRangeDown;
     let yStart, yEnd;
     
-    if (isAboveGround && surfaceYLevel !== null) {
+    if (oceanCtx.overWater) {
+        const floorY = oceanCtx.seafloorY != null ? oceanCtx.seafloorY : cy - 24;
+        yRangeUp = 10;
+        yRangeDown = Math.min(48, Math.max(20, cy - floorY + 6));
+        yStart = Math.min(cy + yRangeUp, dimYMax);
+        yEnd = Math.max(floorY - 4, -64);
+        if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
+            console.warn(`[SPAWN DEBUG] Environment detection: Over water (seafloor Y: ${floorY}), scanning Y ${yEnd} to ${yStart}`);
+        }
+    } else if (isAboveGround && surfaceYLevel !== null) {
         // Above ground: Use STRICT Y range around surface level (±8 blocks)
         // This focuses scanning where blocks are most likely to be
         const surfaceY = Math.floor(surfaceYLevel);
@@ -5395,7 +5803,18 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
     
     // Adjust Y scanning strategy based on environment detection
     let yScanOrder = []; // Will be populated with Y levels in priority order
-    if (isAboveGround && surfaceYLevel !== null) {
+    if (oceanCtx.overWater) {
+        const floorY = Math.floor(oceanCtx.seafloorY != null ? oceanCtx.seafloorY : cy - 24);
+        for (let y = floorY + 2; y >= Math.max(floorY - 4, yEnd); y--) {
+            yScanOrder.push(y);
+        }
+        for (let y = yStart; y >= yEnd; y--) {
+            if (!yScanOrder.includes(y)) yScanOrder.push(y);
+        }
+        if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
+            console.warn(`[SPAWN DEBUG] Over water: prioritizing seafloor Y ${floorY}`);
+        }
+    } else if (isAboveGround && surfaceYLevel !== null) {
         // Above ground: Prioritize scanning around surface level (strict range)
         const surfaceY = Math.floor(surfaceYLevel);
         for (let y = surfaceY; y >= Math.max(surfaceY - yRangeDown, yEnd); y--) {
@@ -6066,7 +6485,7 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
         }
     }
     
-    return filteredCandidates;
+    return preferOceanFloorTiles(dimension, filteredCandidates, limit);
 }
 
 function calculateAverageSpacing(tiles) {
@@ -7146,6 +7565,8 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
     if (!entityCounts || typeof entityCounts !== 'object') entityCounts = {};
     if (!spawnCount || typeof spawnCount !== 'object') spawnCount = { value: 0 };
     if (!Array.isArray(tiles)) tiles = [];
+    // Livestock is JSON-only. Storm tiles include ocean seafloor; never script-spawn cows/pigs/sheep there.
+    if (isInfectedLivestock(config.id)) return false;
     
     const currentDay = getCurrentDay();
     if (currentDay < config.startDay || currentDay > config.endDay) return false;
@@ -7168,6 +7589,15 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
 
     if (isMilestone) {
         maxCount = Math.min(maxCount + 1, capLimit);
+    }
+
+    const entityType = getEntityType(config.id);
+    let infectedTypeCap = null;
+    if (entityType === INFECTED_TYPE) {
+        const addonSpawnMult = getAddonDifficultyState()?.spawnMultiplier;
+        infectedTypeCap = getInfectedTypeCap(nearbyPlayerCount, addonSpawnMult);
+        const baseFamily = ENTITY_TYPE_CAPS[INFECTED_TYPE] || 17;
+        maxCount = Math.min(infectedTypeCap, Math.max(1, Math.round(maxCount * (infectedTypeCap / baseFamily))));
     }
 
     // Use cached entity count instead of querying
@@ -7199,10 +7629,11 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
     }
     
     // Check type-based spawn caps (all variants of a type count toward the same cap)
-    const entityType = getEntityType(config.id);
     if (entityType && ENTITY_TYPE_CAPS[entityType] !== undefined) {
         const typeCount = getTypeCount(entityCounts, entityType);
-        const typeCap = ENTITY_TYPE_CAPS[entityType];
+        const typeCap = entityType === INFECTED_TYPE && infectedTypeCap != null
+            ? infectedTypeCap
+            : ENTITY_TYPE_CAPS[entityType];
         
         // Debug logging for type caps
         if (typeCount >= typeCap) {
@@ -7560,11 +7991,11 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
                     const aboveBlock = dimension.getBlock({ x: snowLoc.x, y: spawnY + 1, z: snowLoc.z });
                     const belowType = snowBlock?.typeId;
                     if (belowType === "minecraft:snow_layer") {
-                        try { snowBlock.setType("mb:snow_layer"); } catch { snowBlock.setType("minecraft:snow_layer"); }
+                        applyInfectionSnowLayer(snowBlock);
                     } else if (belowType !== "mb:snow_layer" && aboveBlock) {
                         const existingType = aboveBlock.typeId;
                         if (existingType !== "mb:snow_layer" && existingType !== "minecraft:snow_layer" && snowBlock && snowBlock.isAir !== undefined && !snowBlock.isAir && snowBlock.isLiquid !== undefined && !snowBlock.isLiquid && aboveBlock.isAir !== undefined && aboveBlock.isAir) {
-                            try { aboveBlock.setType("mb:snow_layer"); } catch { aboveBlock.setType("minecraft:snow_layer"); }
+                            applyInfectionSnowLayer(aboveBlock);
                         }
                     }
                 } catch {
@@ -7716,6 +8147,7 @@ if (ERROR_LOGGING) {
 system.runInterval(() => {
     try {
         if (shouldSleepDayZeroWorldWork("spawn_emulsifier")) return;
+        if (isSpreadThrottleActive() && !claimSpreadSlice("spawn_emulsifier", 10)) return;
         processEmulsifierZones();
     } catch (error) {
         errorLog("Error in emulsifier interval", error);
@@ -7748,12 +8180,16 @@ system.runInterval(() => {
             try {
                 const dim = world.getDimension(data.dimId);
                 const density = typeof getStormParticleDensity === "function" ? (getStormParticleDensity(dim) ?? 0) : 1;
-                const interval = EMULSIFIER_PARTICLE_INTERVAL_BY_DENSITY[Math.min(2, Math.max(0, density))] ?? 80;
+                const interval = emulsifierParticleInterval(density);
                 const lastSpawn = data.lastSpawnTick ?? 0;
                 if (now - lastSpawn < interval) continue;
-                data.lastSpawnTick = now;
-                const particleCount = Math.max(1, Math.min(3, density + 1));
-                spawnEmulsifierParticlesAt(dim, data.x, data.y, data.z, data.blockType, particleCount);
+                if (!shouldSpawnEmulsifierParticles(data.blockType, data.x, data.y, data.z)) {
+                    data.lastSpawnTick = now;
+                    continue;
+                }
+                if (spawnEmulsifierParticlesAt(dim, data.x, data.y, data.z, data.blockType, emulsifierParticleCount(density))) {
+                    data.lastSpawnTick = now;
+                }
             } catch { }
         }
     } catch { }
@@ -8289,7 +8725,14 @@ system.runInterval(() => {
         
         const miningNearCap = getMaxMiningBearsNearPlayerCount();
         const miningDimCap = getMaxMiningBearsDimensionWideCount(dimensionPlayerCount);
-        debugLog('spawn', `${player.name}: ${totalNearbyBears} total bears nearby (Tiny: ${tinyCount}/${ENTITY_TYPE_CAPS[TINY_TYPE]}, Infected: ${infectedCount}/${ENTITY_TYPE_CAPS[INFECTED_TYPE]}, Mining: ${miningCount}/${miningNearCap}, Flying: ${flyingCount}/30, Torpedo: ${torpedoCount}/10, Buff: ${buffCount}/dynamic, dim mining ≤${miningDimCap}), ${spacedTiles.length} spawn tiles available`);
+        let nearbyPlayerCount = 1;
+        try {
+            const nearbyPlayers = dimension.getPlayers({ location: playerPos, maxDistance: getMaxSpawnDistance() });
+            nearbyPlayerCount = nearbyPlayers.length;
+        } catch {
+            nearbyPlayerCount = 1;
+        }
+        debugLog('spawn', `${player.name}: ${totalNearbyBears} total bears nearby (Tiny: ${tinyCount}/${ENTITY_TYPE_CAPS[TINY_TYPE]}, Infected: ${infectedCount}/${getInfectedTypeCap(nearbyPlayerCount, getAddonDifficultyState()?.spawnMultiplier)}, Mining: ${miningCount}/${miningNearCap}, Flying: ${flyingCount}/30, Torpedo: ${torpedoCount}/10, Buff: ${buffCount}/dynamic, dim mining ≤${miningDimCap}), ${spacedTiles.length} spawn tiles available`);
 
         const idealNearbyBearTarget = getIdealNearbyBearTarget(currentDay, dimensionPlayerCount, dimension.id);
         const idealBearPressure = getIdealBearPressureFactors(totalNearbyBears, idealNearbyBearTarget);
@@ -8524,15 +8967,6 @@ system.runInterval(() => {
 
         // Track spawns per tick for this player (per-player budget, not shared)
         const spawnCount = { value: 0 };
-        
-        // Get nearby player count once (cached for all spawn attempts)
-        let nearbyPlayerCount = 1;
-        try {
-            const nearbyPlayers = dimension.getPlayers({ location: playerPos, maxDistance: getMaxSpawnDistance() });
-            nearbyPlayerCount = nearbyPlayers.length;
-        } catch (error) {
-            // On error, default to 1
-        }
 
         // Only process configs that are active for current day
         // Skip lower variants when higher variants are available

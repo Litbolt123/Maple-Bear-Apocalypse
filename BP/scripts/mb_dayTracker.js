@@ -1,5 +1,12 @@
 import { world, system } from "@minecraft/server";
-import { ACTION_BAR_SLOT, setHudActionBarSegment, clearHudActionBarSegment } from "./mb_actionBarHud.js";
+import {
+    ACTION_BAR_SLOT,
+    setHudActionBarSegment,
+    clearHudActionBarSegment,
+    clipHudVisibleText,
+    ONSCREEN_TITLE_MAX_VISIBLE,
+    ONSCREEN_SUBTITLE_MAX_VISIBLE
+} from "./mb_actionBarHud.js";
 import { getWorldProperty, setWorldProperty, getPlayerProperty } from "./mb_dynamicPropertyHandler.js";
 import { getCodex, saveCodex, markSectionUnlock, markSubsectionUnlock, getKnowledgeLevel, hasKnowledge, checkKnowledgeProgression, getPlayerSoundVolume, getPlayerSettings } from "./mb_codex.js";
 import { CHAT_ACHIEVEMENT, CHAT_DANGER, CHAT_DANGER_STRONG, CHAT_SUCCESS, CHAT_WARNING, CHAT_INFO, CHAT_DEV, CHAT_HIGHLIGHT } from "./mb_chatColors.js";
@@ -230,6 +237,56 @@ export function getDayDisplayInfo(day) {
     return { color, symbols: "!".repeat(exclamations) };
 }
 
+/** Bedrock titles clip past ~18 visible glyphs. Chat/journal can keep the full bangs. */
+const ONSCREEN_TITLE_BANG_MAX = 5;
+
+/**
+ * Bangs for titles / action-bar banners (capped). Chat still uses getDayDisplayInfo().symbols.
+ * @param {number} day
+ * @returns {string}
+ */
+export function onScreenDayBangs(day) {
+    const raw = getDayDisplayInfo(day).symbols || "";
+    if (raw.length <= ONSCREEN_TITLE_BANG_MAX) return raw;
+    return raw.slice(0, ONSCREEN_TITLE_BANG_MAX);
+}
+
+/**
+ * Center-screen day counter. Day 100 used to be `!!!!!!!!!! Day 100 (+75 past victory)`.
+ * @param {number} day
+ * @param {"day"|"welcome"} [kind]
+ */
+export function formatOnScreenDayTitle(day, kind = "day") {
+    const { color } = getDayDisplayInfo(day);
+    const bangs = onScreenDayBangs(day);
+    const prefix = bangs ? `${color}${bangs} ` : `${color}`;
+    if (kind === "welcome") return `${prefix}Welcome`;
+    return `${prefix}Day ${day}`;
+}
+
+/**
+ * Optional subtitle so “past victory” is not glued onto the huge title.
+ * @param {number} day
+ * @returns {string|undefined}
+ */
+export function formatOnScreenDaySubtitle(day) {
+    if (!(day > 25)) return undefined;
+    return `§7+${day - 25} past victory`;
+}
+
+/**
+ * Sunrise action bar — short enough to sit with infection HUD.
+ * @param {number} day
+ * @param {boolean} showDayMessage
+ */
+function formatSunriseNarrativeBar(day, showDayMessage) {
+    if (!showDayMessage) return `§7Day ${day}`;
+    if (day === 25) return "§aVictory. Infection continues.";
+    let line = day > 25 ? `§cIntensifies §7(+${day - 25})` : "§7Infection continues.";
+    if (MILESTONE_DAYS.includes(day + 1)) line += " §8· tomorrow";
+    return line;
+}
+
 /**
  * Get custom welcome message for returning players based on current day and knowledge
  * @param {number} day The current day
@@ -242,7 +299,7 @@ function getReturningPlayerWelcome(day, player) {
         return {
             message: "§7Welcome back to your world.",
             title: "§7Welcome Back",
-            actionbar: "Everything seems peaceful here."
+            actionbar: "§7Peaceful here."
         };
     }
 
@@ -254,7 +311,7 @@ function getReturningPlayerWelcome(day, player) {
         return {
             message: "§aWelcome back to your world...",
             title: "§aWelcome Back!",
-            actionbar: "Everything seems peaceful here..."
+            actionbar: "§7Peaceful here."
         };
     } else if (day < 4) {
         // Days 2-3: Tiny Maple Bears have started spawning
@@ -262,13 +319,13 @@ function getReturningPlayerWelcome(day, player) {
             return {
                 message: "§eWelcome back! The tiny ones have emerged...",
                 title: "§e! Day " + day,
-                actionbar: "Small white bears roam the land..."
+                actionbar: "§eTiny white bears."
             };
         } else {
             return {
                 message: "§eWelcome back... something feels different.",
                 title: "§e! Day " + day,
-                actionbar: "You sense something has changed..."
+                actionbar: "§eSomething changed."
             };
         }
     } else if (day < 8) {
@@ -277,19 +334,19 @@ function getReturningPlayerWelcome(day, player) {
             return {
                 message: "§6Welcome back! The infection spreads...",
                 title: "§6!! Day " + day,
-                actionbar: "Infected Maple Bears are growing in number..."
+                actionbar: "§6Infection spreading."
             };
         } else if (bearKnowledge >= 1) {
             return {
                 message: "§6Welcome back! More dangerous creatures appear...",
                 title: "§6!! Day " + day,
-                actionbar: "Larger Maple Bears have emerged..."
+                actionbar: "§6Larger bears."
             };
         } else {
             return {
                 message: "§6Welcome back... the world grows more dangerous.",
                 title: "§6!! Day " + day,
-                actionbar: "Something ominous lurks nearby..."
+                actionbar: "§6Something nearby."
             };
         }
     } else {
@@ -298,19 +355,19 @@ function getReturningPlayerWelcome(day, player) {
             return {
                 message: "§cWelcome back! The end draws near...",
                 title: "§c!!! Day " + day,
-                actionbar: "The most dangerous Maple Bears have arrived..."
+                actionbar: "§cWorst bears here."
             };
         } else if (infectionKnowledge >= 1) {
             return {
                 message: "§cWelcome back! The situation has become critical...",
                 title: "§c!!! Day " + day,
-                actionbar: "Massive threats have emerged..."
+                actionbar: "§cMassive threats."
             };
         } else {
             return {
                 message: "§cWelcome back... darkness approaches.",
                 title: "§c!!! Day " + day,
-                actionbar: "You feel an overwhelming sense of dread..."
+                actionbar: "§cOverwhelming dread."
             };
         }
     }
@@ -571,10 +628,15 @@ function showPlayerTitle(player, text, subtitle = undefined, options = {}, day =
                 stayDuration: options.stayDuration ?? 60,       // 3s
                 fadeOutDuration: options.fadeOutDuration ?? 20, // 1s
             };
+            const titleText = typeof text === "string"
+                ? clipHudVisibleText(text, ONSCREEN_TITLE_MAX_VISIBLE)
+                : text;
             if (subtitle !== undefined) {
-                titleOptions.subtitle = subtitle;
+                titleOptions.subtitle = typeof subtitle === "string"
+                    ? clipHudVisibleText(subtitle, ONSCREEN_SUBTITLE_MAX_VISIBLE)
+                    : subtitle;
             }
-            player.onScreenDisplay.setTitle(text, titleOptions);
+            player.onScreenDisplay.setTitle(titleText, titleOptions);
 
             // Use infection-based sound if day is provided (null = silent)
             if (day !== null && day !== undefined) {
@@ -788,13 +850,10 @@ function startDayCycleLoop() {
                             volume: soundConfig.volume * volumeMultiplier
                         });
                         
-                        let titleText = `${displayInfo.color}${displayInfo.symbols} Day ${newDay}`;
-                        if (newDay > 25) {
-                            const daysPastVictory = newDay - 25;
-                            titleText = `${displayInfo.color}${displayInfo.symbols} Day ${newDay} §7(+${daysPastVictory} past victory)`;
-                        }
+                        let titleText = formatOnScreenDayTitle(newDay);
+                        const titleSub = formatOnScreenDaySubtitle(newDay);
                         
-                        showPlayerTitle(player, titleText, undefined, TITLE_TIMING_SUNRISE, newDay);
+                        showPlayerTitle(player, titleText, titleSub, TITLE_TIMING_SUNRISE, newDay);
                         
                         if (isMilestone) {
                             try {
@@ -806,16 +865,7 @@ function startDayCycleLoop() {
                         
                         let actionbarText = "";
                         if (showDayMessage) {
-                            actionbarText = "The Maple Bear infection continues...";
-                            if (newDay > 25) {
-                                const daysPastVictory = newDay - 25;
-                                actionbarText = `§cThe infection intensifies... §7(${daysPastVictory} days past victory)`;
-                            } else if (newDay === 25) {
-                                actionbarText = "§aVictory achieved! But the infection persists...";
-                            }
-                            if (MILESTONE_DAYS.includes(newDay + 1)) {
-                                actionbarText = (actionbarText ? actionbarText + " " : "") + "§8Tomorrow: a turning point approaches.";
-                            }
+                            actionbarText = formatSunriseNarrativeBar(newDay, true);
                         } else {
                             actionbarText = `§7Day ${newDay}`;
                         }
@@ -918,7 +968,7 @@ export function mbiHandleMilestoneDay(day) {
                             console.warn("[ERROR] in player.playSound:", err);
                         }
                         try {
-                            showPlayerTitle(player, `§eDay ${day} Milestone!`, undefined, {}, day);
+                            showPlayerTitle(player, `§eDay ${day}`, "§6Milestone", {}, day);
                         } catch (err) {
                             console.warn("[ERROR] in showPlayerTitle:", err);
                         }
@@ -1192,11 +1242,11 @@ export function initializeDayTracking() {
                     const volumeMultiplier = getPlayerSoundVolume(player);
                     if (currentDay < 2) {
                         player.playSound("random.levelup", { pitch: 1.2, volume: 0.6 * volumeMultiplier });
-                        showPlayerTitle(player, "§aa completely normal world...", undefined, TITLE_TIMING_JOIN, currentDay);
+                        showPlayerTitle(player, "§aA normal world", undefined, TITLE_TIMING_JOIN, currentDay);
                     } else {
                         const soundConfig = getInfectionSound(currentDay);
                         player.playSound(soundConfig.sound, { pitch: soundConfig.pitch, volume: soundConfig.volume * volumeMultiplier });
-                        showPlayerTitle(player, `${displayInfo.color}${displayInfo.symbols} Day ${currentDay}`, undefined, TITLE_TIMING_JOIN, currentDay);
+                        showPlayerTitle(player, formatOnScreenDayTitle(currentDay), formatOnScreenDaySubtitle(currentDay), TITLE_TIMING_JOIN, currentDay);
                     }
                     const welcomeLine = getReturningPlayerWelcome(currentDay, player);
                     const narrHudInit = getPlayerSettings(player).showDayNarrativeActionBar !== false;
@@ -1338,7 +1388,7 @@ world.afterEvents.playerJoin.subscribe((event) => {
                                         showPlayerTitle(player, "§aWelcome...", undefined, TITLE_TIMING_JOIN, currentDay);
                                     } else {
                                         sendPlayerMessage(player, `${displayInfo.color}${displayInfo.symbols} Welcome to Day ${currentDay}...`);
-                                        showPlayerTitle(player, `${displayInfo.color}${displayInfo.symbols} Welcome...`, undefined, TITLE_TIMING_JOIN, currentDay);
+                                        showPlayerTitle(player, formatOnScreenDayTitle(currentDay, "welcome"), formatOnScreenDaySubtitle(currentDay), TITLE_TIMING_JOIN, currentDay);
                                     }
                                     const welcomeLine = getReturningPlayerWelcome(currentDay, player);
                                     const narrHudJoin = getPlayerSettings(player).showDayNarrativeActionBar !== false;
@@ -1352,7 +1402,7 @@ world.afterEvents.playerJoin.subscribe((event) => {
                                         if (!player || !player.isValid) return;
                                         const displayInfoInner = getDayDisplayInfo(currentDay);
                                         sendPlayerMessage(player, `${displayInfoInner.color}${displayInfoInner.symbols} Day ${currentDay}`);
-                                        showPlayerTitle(player, `${displayInfoInner.color}${displayInfoInner.symbols} Day ${currentDay}`, undefined, TITLE_TIMING_DAY_PULSE, currentDay);
+                                        showPlayerTitle(player, formatOnScreenDayTitle(currentDay), formatOnScreenDaySubtitle(currentDay), TITLE_TIMING_DAY_PULSE, currentDay);
                                         const wl = getReturningPlayerWelcome(currentDay, player);
                                         const narrPulse = getPlayerSettings(player).showDayNarrativeActionBar !== false;
                                         showPlayerActionbar(player, narrPulse ? wl.actionbar : "", narrativeClearTicksForTitle(TITLE_TIMING_DAY_PULSE));
@@ -1364,7 +1414,7 @@ world.afterEvents.playerJoin.subscribe((event) => {
                                 // Returning player — title + chat + day narrative action bar (auto-clears)
                                 const displayInfo = getDayDisplayInfo(currentDay);
                                 sendPlayerMessage(player, `${displayInfo.color}${displayInfo.symbols} Day ${currentDay}`);
-                                showPlayerTitle(player, `${displayInfo.color}${displayInfo.symbols} Day ${currentDay}`, undefined, TITLE_TIMING_JOIN, currentDay);
+                                showPlayerTitle(player, formatOnScreenDayTitle(currentDay), formatOnScreenDaySubtitle(currentDay), TITLE_TIMING_JOIN, currentDay);
                                 const welcomeLine = getReturningPlayerWelcome(currentDay, player);
                                 const narrHudReturn = getPlayerSettings(player).showDayNarrativeActionBar !== false;
                                 showPlayerActionbar(player, narrHudReturn ? welcomeLine.actionbar : "", narrativeClearTicksForTitle(TITLE_TIMING_JOIN));

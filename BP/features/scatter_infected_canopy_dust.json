@@ -1,0 +1,18 @@
+{
+	"format_version": "1.21.10",
+	"minecraft:scatter_feature": {
+		"description": {
+			"identifier": "mb:scatter_infected_canopy_dust"
+		},
+		"places_feature": "mb:search_infected_canopy_dust",
+		"project_input_to_floor": true,
+		"distribution": {
+			"iterations": 96,
+			"scatter_chance": 95.0,
+			"coordinate_eval_order": "xzy",
+			"x": { "distribution": "uniform", "extent": [0, 15] },
+			"y": 14,
+			"z": { "distribution": "uniform", "extent": [0, 15] }
+		}
+	}
+}

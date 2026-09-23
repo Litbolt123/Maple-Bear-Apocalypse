@@ -4,7 +4,8 @@
  * may still be kept for compatibility/fallback behavior defined outside this file.
  */
 import { system, world, ItemStack } from "@minecraft/server";
-import { UNBREAKABLE_BLOCKS } from "./mb_miningBlockList.js";
+import { UNBREAKABLE_BLOCKS, isSlowBreakBlockId, consumeSlowBreakProgress } from "./mb_miningBlockList.js";
+import { ALL_INFECTED_FOLIAGE_WALKABLE_IDS } from "./mb_infectedFoliage.js";
 import { getCurrentDay } from "./mb_dayTracker.js";
 import { getAddonDifficultyState, getWorldProperty } from "./mb_dynamicPropertyHandler.js";
 import { isDebugEnabled } from "./mb_codex.js";
@@ -59,11 +60,25 @@ const WALKABLE_THROUGH_BLOCKS = new Set([
     "minecraft:peony",
     // Saplings
     "minecraft:sapling",
+    "minecraft:oak_sapling",
     "minecraft:birch_sapling",
     "minecraft:spruce_sapling",
     "minecraft:jungle_sapling",
     "minecraft:acacia_sapling",
     "minecraft:dark_oak_sapling",
+    "minecraft:cherry_sapling",
+    "minecraft:pale_oak_sapling",
+    "minecraft:poplar_sapling",
+    "minecraft:red_shrub",
+    "minecraft:leaf_litter",
+    "minecraft:shelf_mushroom",
+    "minecraft:brown_mushroom",
+    "minecraft:nether_sprouts",
+    "minecraft:warped_roots",
+    "minecraft:crimson_roots",
+    "minecraft:warped_fungus",
+    "minecraft:crimson_fungus",
+    ...ALL_INFECTED_FOLIAGE_WALKABLE_IDS,
     // Crops
     "minecraft:wheat",
     "minecraft:carrots",
@@ -432,6 +447,7 @@ function blockToItemType(blockTypeId) {
         "mb:snow_layer": "mb:snow",
         "minecraft:snow_layer": "mb:snow",
         "mb:dusted_dirt": "minecraft:dirt",
+        "mb:dusted_podzol": "minecraft:podzol",
         "minecraft:snow": "minecraft:snowball",
         "minecraft:clay": "minecraft:clay_ball",
         "minecraft:bookshelf": "minecraft:book",
@@ -473,7 +489,11 @@ function blockToItemType(blockTypeId) {
         "minecraft:mangrove_leaves": null,
         "minecraft:cherry_leaves": null,
         "minecraft:azalea_leaves": null,
-        "minecraft:flowering_azalea_leaves": null,
+        "minecraft:azalea_leaves_flowered": null,
+        "minecraft:pale_oak_leaves": null,
+        "minecraft:red_poplar_leaves": null,
+        "minecraft:orange_poplar_leaves": null,
+        "minecraft:yellow_poplar_leaves": null,
         
         // Glowstone drops glowstone dust, not the block
         "minecraft:glowstone": "minecraft:glowstone_dust",
@@ -532,7 +552,11 @@ const NO_DROP_BLOCKS = new Set([
     "minecraft:mangrove_leaves",
     "minecraft:cherry_leaves",
     "minecraft:azalea_leaves",
-    "minecraft:flowering_azalea_leaves",
+    "minecraft:azalea_leaves_flowered",
+    "minecraft:pale_oak_leaves",
+    "minecraft:red_poplar_leaves",
+    "minecraft:orange_poplar_leaves",
+    "minecraft:yellow_poplar_leaves",
     "minecraft:glass",
     "minecraft:white_stained_glass",
     "minecraft:orange_stained_glass",
@@ -576,7 +600,8 @@ const MINING_DROP_COUNTS = {
 
 /** Extra rolls after primary drop (loot_tables/blocks parity). */
 const MINING_BONUS_DROPS = {
-    "mb:dusted_dirt": [{ item: "mb:snow", chance: 0.15 }]
+    "mb:dusted_dirt": [{ item: "mb:snow", chance: 0.15 }],
+    "mb:dusted_podzol": [{ item: "mb:snow", chance: 0.15 }]
 };
 
 /** Fraction of breaks that spawn/collect loot (throttle when bear inventory fills and spills items). */
@@ -884,7 +909,7 @@ function playBreakSound(dimension, x, y, z, typeId) {
 }
 
 function clearBlock(dimension, x, y, z, digContext, entity = null, targetInfo = null) {
-    if (digContext && digContext.cleared >= digContext.max) {
+    if (digContext && (digContext.cleared >= digContext.max || digContext.slowChew)) {
         if (getDebugPitfall()) console.warn(`[PITFALL DEBUG] clearBlock: Budget exhausted ${digContext.cleared}/${digContext.max} at (${x}, ${y}, ${z})`);
         return false;
     }
@@ -1274,6 +1299,24 @@ function clearBlock(dimension, x, y, z, digContext, entity = null, targetInfo = 
     }
     
     const originalType = block.typeId;
+    if (entity && isSlowBreakBlockId(originalType)) {
+        const dimId = dimension.id ?? "";
+        if (!consumeSlowBreakProgress(dimId, x, y, z, originalType, system.currentTick)) {
+            if (digContext) {
+                digContext.cleared++;
+                digContext.slowChew = true;
+            }
+            try {
+                if (entity.typeId === "mb:mining_mb" || entity.typeId === "mb:mining_mb_day20") {
+                    const location = { x: x + 0.5, y: y + 0.5, z: z + 0.5 };
+                    dimension.playSound?.("mining_mb.dig", location, { volume: 0.45, pitch: 0.7 });
+                }
+            } catch {
+                /* ignore */
+            }
+            return false;
+        }
+    }
     try {
         // Break the block
         block.setType("minecraft:air");

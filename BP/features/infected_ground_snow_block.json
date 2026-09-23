@@ -1,0 +1,24 @@
+{
+	"format_version": "1.21.10",
+	"minecraft:single_block_feature": {
+		"description": {
+			"identifier": "mb:infected_ground_snow_block"
+		},
+		"places_block": "mb:snow_layer",
+		"enforce_placement_rules": false,
+		"enforce_survivability_rules": false,
+		"may_replace": [
+			"minecraft:air",
+			"minecraft:short_grass",
+			"minecraft:tallgrass"
+		],
+		"may_attach_to": {
+			"bottom": [
+				"minecraft:grass_block",
+				"minecraft:dirt",
+				"minecraft:podzol",
+				"mb:dusted_dirt"
+			]
+		}
+	}
+}

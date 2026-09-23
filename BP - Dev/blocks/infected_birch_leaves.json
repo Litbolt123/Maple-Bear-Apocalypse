@@ -1,0 +1,56 @@
+{
+	"format_version": "1.26.10",
+	"minecraft:block": {
+		"description": {
+			"identifier": "mb:infected_birch_leaves",
+			"menu_category": {
+				"category": "nature"
+			},
+			"is_experimental": false,
+			"states": {
+				"mb:persistent": [
+					false,
+					true
+				]
+			}
+		},
+		"components": {
+			"minecraft:geometry": "geometry.infected_oak_leaves",
+			"minecraft:material_instances": {
+				"*": {
+					"texture": "infected_birch_leaves",
+					"render_method": "alpha_test_single_sided_to_opaque",
+					"ambient_occlusion": false,
+					"face_dimming": true,
+					"tint_method": "default_foliage"
+				}
+			},
+			"minecraft:display_name": "Infected Birch Leaves",
+			"minecraft:map_color": {
+				"color": "#7A6E5C",
+				"tint_method": "default_foliage"
+			},
+			"minecraft:destruction_particles": {
+				"texture": "infected_birch_leaves",
+				"tint_method": "default_foliage"
+			},
+			"minecraft:destructible_by_mining": {
+				"seconds_to_destroy": 0.2,
+				"use_efficiency": true
+			},
+			"minecraft:destructible_by_explosion": {
+				"explosion_resistance": 0.2
+			},
+			"minecraft:light_dampening": 1,
+			"minecraft:collision_box": true,
+			"minecraft:flammable": {
+				"catch_chance_modifier": 30,
+				"destroy_chance_modifier": 60
+			},
+			"minecraft:loot": "loot_tables/blocks/infected_birch_leaves.json",
+			"mb:infected_oak_leaf": {},
+			"tag:minecraft:is_shears_item_destructible": {},
+			"tag:minecraft:is_hoe_item_destructible": {}
+		}
+	}
+}

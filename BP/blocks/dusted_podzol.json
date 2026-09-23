@@ -1,0 +1,33 @@
+{
+	"format_version": "1.26.10",
+	"minecraft:block": {
+		"description": {
+			"identifier": "mb:dusted_podzol",
+			"menu_category": {
+				"category": "nature"
+			},
+			"is_experimental": false
+		},
+		"components": {
+			"minecraft:geometry": "geometry.dusted_dirt",
+			"minecraft:material_instances": {
+				"*": {
+					"texture": "dusted_podzol",
+					"render_method": "opaque"
+				}
+			},
+			"minecraft:display_name": "Dusted Podzol",
+			"minecraft:destructible_by_mining": {
+				"seconds_to_destroy": 0.5,
+				"use_efficiency": true
+			},
+			"minecraft:destructible_by_explosion": {
+				"explosion_resistance": 0.5
+			},
+			"minecraft:light_dampening": 15,
+			"minecraft:collision_box": true,
+			"minecraft:loot": "loot_tables/blocks/dusted_podzol.json",
+			"tag:minecraft:is_shovel_item_destructible": {}
+		}
+	}
+}

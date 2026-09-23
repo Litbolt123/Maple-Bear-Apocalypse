@@ -1,6 +1,13 @@
 /**
  * Regenerate BP - Dev/scripts/mb_biomeReplaceRegistry.js from infected biome JSON.
  * Run: node tools/syncBiomeReplaceRegistry.cjs
+ *
+ * Keep every named export other scripts import. A missing export is a SyntaxError on
+ * main.js / mb_leafInfection.js — the script module dies and custom blocks never
+ * register (RP blocks.json then screams "does not exist in the registry").
+ * Required today: isInfectedComponentBiome, isInfectedComponentBiomeAt,
+ * getBiomeCheckAtLocation, formatBiomeCheckLines, formatBiomeCheckHudSegment,
+ * plus the catalog constants biome checker imports.
  */
 const fs = require("fs");
 const path = require("path");
@@ -67,6 +74,14 @@ for (const size of sizes) {
     bySize[size] = loadReplaceGroups(fp);
 }
 
+if (fs.existsSync(BIOME_DIR)) {
+    for (const name of fs.readdirSync(BIOME_DIR)) {
+        if (!name.startsWith("mb_infected_vanilla_") || !name.endsWith(".json")) continue;
+        const fp = path.join(BIOME_DIR, name);
+        bySize[`vanilla:${name.replace(/\.json$/, "")}`] = loadReplaceGroups(fp);
+    }
+}
+
 const merged = mergeGroups(bySize);
 merged.forEach((g) => {
     g.label = labelForGroup(g);
@@ -80,7 +95,9 @@ const INTENTIONAL_SAFE_OVERWORLD_BIOMES = [
     "minecraft:mega_taiga_hills",
     "minecraft:ice_mountains",
     "minecraft:redwood_taiga_mutated",
-    "minecraft:redwood_taiga_hills_mutated"
+    "minecraft:redwood_taiga_hills_mutated",
+    "minecraft:old_growth_pine_taiga",
+    "minecraft:old_growth_spruce_taiga"
 ];
 
 /** In reference catalog but not in mb_infected_biome_*.json yet (Nether/End). */
@@ -117,7 +134,15 @@ const out = `/**
 export const INFECTED_BIOME_COMPONENT_IDS = [
     "mb:infected_biome_small",
     "mb:infected_biome_medium",
-    "mb:infected_biome_large"
+    "mb:infected_biome_large",
+    "mb:infected_biome_small_ocean",
+    "mb:infected_biome_medium_ocean",
+    "mb:infected_biome_large_ocean"
+];
+
+/** Test / future: vanilla-looking infected biomes (keep trees/grass). Not snow/dusted carpets. */
+export const INFECTED_VANILLA_BIOME_IDS = [
+    "mb:infected_vanilla_forest"
 ];
 
 /** Reference catalog of vanilla biome ids (dev/biomes stuff) for "missing from replace list". */
@@ -149,9 +174,28 @@ export function normalizeBiomeId(biome) {
     return biome.id ?? null;
 }
 
-export function isInfectedComponentBiome(biomeId) {
+export function isSnowInfectedBiome(biomeId) {
     if (!biomeId) return false;
-    return INFECTED_BIOME_COMPONENT_IDS.includes(biomeId) || biomeId.includes("infected_biome");
+    return INFECTED_BIOME_COMPONENT_IDS.includes(biomeId) || biomeId.startsWith("mb:infected_biome");
+}
+
+export function isVanillaInfectedBiome(biomeId) {
+    if (!biomeId) return false;
+    return INFECTED_VANILLA_BIOME_IDS.includes(biomeId) || biomeId.startsWith("mb:infected_vanilla_");
+}
+
+export function isInfectedComponentBiome(biomeId) {
+    return isSnowInfectedBiome(biomeId) || isVanillaInfectedBiome(biomeId);
+}
+
+/** Location helper — mb_leafInfection biome-tint scan. Do not drop on regen (missing export fails the whole script module). */
+export function isInfectedComponentBiomeAt(dimension, location) {
+    try {
+        const b = dimension?.getBiome?.(location);
+        return isInfectedComponentBiome(normalizeBiomeId(b));
+    } catch {
+        return false;
+    }
 }
 
 export function getReplacementGroupsForTarget(biomeId) {
@@ -230,7 +274,11 @@ export function formatBiomeCheckLines(check) {
     lines.push(\`Biome: \${check.biomeId || "§8(unknown)"}\`);
     if (check.error) lines.push(\`§cError: \${check.error}\`);
     if (check.infected) {
-        lines.push("§dStatus: §fInfected component biome §8(mb:…)");
+        if (isVanillaInfectedBiome(check.biomeId)) {
+            lines.push("§dStatus: §fInfected vanilla §8(trees/grass kept)");
+        } else {
+            lines.push("§dStatus: §fSnow infected §8(dusted carpet)");
+        }
     } else if (check.inReplaceList) {
         const g = check.groups[0];
         const pct = g ? \`\${(g.amount * 100).toFixed(0)}% replace\` : "";
@@ -253,7 +301,8 @@ export function formatBiomeCheckHudSegment(check, compact = false) {
     const name = (check.biomeId || "?").replace("minecraft:", "");
     let status;
     if (check.error) status = "§cERR§r";
-    else if (check.infected) status = "§dINF§r";
+    else if (isVanillaInfectedBiome(check.biomeId)) status = "§dVAN§r";
+    else if (check.infected) status = "§dSNW§r";
     else if (check.inReplaceList) {
         const g = check.groups[0];
         const pct = g?.amount != null ? \`\${Math.round(g.amount * 100)}\` : "";

@@ -28,7 +28,11 @@ const activeBiomeAmbience = new Map();
 const INFECTED_BIOME_IDS = [
     "mb:infected_biome_small",
     "mb:infected_biome_medium",
-    "mb:infected_biome_large"
+    "mb:infected_biome_large",
+    "mb:infected_biome_small_ocean",
+    "mb:infected_biome_medium_ocean",
+    "mb:infected_biome_large_ocean",
+    "mb:infected_vanilla_forest"
 ];
 
 // Biome ambience sound variants (all sizes use same sounds)

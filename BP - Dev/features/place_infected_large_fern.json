@@ -1,0 +1,24 @@
+{
+	"format_version": "1.26.50",
+	"minecraft:multi_block_feature": {
+		"description": {
+			"identifier": "mb:place_infected_large_fern"
+		},
+		"places_block": "mb:infected_large_fern",
+		"enforce_placement_rules": true,
+		"may_replace": [
+			"minecraft:air",
+			"minecraft:short_grass",
+			"minecraft:grass",
+			"minecraft:tall_grass",
+			"minecraft:fern",
+			"minecraft:large_fern",
+			"minecraft:deadbush",
+			"minecraft:firefly_bush",
+			"minecraft:brown_mushroom",
+			"minecraft:red_mushroom",
+			"minecraft:red_shrub",
+			"minecraft:leaf_litter"
+		]
+	}
+}

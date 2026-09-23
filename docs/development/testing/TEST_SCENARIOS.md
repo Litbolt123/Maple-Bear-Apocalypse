@@ -117,7 +117,7 @@ This test suite has been updated to include tests for:
 
 ### Scenario 5: Target Above (4+ blocks) - Hillside/Unsuitable Terrain
 **Setup**:
-- Spawn a mining bear on a hillside with many unbreakable blocks (bedrock, obsidian)
+- Spawn a mining bear on a hillside with many unbreakable blocks (bedrock)
 - Stand 5-7 blocks above the bear
 
 **Expected Behavior**:

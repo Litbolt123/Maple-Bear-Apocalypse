@@ -7,6 +7,9 @@
 		"dusted_dirt": {
 			"textures": "textures/blocks/dusted_dirt"
 		},
+		"dusted_podzol": {
+			"textures": "textures/blocks/dusted_podzol"
+		},
 		"'snow'_layer": {
 			"textures": "textures/blocks/'snow'_layer"
 		},
@@ -15,6 +18,855 @@
 		},
 		"emulsifier_machine_on": {
 			"textures": "textures/blocks/emuslsifierblocktexture_on"
+		},
+		"infected_oak_leaves": {
+			"textures": "textures/blocks/infected_oak_leaves"
+		},
+		"infected_oak_leaves_oak": {
+			"textures": "textures/blocks/infected_oak_leaves_oak"
+		},
+		"infected_oak_dust_0": {
+			"textures": "textures/blocks/infected_oak_dust_0"
+		},
+		"infected_oak_dust_1": {
+			"textures": "textures/blocks/infected_oak_dust_1"
+		},
+		"infected_oak_dust_2": {
+			"textures": "textures/blocks/infected_oak_dust_2"
+		},
+		"infected_oak_leaves_0": {
+			"textures": "textures/blocks/infected_oak_leaves_0"
+		},
+		"infected_oak_leaves_1": {
+			"textures": "textures/blocks/infected_oak_leaves_1"
+		},
+		"infected_oak_leaves_2": {
+			"textures": "textures/blocks/infected_oak_leaves_2"
+		},
+		"infected_oak_leaves_3": {
+			"textures": "textures/blocks/infected_oak_leaves_3"
+		},
+		"infected_birch_leaves": {
+			"textures": "textures/blocks/infected_birch_leaves"
+		},
+		"infected_birch_leaves_1": {
+			"textures": "textures/blocks/infected_birch_leaves_1"
+		},
+		"infected_birch_leaves_2": {
+			"textures": "textures/blocks/infected_birch_leaves_2"
+		},
+		"infected_birch_leaves_3": {
+			"textures": "textures/blocks/infected_birch_leaves_3"
+		},
+		"infected_spruce_leaves_0": {
+			"textures": "textures/blocks/infected_spruce_leaves_0"
+		},
+		"infected_spruce_leaves_1": {
+			"textures": "textures/blocks/infected_spruce_leaves_1"
+		},
+		"infected_spruce_leaves_2": {
+			"textures": "textures/blocks/infected_spruce_leaves_2"
+		},
+		"infected_spruce_leaves_3": {
+			"textures": "textures/blocks/infected_spruce_leaves_3"
+		},
+		"infected_jungle_leaves_0": {
+			"textures": "textures/blocks/infected_jungle_leaves_0"
+		},
+		"infected_jungle_leaves_1": {
+			"textures": "textures/blocks/infected_jungle_leaves_1"
+		},
+		"infected_jungle_leaves_2": {
+			"textures": "textures/blocks/infected_jungle_leaves_2"
+		},
+		"infected_jungle_leaves_3": {
+			"textures": "textures/blocks/infected_jungle_leaves_3"
+		},
+		"infected_acacia_leaves_0": {
+			"textures": "textures/blocks/infected_acacia_leaves_0"
+		},
+		"infected_acacia_leaves_1": {
+			"textures": "textures/blocks/infected_acacia_leaves_1"
+		},
+		"infected_acacia_leaves_2": {
+			"textures": "textures/blocks/infected_acacia_leaves_2"
+		},
+		"infected_acacia_leaves_3": {
+			"textures": "textures/blocks/infected_acacia_leaves_3"
+		},
+		"infected_dark_oak_leaves_0": {
+			"textures": "textures/blocks/infected_dark_oak_leaves_0"
+		},
+		"infected_dark_oak_leaves_1": {
+			"textures": "textures/blocks/infected_dark_oak_leaves_1"
+		},
+		"infected_dark_oak_leaves_2": {
+			"textures": "textures/blocks/infected_dark_oak_leaves_2"
+		},
+		"infected_dark_oak_leaves_3": {
+			"textures": "textures/blocks/infected_dark_oak_leaves_3"
+		},
+		"infected_mangrove_leaves_0": {
+			"textures": "textures/blocks/infected_mangrove_leaves_0"
+		},
+		"infected_mangrove_leaves_1": {
+			"textures": "textures/blocks/infected_mangrove_leaves_1"
+		},
+		"infected_mangrove_leaves_2": {
+			"textures": "textures/blocks/infected_mangrove_leaves_2"
+		},
+		"infected_mangrove_leaves_3": {
+			"textures": "textures/blocks/infected_mangrove_leaves_3"
+		},
+		"infected_cherry_leaves_0": {
+			"textures": "textures/blocks/infected_cherry_leaves_0"
+		},
+		"infected_cherry_leaves_1": {
+			"textures": "textures/blocks/infected_cherry_leaves_1"
+		},
+		"infected_cherry_leaves_2": {
+			"textures": "textures/blocks/infected_cherry_leaves_2"
+		},
+		"infected_cherry_leaves_3": {
+			"textures": "textures/blocks/infected_cherry_leaves_3"
+		},
+		"infected_azalea_leaves_0": {
+			"textures": "textures/blocks/infected_azalea_leaves_0"
+		},
+		"infected_azalea_leaves_1": {
+			"textures": "textures/blocks/infected_azalea_leaves_1"
+		},
+		"infected_azalea_leaves_2": {
+			"textures": "textures/blocks/infected_azalea_leaves_2"
+		},
+		"infected_azalea_leaves_3": {
+			"textures": "textures/blocks/infected_azalea_leaves_3"
+		},
+		"infected_flowering_azalea_leaves_0": {
+			"textures": "textures/blocks/infected_flowering_azalea_leaves_0"
+		},
+		"infected_flowering_azalea_leaves_1": {
+			"textures": "textures/blocks/infected_flowering_azalea_leaves_1"
+		},
+		"infected_flowering_azalea_leaves_2": {
+			"textures": "textures/blocks/infected_flowering_azalea_leaves_2"
+		},
+		"infected_flowering_azalea_leaves_3": {
+			"textures": "textures/blocks/infected_flowering_azalea_leaves_3"
+		},
+		"infected_pale_oak_leaves_0": {
+			"textures": "textures/blocks/infected_pale_oak_leaves_0"
+		},
+		"infected_pale_oak_leaves_1": {
+			"textures": "textures/blocks/infected_pale_oak_leaves_1"
+		},
+		"infected_pale_oak_leaves_2": {
+			"textures": "textures/blocks/infected_pale_oak_leaves_2"
+		},
+		"infected_pale_oak_leaves_3": {
+			"textures": "textures/blocks/infected_pale_oak_leaves_3"
+		},
+		"infected_oak_log_side_0": {
+			"textures": "textures/blocks/infected_oak_log_side_0"
+		},
+		"infected_oak_log_side_1": {
+			"textures": "textures/blocks/infected_oak_log_side_1"
+		},
+		"infected_oak_log_side_2": {
+			"textures": "textures/blocks/infected_oak_log_side_2"
+		},
+		"infected_oak_log_side_3": {
+			"textures": "textures/blocks/infected_oak_log_side_3"
+		},
+		"infected_oak_log_top_0": {
+			"textures": "textures/blocks/infected_oak_log_top_0"
+		},
+		"infected_oak_log_top_1": {
+			"textures": "textures/blocks/infected_oak_log_top_1"
+		},
+		"infected_oak_log_top_2": {
+			"textures": "textures/blocks/infected_oak_log_top_2"
+		},
+		"infected_oak_log_top_3": {
+			"textures": "textures/blocks/infected_oak_log_top_3"
+		},
+		"infected_oak_stripped_side_0": {
+			"textures": "textures/blocks/infected_oak_stripped_side_0"
+		},
+		"infected_oak_stripped_side_1": {
+			"textures": "textures/blocks/infected_oak_stripped_side_1"
+		},
+		"infected_oak_stripped_side_2": {
+			"textures": "textures/blocks/infected_oak_stripped_side_2"
+		},
+		"infected_oak_stripped_side_3": {
+			"textures": "textures/blocks/infected_oak_stripped_side_3"
+		},
+		"infected_oak_stripped_top_0": {
+			"textures": "textures/blocks/infected_oak_stripped_top_0"
+		},
+		"infected_oak_stripped_top_1": {
+			"textures": "textures/blocks/infected_oak_stripped_top_1"
+		},
+		"infected_oak_stripped_top_2": {
+			"textures": "textures/blocks/infected_oak_stripped_top_2"
+		},
+		"infected_oak_stripped_top_3": {
+			"textures": "textures/blocks/infected_oak_stripped_top_3"
+		},
+		"infected_birch_log_side_0": {
+			"textures": "textures/blocks/infected_birch_log_side_0"
+		},
+		"infected_birch_log_side_1": {
+			"textures": "textures/blocks/infected_birch_log_side_1"
+		},
+		"infected_birch_log_side_2": {
+			"textures": "textures/blocks/infected_birch_log_side_2"
+		},
+		"infected_birch_log_side_3": {
+			"textures": "textures/blocks/infected_birch_log_side_3"
+		},
+		"infected_birch_log_top_0": {
+			"textures": "textures/blocks/infected_birch_log_top_0"
+		},
+		"infected_birch_log_top_1": {
+			"textures": "textures/blocks/infected_birch_log_top_1"
+		},
+		"infected_birch_log_top_2": {
+			"textures": "textures/blocks/infected_birch_log_top_2"
+		},
+		"infected_birch_log_top_3": {
+			"textures": "textures/blocks/infected_birch_log_top_3"
+		},
+		"infected_birch_stripped_side_0": {
+			"textures": "textures/blocks/infected_birch_stripped_side_0"
+		},
+		"infected_birch_stripped_side_1": {
+			"textures": "textures/blocks/infected_birch_stripped_side_1"
+		},
+		"infected_birch_stripped_side_2": {
+			"textures": "textures/blocks/infected_birch_stripped_side_2"
+		},
+		"infected_birch_stripped_side_3": {
+			"textures": "textures/blocks/infected_birch_stripped_side_3"
+		},
+		"infected_birch_stripped_top_0": {
+			"textures": "textures/blocks/infected_birch_stripped_top_0"
+		},
+		"infected_birch_stripped_top_1": {
+			"textures": "textures/blocks/infected_birch_stripped_top_1"
+		},
+		"infected_birch_stripped_top_2": {
+			"textures": "textures/blocks/infected_birch_stripped_top_2"
+		},
+		"infected_birch_stripped_top_3": {
+			"textures": "textures/blocks/infected_birch_stripped_top_3"
+		},
+		"infected_spruce_log_side_0": {
+			"textures": "textures/blocks/infected_spruce_log_side_0"
+		},
+		"infected_spruce_log_side_1": {
+			"textures": "textures/blocks/infected_spruce_log_side_1"
+		},
+		"infected_spruce_log_side_2": {
+			"textures": "textures/blocks/infected_spruce_log_side_2"
+		},
+		"infected_spruce_log_side_3": {
+			"textures": "textures/blocks/infected_spruce_log_side_3"
+		},
+		"infected_spruce_log_top_0": {
+			"textures": "textures/blocks/infected_spruce_log_top_0"
+		},
+		"infected_spruce_log_top_1": {
+			"textures": "textures/blocks/infected_spruce_log_top_1"
+		},
+		"infected_spruce_log_top_2": {
+			"textures": "textures/blocks/infected_spruce_log_top_2"
+		},
+		"infected_spruce_log_top_3": {
+			"textures": "textures/blocks/infected_spruce_log_top_3"
+		},
+		"infected_spruce_stripped_side_0": {
+			"textures": "textures/blocks/infected_spruce_stripped_side_0"
+		},
+		"infected_spruce_stripped_side_1": {
+			"textures": "textures/blocks/infected_spruce_stripped_side_1"
+		},
+		"infected_spruce_stripped_side_2": {
+			"textures": "textures/blocks/infected_spruce_stripped_side_2"
+		},
+		"infected_spruce_stripped_side_3": {
+			"textures": "textures/blocks/infected_spruce_stripped_side_3"
+		},
+		"infected_spruce_stripped_top_0": {
+			"textures": "textures/blocks/infected_spruce_stripped_top_0"
+		},
+		"infected_spruce_stripped_top_1": {
+			"textures": "textures/blocks/infected_spruce_stripped_top_1"
+		},
+		"infected_spruce_stripped_top_2": {
+			"textures": "textures/blocks/infected_spruce_stripped_top_2"
+		},
+		"infected_spruce_stripped_top_3": {
+			"textures": "textures/blocks/infected_spruce_stripped_top_3"
+		},
+		"infected_jungle_log_side_0": {
+			"textures": "textures/blocks/infected_jungle_log_side_0"
+		},
+		"infected_jungle_log_side_1": {
+			"textures": "textures/blocks/infected_jungle_log_side_1"
+		},
+		"infected_jungle_log_side_2": {
+			"textures": "textures/blocks/infected_jungle_log_side_2"
+		},
+		"infected_jungle_log_side_3": {
+			"textures": "textures/blocks/infected_jungle_log_side_3"
+		},
+		"infected_jungle_log_top_0": {
+			"textures": "textures/blocks/infected_jungle_log_top_0"
+		},
+		"infected_jungle_log_top_1": {
+			"textures": "textures/blocks/infected_jungle_log_top_1"
+		},
+		"infected_jungle_log_top_2": {
+			"textures": "textures/blocks/infected_jungle_log_top_2"
+		},
+		"infected_jungle_log_top_3": {
+			"textures": "textures/blocks/infected_jungle_log_top_3"
+		},
+		"infected_jungle_stripped_side_0": {
+			"textures": "textures/blocks/infected_jungle_stripped_side_0"
+		},
+		"infected_jungle_stripped_side_1": {
+			"textures": "textures/blocks/infected_jungle_stripped_side_1"
+		},
+		"infected_jungle_stripped_side_2": {
+			"textures": "textures/blocks/infected_jungle_stripped_side_2"
+		},
+		"infected_jungle_stripped_side_3": {
+			"textures": "textures/blocks/infected_jungle_stripped_side_3"
+		},
+		"infected_jungle_stripped_top_0": {
+			"textures": "textures/blocks/infected_jungle_stripped_top_0"
+		},
+		"infected_jungle_stripped_top_1": {
+			"textures": "textures/blocks/infected_jungle_stripped_top_1"
+		},
+		"infected_jungle_stripped_top_2": {
+			"textures": "textures/blocks/infected_jungle_stripped_top_2"
+		},
+		"infected_jungle_stripped_top_3": {
+			"textures": "textures/blocks/infected_jungle_stripped_top_3"
+		},
+		"infected_acacia_log_side_0": {
+			"textures": "textures/blocks/infected_acacia_log_side_0"
+		},
+		"infected_acacia_log_side_1": {
+			"textures": "textures/blocks/infected_acacia_log_side_1"
+		},
+		"infected_acacia_log_side_2": {
+			"textures": "textures/blocks/infected_acacia_log_side_2"
+		},
+		"infected_acacia_log_side_3": {
+			"textures": "textures/blocks/infected_acacia_log_side_3"
+		},
+		"infected_acacia_log_top_0": {
+			"textures": "textures/blocks/infected_acacia_log_top_0"
+		},
+		"infected_acacia_log_top_1": {
+			"textures": "textures/blocks/infected_acacia_log_top_1"
+		},
+		"infected_acacia_log_top_2": {
+			"textures": "textures/blocks/infected_acacia_log_top_2"
+		},
+		"infected_acacia_log_top_3": {
+			"textures": "textures/blocks/infected_acacia_log_top_3"
+		},
+		"infected_acacia_stripped_side_0": {
+			"textures": "textures/blocks/infected_acacia_stripped_side_0"
+		},
+		"infected_acacia_stripped_side_1": {
+			"textures": "textures/blocks/infected_acacia_stripped_side_1"
+		},
+		"infected_acacia_stripped_side_2": {
+			"textures": "textures/blocks/infected_acacia_stripped_side_2"
+		},
+		"infected_acacia_stripped_side_3": {
+			"textures": "textures/blocks/infected_acacia_stripped_side_3"
+		},
+		"infected_acacia_stripped_top_0": {
+			"textures": "textures/blocks/infected_acacia_stripped_top_0"
+		},
+		"infected_acacia_stripped_top_1": {
+			"textures": "textures/blocks/infected_acacia_stripped_top_1"
+		},
+		"infected_acacia_stripped_top_2": {
+			"textures": "textures/blocks/infected_acacia_stripped_top_2"
+		},
+		"infected_acacia_stripped_top_3": {
+			"textures": "textures/blocks/infected_acacia_stripped_top_3"
+		},
+		"infected_dark_oak_log_side_0": {
+			"textures": "textures/blocks/infected_dark_oak_log_side_0"
+		},
+		"infected_dark_oak_log_side_1": {
+			"textures": "textures/blocks/infected_dark_oak_log_side_1"
+		},
+		"infected_dark_oak_log_side_2": {
+			"textures": "textures/blocks/infected_dark_oak_log_side_2"
+		},
+		"infected_dark_oak_log_side_3": {
+			"textures": "textures/blocks/infected_dark_oak_log_side_3"
+		},
+		"infected_dark_oak_log_top_0": {
+			"textures": "textures/blocks/infected_dark_oak_log_top_0"
+		},
+		"infected_dark_oak_log_top_1": {
+			"textures": "textures/blocks/infected_dark_oak_log_top_1"
+		},
+		"infected_dark_oak_log_top_2": {
+			"textures": "textures/blocks/infected_dark_oak_log_top_2"
+		},
+		"infected_dark_oak_log_top_3": {
+			"textures": "textures/blocks/infected_dark_oak_log_top_3"
+		},
+		"infected_dark_oak_stripped_side_0": {
+			"textures": "textures/blocks/infected_dark_oak_stripped_side_0"
+		},
+		"infected_dark_oak_stripped_side_1": {
+			"textures": "textures/blocks/infected_dark_oak_stripped_side_1"
+		},
+		"infected_dark_oak_stripped_side_2": {
+			"textures": "textures/blocks/infected_dark_oak_stripped_side_2"
+		},
+		"infected_dark_oak_stripped_side_3": {
+			"textures": "textures/blocks/infected_dark_oak_stripped_side_3"
+		},
+		"infected_dark_oak_stripped_top_0": {
+			"textures": "textures/blocks/infected_dark_oak_stripped_top_0"
+		},
+		"infected_dark_oak_stripped_top_1": {
+			"textures": "textures/blocks/infected_dark_oak_stripped_top_1"
+		},
+		"infected_dark_oak_stripped_top_2": {
+			"textures": "textures/blocks/infected_dark_oak_stripped_top_2"
+		},
+		"infected_dark_oak_stripped_top_3": {
+			"textures": "textures/blocks/infected_dark_oak_stripped_top_3"
+		},
+		"infected_mangrove_log_side_0": {
+			"textures": "textures/blocks/infected_mangrove_log_side_0"
+		},
+		"infected_mangrove_log_side_1": {
+			"textures": "textures/blocks/infected_mangrove_log_side_1"
+		},
+		"infected_mangrove_log_side_2": {
+			"textures": "textures/blocks/infected_mangrove_log_side_2"
+		},
+		"infected_mangrove_log_side_3": {
+			"textures": "textures/blocks/infected_mangrove_log_side_3"
+		},
+		"infected_mangrove_log_top_0": {
+			"textures": "textures/blocks/infected_mangrove_log_top_0"
+		},
+		"infected_mangrove_log_top_1": {
+			"textures": "textures/blocks/infected_mangrove_log_top_1"
+		},
+		"infected_mangrove_log_top_2": {
+			"textures": "textures/blocks/infected_mangrove_log_top_2"
+		},
+		"infected_mangrove_log_top_3": {
+			"textures": "textures/blocks/infected_mangrove_log_top_3"
+		},
+		"infected_mangrove_stripped_side_0": {
+			"textures": "textures/blocks/infected_mangrove_stripped_side_0"
+		},
+		"infected_mangrove_stripped_side_1": {
+			"textures": "textures/blocks/infected_mangrove_stripped_side_1"
+		},
+		"infected_mangrove_stripped_side_2": {
+			"textures": "textures/blocks/infected_mangrove_stripped_side_2"
+		},
+		"infected_mangrove_stripped_side_3": {
+			"textures": "textures/blocks/infected_mangrove_stripped_side_3"
+		},
+		"infected_mangrove_stripped_top_0": {
+			"textures": "textures/blocks/infected_mangrove_stripped_top_0"
+		},
+		"infected_mangrove_stripped_top_1": {
+			"textures": "textures/blocks/infected_mangrove_stripped_top_1"
+		},
+		"infected_mangrove_stripped_top_2": {
+			"textures": "textures/blocks/infected_mangrove_stripped_top_2"
+		},
+		"infected_mangrove_stripped_top_3": {
+			"textures": "textures/blocks/infected_mangrove_stripped_top_3"
+		},
+		"infected_cherry_log_side_0": {
+			"textures": "textures/blocks/infected_cherry_log_side_0"
+		},
+		"infected_cherry_log_side_1": {
+			"textures": "textures/blocks/infected_cherry_log_side_1"
+		},
+		"infected_cherry_log_side_2": {
+			"textures": "textures/blocks/infected_cherry_log_side_2"
+		},
+		"infected_cherry_log_side_3": {
+			"textures": "textures/blocks/infected_cherry_log_side_3"
+		},
+		"infected_cherry_log_top_0": {
+			"textures": "textures/blocks/infected_cherry_log_top_0"
+		},
+		"infected_cherry_log_top_1": {
+			"textures": "textures/blocks/infected_cherry_log_top_1"
+		},
+		"infected_cherry_log_top_2": {
+			"textures": "textures/blocks/infected_cherry_log_top_2"
+		},
+		"infected_cherry_log_top_3": {
+			"textures": "textures/blocks/infected_cherry_log_top_3"
+		},
+		"infected_cherry_stripped_side_0": {
+			"textures": "textures/blocks/infected_cherry_stripped_side_0"
+		},
+		"infected_cherry_stripped_side_1": {
+			"textures": "textures/blocks/infected_cherry_stripped_side_1"
+		},
+		"infected_cherry_stripped_side_2": {
+			"textures": "textures/blocks/infected_cherry_stripped_side_2"
+		},
+		"infected_cherry_stripped_side_3": {
+			"textures": "textures/blocks/infected_cherry_stripped_side_3"
+		},
+		"infected_cherry_stripped_top_0": {
+			"textures": "textures/blocks/infected_cherry_stripped_top_0"
+		},
+		"infected_cherry_stripped_top_1": {
+			"textures": "textures/blocks/infected_cherry_stripped_top_1"
+		},
+		"infected_cherry_stripped_top_2": {
+			"textures": "textures/blocks/infected_cherry_stripped_top_2"
+		},
+		"infected_cherry_stripped_top_3": {
+			"textures": "textures/blocks/infected_cherry_stripped_top_3"
+		},
+		"infected_pale_oak_log_side_0": {
+			"textures": "textures/blocks/infected_pale_oak_log_side_0"
+		},
+		"infected_pale_oak_log_side_1": {
+			"textures": "textures/blocks/infected_pale_oak_log_side_1"
+		},
+		"infected_pale_oak_log_side_2": {
+			"textures": "textures/blocks/infected_pale_oak_log_side_2"
+		},
+		"infected_pale_oak_log_side_3": {
+			"textures": "textures/blocks/infected_pale_oak_log_side_3"
+		},
+		"infected_pale_oak_log_top_0": {
+			"textures": "textures/blocks/infected_pale_oak_log_top_0"
+		},
+		"infected_pale_oak_log_top_1": {
+			"textures": "textures/blocks/infected_pale_oak_log_top_1"
+		},
+		"infected_pale_oak_log_top_2": {
+			"textures": "textures/blocks/infected_pale_oak_log_top_2"
+		},
+		"infected_pale_oak_log_top_3": {
+			"textures": "textures/blocks/infected_pale_oak_log_top_3"
+		},
+		"infected_pale_oak_stripped_side_0": {
+			"textures": "textures/blocks/infected_pale_oak_stripped_side_0"
+		},
+		"infected_pale_oak_stripped_side_1": {
+			"textures": "textures/blocks/infected_pale_oak_stripped_side_1"
+		},
+		"infected_pale_oak_stripped_side_2": {
+			"textures": "textures/blocks/infected_pale_oak_stripped_side_2"
+		},
+		"infected_pale_oak_stripped_side_3": {
+			"textures": "textures/blocks/infected_pale_oak_stripped_side_3"
+		},
+		"infected_pale_oak_stripped_top_0": {
+			"textures": "textures/blocks/infected_pale_oak_stripped_top_0"
+		},
+		"infected_pale_oak_stripped_top_1": {
+			"textures": "textures/blocks/infected_pale_oak_stripped_top_1"
+		},
+		"infected_pale_oak_stripped_top_2": {
+			"textures": "textures/blocks/infected_pale_oak_stripped_top_2"
+		},
+		"infected_pale_oak_stripped_top_3": {
+			"textures": "textures/blocks/infected_pale_oak_stripped_top_3"
+		},
+		"infected_crimson_log_side_0": {
+			"textures": "textures/blocks/infected_crimson_log_side_0"
+		},
+		"infected_crimson_log_side_1": {
+			"textures": "textures/blocks/infected_crimson_log_side_1"
+		},
+		"infected_crimson_log_side_2": {
+			"textures": "textures/blocks/infected_crimson_log_side_2"
+		},
+		"infected_crimson_log_side_3": {
+			"textures": "textures/blocks/infected_crimson_log_side_3"
+		},
+		"infected_crimson_log_top_0": {
+			"textures": "textures/blocks/infected_crimson_log_top_0"
+		},
+		"infected_crimson_log_top_1": {
+			"textures": "textures/blocks/infected_crimson_log_top_1"
+		},
+		"infected_crimson_log_top_2": {
+			"textures": "textures/blocks/infected_crimson_log_top_2"
+		},
+		"infected_crimson_log_top_3": {
+			"textures": "textures/blocks/infected_crimson_log_top_3"
+		},
+		"infected_crimson_stripped_side_0": {
+			"textures": "textures/blocks/infected_crimson_stripped_side_0"
+		},
+		"infected_crimson_stripped_side_1": {
+			"textures": "textures/blocks/infected_crimson_stripped_side_1"
+		},
+		"infected_crimson_stripped_side_2": {
+			"textures": "textures/blocks/infected_crimson_stripped_side_2"
+		},
+		"infected_crimson_stripped_side_3": {
+			"textures": "textures/blocks/infected_crimson_stripped_side_3"
+		},
+		"infected_crimson_stripped_top_0": {
+			"textures": "textures/blocks/infected_crimson_stripped_top_0"
+		},
+		"infected_crimson_stripped_top_1": {
+			"textures": "textures/blocks/infected_crimson_stripped_top_1"
+		},
+		"infected_crimson_stripped_top_2": {
+			"textures": "textures/blocks/infected_crimson_stripped_top_2"
+		},
+		"infected_crimson_stripped_top_3": {
+			"textures": "textures/blocks/infected_crimson_stripped_top_3"
+		},
+		"infected_warped_log_side_0": {
+			"textures": "textures/blocks/infected_warped_log_side_0"
+		},
+		"infected_warped_log_side_1": {
+			"textures": "textures/blocks/infected_warped_log_side_1"
+		},
+		"infected_warped_log_side_2": {
+			"textures": "textures/blocks/infected_warped_log_side_2"
+		},
+		"infected_warped_log_side_3": {
+			"textures": "textures/blocks/infected_warped_log_side_3"
+		},
+		"infected_warped_log_top_0": {
+			"textures": "textures/blocks/infected_warped_log_top_0"
+		},
+		"infected_warped_log_top_1": {
+			"textures": "textures/blocks/infected_warped_log_top_1"
+		},
+		"infected_warped_log_top_2": {
+			"textures": "textures/blocks/infected_warped_log_top_2"
+		},
+		"infected_warped_log_top_3": {
+			"textures": "textures/blocks/infected_warped_log_top_3"
+		},
+		"infected_warped_stripped_side_0": {
+			"textures": "textures/blocks/infected_warped_stripped_side_0"
+		},
+		"infected_warped_stripped_side_1": {
+			"textures": "textures/blocks/infected_warped_stripped_side_1"
+		},
+		"infected_warped_stripped_side_2": {
+			"textures": "textures/blocks/infected_warped_stripped_side_2"
+		},
+		"infected_warped_stripped_side_3": {
+			"textures": "textures/blocks/infected_warped_stripped_side_3"
+		},
+		"infected_warped_stripped_top_0": {
+			"textures": "textures/blocks/infected_warped_stripped_top_0"
+		},
+		"infected_warped_stripped_top_1": {
+			"textures": "textures/blocks/infected_warped_stripped_top_1"
+		},
+		"infected_warped_stripped_top_2": {
+			"textures": "textures/blocks/infected_warped_stripped_top_2"
+		},
+		"infected_warped_stripped_top_3": {
+			"textures": "textures/blocks/infected_warped_stripped_top_3"
+		},
+		"infected_nether_wart_block_0": {
+			"textures": "textures/blocks/infected_nether_wart_block_0"
+		},
+		"infected_nether_wart_block_1": {
+			"textures": "textures/blocks/infected_nether_wart_block_1"
+		},
+		"infected_nether_wart_block_2": {
+			"textures": "textures/blocks/infected_nether_wart_block_2"
+		},
+		"infected_nether_wart_block_3": {
+			"textures": "textures/blocks/infected_nether_wart_block_3"
+		},
+		"infected_warped_wart_block_0": {
+			"textures": "textures/blocks/infected_warped_wart_block_0"
+		},
+		"infected_warped_wart_block_1": {
+			"textures": "textures/blocks/infected_warped_wart_block_1"
+		},
+		"infected_warped_wart_block_2": {
+			"textures": "textures/blocks/infected_warped_wart_block_2"
+		},
+		"infected_warped_wart_block_3": {
+			"textures": "textures/blocks/infected_warped_wart_block_3"
+		},
+		"infected_red_poplar_leaves_0": {
+			"textures": "textures/blocks/infected_red_poplar_leaves_0"
+		},
+		"infected_red_poplar_leaves_1": {
+			"textures": "textures/blocks/infected_red_poplar_leaves_1"
+		},
+		"infected_red_poplar_leaves_2": {
+			"textures": "textures/blocks/infected_red_poplar_leaves_2"
+		},
+		"infected_red_poplar_leaves_3": {
+			"textures": "textures/blocks/infected_red_poplar_leaves_3"
+		},
+		"infected_orange_poplar_leaves_0": {
+			"textures": "textures/blocks/infected_orange_poplar_leaves_0"
+		},
+		"infected_orange_poplar_leaves_1": {
+			"textures": "textures/blocks/infected_orange_poplar_leaves_1"
+		},
+		"infected_orange_poplar_leaves_2": {
+			"textures": "textures/blocks/infected_orange_poplar_leaves_2"
+		},
+		"infected_orange_poplar_leaves_3": {
+			"textures": "textures/blocks/infected_orange_poplar_leaves_3"
+		},
+		"infected_yellow_poplar_leaves_0": {
+			"textures": "textures/blocks/infected_yellow_poplar_leaves_0"
+		},
+		"infected_yellow_poplar_leaves_1": {
+			"textures": "textures/blocks/infected_yellow_poplar_leaves_1"
+		},
+		"infected_yellow_poplar_leaves_2": {
+			"textures": "textures/blocks/infected_yellow_poplar_leaves_2"
+		},
+		"infected_yellow_poplar_leaves_3": {
+			"textures": "textures/blocks/infected_yellow_poplar_leaves_3"
+		},
+		"infected_poplar_log_side_0": {
+			"textures": "textures/blocks/infected_poplar_log_side_0"
+		},
+		"infected_poplar_log_side_1": {
+			"textures": "textures/blocks/infected_poplar_log_side_1"
+		},
+		"infected_poplar_log_side_2": {
+			"textures": "textures/blocks/infected_poplar_log_side_2"
+		},
+		"infected_poplar_log_side_3": {
+			"textures": "textures/blocks/infected_poplar_log_side_3"
+		},
+		"infected_poplar_log_top_0": {
+			"textures": "textures/blocks/infected_poplar_log_top_0"
+		},
+		"infected_poplar_log_top_1": {
+			"textures": "textures/blocks/infected_poplar_log_top_1"
+		},
+		"infected_poplar_log_top_2": {
+			"textures": "textures/blocks/infected_poplar_log_top_2"
+		},
+		"infected_poplar_log_top_3": {
+			"textures": "textures/blocks/infected_poplar_log_top_3"
+		},
+		"infected_poplar_stripped_side_0": {
+			"textures": "textures/blocks/infected_poplar_stripped_side_0"
+		},
+		"infected_poplar_stripped_side_1": {
+			"textures": "textures/blocks/infected_poplar_stripped_side_1"
+		},
+		"infected_poplar_stripped_side_2": {
+			"textures": "textures/blocks/infected_poplar_stripped_side_2"
+		},
+		"infected_poplar_stripped_side_3": {
+			"textures": "textures/blocks/infected_poplar_stripped_side_3"
+		},
+		"infected_poplar_stripped_top_0": {
+			"textures": "textures/blocks/infected_poplar_stripped_top_0"
+		},
+		"infected_poplar_stripped_top_1": {
+			"textures": "textures/blocks/infected_poplar_stripped_top_1"
+		},
+		"infected_poplar_stripped_top_2": {
+			"textures": "textures/blocks/infected_poplar_stripped_top_2"
+		},
+		"infected_poplar_stripped_top_3": {
+			"textures": "textures/blocks/infected_poplar_stripped_top_3"
+		},
+		"infected_short_grass": {
+			"textures": "textures/blocks/infected_short_grass"
+		},
+		"infected_tall_grass": {
+			"textures": "textures/blocks/infected_tall_grass"
+		},
+		"infected_fern": {
+			"textures": "textures/blocks/infected_fern"
+		},
+		"infected_large_fern": {
+			"textures": "textures/blocks/infected_large_fern"
+		},
+		"infected_firefly_bush": {
+			"textures": "textures/blocks/infected_firefly_bush"
+		},
+		"infected_brown_mushroom": {
+			"textures": "textures/blocks/infected_brown_mushroom"
+		},
+		"infected_red_mushroom": {
+			"textures": "textures/blocks/infected_red_mushroom"
+		},
+		"infected_red_shrub": {
+			"textures": "textures/blocks/infected_red_shrub"
+		},
+		"infected_leaf_litter": {
+			"textures": "textures/blocks/infected_leaf_litter"
+		},
+		"infected_vine": {
+			"textures": "textures/blocks/infected_vine"
+		},
+		"infected_brown_mushroom_block": {
+			"textures": "textures/blocks/infected_brown_mushroom_block"
+		},
+		"infected_red_mushroom_block": {
+			"textures": "textures/blocks/infected_red_mushroom_block"
+		},
+		"infected_mushroom_stem": {
+			"textures": "textures/blocks/infected_mushroom_stem"
+		},
+		"infected_warped_roots": {
+			"textures": "textures/blocks/infected_warped_roots"
+		},
+		"infected_crimson_roots": {
+			"textures": "textures/blocks/infected_crimson_roots"
+		},
+		"infected_nether_sprouts": {
+			"textures": "textures/blocks/infected_nether_sprouts"
+		},
+		"infected_warped_fungus": {
+			"textures": "textures/blocks/infected_warped_fungus"
+		},
+		"infected_crimson_fungus": {
+			"textures": "textures/blocks/infected_crimson_fungus"
+		},
+		"infected_twisting_vines": {
+			"textures": "textures/blocks/infected_twisting_vines"
+		},
+		"infected_weeping_vines": {
+			"textures": "textures/blocks/infected_weeping_vines"
+		},
+		"infected_tall_grass_top": {
+			"textures": "textures/blocks/infected_tall_grass_top"
+		},
+		"infected_large_fern_top": {
+			"textures": "textures/blocks/infected_large_fern_top"
 		}
 	}
 }

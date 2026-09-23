@@ -30,12 +30,13 @@ import {
 import { getCachedBlockInfo } from "./mb_blockCache.js";
 import { registerSpawnLoadProbes, initializeSpawnLoadScalerWatch } from "./mb_spawnLoadMetrics.js";
 import { initializeBiomeCheckerHudWatch } from "./mb_biomeCheckerDev.js";
+import { isInfectedComponentBiome } from "./mb_biomeReplaceRegistry.js";
 import { initializeEntityQueryDebugHudWatch } from "./mb_entityQueryDebugDev.js";
 import { initializeBuffBearOverflowCull } from "./mb_buffCap.js";
 import { initializeMiningBearOverflowCull } from "./mb_miningCap.js";
 import { getActiveStormCount } from "./mb_snowStorm.js";
 import { isDustStormsEnabled, isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
-import { ACTION_BAR_SLOT, setHudActionBarSegment, clearHudActionBarSegment, pushHudActionBarToast } from "./mb_actionBarHud.js";
+import { ACTION_BAR_SLOT, setHudActionBarSegment, clearHudActionBarSegment, pushHudActionBarToast, getHudActiveSegmentCount } from "./mb_actionBarHud.js";
 import { findItem, hasItem } from "./mb_itemFinder.js";
 import { initializeItemRegistry, registerItemHandler } from "./mb_itemRegistry.js";
 import { getSimPlayers, isSimFullBehaviorEnabled } from "./mb_simPlayers.js";
@@ -61,7 +62,7 @@ import {
 } from "./mb_torpedoBlastEffects.js";
 import { hasInfectionExposureLineOfSight } from "./mb_infectionExposureLos.js";
 import { SNOW_REPLACEABLE_BLOCKS, SNOW_TWO_BLOCK_PLANTS } from "./mb_blockLists.js";
-import { tryPlaceSnowLayerUnder } from "./mb_snowPlacement.js";
+import { tryPlaceSnowLayerUnder, applyInfectionSnowLayer } from "./mb_snowPlacement.js";
 import { CHAT_ACHIEVEMENT, CHAT_DANGER, CHAT_DANGER_STRONG, CHAT_SUCCESS, CHAT_WARNING, CHAT_INFO, CHAT_DEV, CHAT_HIGHLIGHT, CHAT_SPECIAL } from "./mb_chatColors.js";
 import {
     MAPLE_BEAR_ID,
@@ -84,7 +85,9 @@ import {
     TORPEDO_BEAR_ID,
     TORPEDO_BEAR_DAY20_ID,
     INFECTED_PIG_ID,
-    INFECTED_COW_ID
+    INFECTED_COW_ID,
+    INFECTED_SHEEP_ID,
+    isInfectedLivestock
 } from "./mb_spawnEntityIds.js";
 import {
     handleMobConversion,
@@ -98,6 +101,10 @@ import { registerBearTelemetryTick } from "./mb_bearTelemetry.js";
 import { initializeBearPopulationCull } from "./mb_bearPopulationCull.js";
 import { registerStormSecondsForSpawnPressure } from "./mb_exposureSpawnPressure.js";
 import { initializeInfectionDirectorWatch } from "./mb_infectionDirector.js";
+import { initializeLeafInfectionWatch, tryInfectUnderSnow, infectLeavesInTorpedoBlast } from "./mb_leafInfection.js";
+import { handlePlayerPlacedInfectionBlock, dustedGroundIdForVanilla, isDustedGroundId } from "./mb_grassInfection.js";
+import { getGroundConvertChanceMult, getResistantSoilBiomeSpreadMult } from "./mb_balance.js";
+import { registerSnowLayerInfectHandler } from "./mb_snowPlacement.js";
 
 // NOTE: Debug and testing features have been commented out for playability
 // To re-enable testing features, uncomment the following sections:
@@ -166,7 +173,7 @@ const SNOW_ITEM_ID = "mb:snow";
 const INFECTED_TAG = "mb_infected";
 const INFECTED_CORPSE_ID = "mb:infected_corpse";
 const SNOW_LAYER_BLOCK = "minecraft:snow_layer";
-const INFECTED_GROUND_BLOCKS = new Set(["mb:dusted_dirt", "mb:snow_layer"]);
+const INFECTED_GROUND_BLOCKS = new Set(["mb:dusted_dirt", "mb:dusted_podzol", "mb:snow_layer"]);
 // SNOW_REPLACEABLE_BLOCKS and SNOW_TWO_BLOCK_PLANTS imported from mb_blockLists.js
 
 // Adaptive checking intervals (like biome ambience system)
@@ -516,6 +523,7 @@ function trackBearKill(player, bearType) {
                 buffBear: { original: 0, day13: 0, day20: 0 },
                 infectedPig: { original: 0, day4: 0, day8: 0, day13: 0, day20: 0 },
                 infectedCow: { original: 0, day4: 0, day8: 0, day13: 0, day20: 0 },
+                infectedSheep: { original: 0, day4: 0, day8: 0, day13: 0, day20: 0 },
                 flyingBear: { original: 0, day15: 0, day20: 0 },
                 miningBear: { original: 0, day20: 0 },
                 torpedoBear: { original: 0, day20: 0 }
@@ -594,6 +602,13 @@ function trackBearKill(player, bearType) {
             codex.mobs.infectedCowKills = (codex.mobs.infectedCowKills || 0) + 1;
             codex.mobs.variantKills.infectedCow.original = (codex.mobs.variantKills.infectedCow.original || 0) + 1;
             checkAndUnlockMobDiscovery(codex, player, "infectedCowKills", "infectedCowMobKills", "infectedCowHits", "infectedCowSeen", 3, "dangerous", "infected_cow");
+        } else if (bearType === INFECTED_SHEEP_ID) {
+            codex.mobs.infectedSheepKills = (codex.mobs.infectedSheepKills || 0) + 1;
+            if (!codex.mobs.variantKills.infectedSheep) {
+                codex.mobs.variantKills.infectedSheep = { original: 0, day4: 0, day8: 0, day13: 0, day20: 0 };
+            }
+            codex.mobs.variantKills.infectedSheep.original = (codex.mobs.variantKills.infectedSheep.original || 0) + 1;
+            checkAndUnlockMobDiscovery(codex, player, "infectedSheepKills", "infectedSheepMobKills", "infectedSheepHits", "infectedSheepSeen", 3, "dangerous", "infected_sheep");
         } else if (bearType === FLYING_BEAR_ID) {
             codex.mobs.flyingBearKills = (codex.mobs.flyingBearKills || 0) + 1;
             codex.mobs.variantKills.flyingBear.original = (codex.mobs.variantKills.flyingBear.original || 0) + 1;
@@ -657,7 +672,8 @@ function trackMobKill(killer, victim) {
         const killerType = killer.typeId;
         if (killerType !== MAPLE_BEAR_ID && killerType !== MAPLE_BEAR_DAY4_ID && killerType !== MAPLE_BEAR_DAY8_ID && killerType !== MAPLE_BEAR_DAY13_ID && 
             killerType !== MAPLE_BEAR_DAY20_ID && killerType !== INFECTED_BEAR_ID && killerType !== INFECTED_BEAR_DAY8_ID && killerType !== INFECTED_BEAR_DAY13_ID && killerType !== INFECTED_BEAR_DAY20_ID &&
-            killerType !== BUFF_BEAR_ID && killerType !== BUFF_BEAR_DAY13_ID && killerType !== BUFF_BEAR_DAY20_ID && killerType !== INFECTED_PIG_ID &&
+            killerType !== BUFF_BEAR_ID && killerType !== BUFF_BEAR_DAY13_ID && killerType !== BUFF_BEAR_DAY20_ID &&
+            !isInfectedLivestock(killerType) &&
             killerType !== FLYING_BEAR_ID && killerType !== FLYING_BEAR_DAY15_ID && killerType !== FLYING_BEAR_DAY20_ID &&
             killerType !== MINING_BEAR_ID && killerType !== MINING_BEAR_DAY20_ID &&
             killerType !== TORPEDO_BEAR_ID && killerType !== TORPEDO_BEAR_DAY20_ID) {
@@ -717,6 +733,9 @@ function trackMobKill(killer, victim) {
                 } else if (killerType === INFECTED_COW_ID) {
                     codex.mobs.infectedCowMobKills = (codex.mobs.infectedCowMobKills || 0) + 1;
                     checkAndUnlockMobDiscovery(codex, player, "infectedCowKills", "infectedCowMobKills", "infectedCowHits", "infectedCowSeen", 3, "dangerous");
+                } else if (killerType === INFECTED_SHEEP_ID) {
+                    codex.mobs.infectedSheepMobKills = (codex.mobs.infectedSheepMobKills || 0) + 1;
+                    checkAndUnlockMobDiscovery(codex, player, "infectedSheepKills", "infectedSheepMobKills", "infectedSheepHits", "infectedSheepSeen", 3, "dangerous");
                 } else if (killerType === FLYING_BEAR_ID || killerType === FLYING_BEAR_DAY15_ID || killerType === FLYING_BEAR_DAY20_ID) {
                     codex.mobs.flyingBearMobKills = (codex.mobs.flyingBearMobKills || 0) + 1;
                     checkAndUnlockMobDiscovery(codex, player, "flyingBearKills", "flyingBearMobKills", "flyingBearHits", "flyingBearSeen", 2, "dangerous", "flying_bear");
@@ -789,6 +808,7 @@ function checkVariantUnlock(player, codexParam = null) {
                 buffBear: { original: 0, day13: 0, day20: 0 },
                 infectedPig: { original: 0, day4: 0, day8: 0, day13: 0, day20: 0 },
                 infectedCow: { original: 0, day4: 0, day8: 0, day13: 0, day20: 0 },
+                infectedSheep: { original: 0, day4: 0, day8: 0, day13: 0, day20: 0 },
                 flyingBear: { original: 0, day15: 0, day20: 0 },
                 miningBear: { original: 0, day20: 0 },
                 torpedoBear: { original: 0, day20: 0 }
@@ -801,10 +821,10 @@ function checkVariantUnlock(player, codexParam = null) {
 
         // Helpers: only show unlock chat message when player has actually killed/experienced a variant
         const v = codex.mobs.variantKills;
-        const hasKilledDay4Variant = (v?.tinyBear?.day4 || 0) >= 1 || (v?.infectedPig?.day4 || 0) >= 1 || (v?.infectedCow?.day4 || 0) >= 1;
-        const hasKilledDay8Variant = (v?.tinyBear?.day8 || 0) >= 1 || (v?.infectedBear?.day8 || 0) >= 1 || (v?.infectedPig?.day8 || 0) >= 1 || (v?.infectedCow?.day8 || 0) >= 1 || (v?.flyingBear?.day15 || 0) >= 1;
-        const hasKilledDay13Variant = (v?.tinyBear?.day13 || 0) >= 1 || (v?.infectedBear?.day13 || 0) >= 1 || (v?.buffBear?.day13 || 0) >= 1 || (v?.infectedPig?.day13 || 0) >= 1 || (v?.infectedCow?.day13 || 0) >= 1 || (v?.miningBear?.original || 0) >= 1 || (v?.flyingBear?.day15 || 0) >= 1;
-        const hasKilledDay20Variant = (v?.tinyBear?.day20 || 0) >= 1 || (v?.infectedBear?.day20 || 0) >= 1 || (v?.buffBear?.day20 || 0) >= 1 || (v?.infectedPig?.day20 || 0) >= 1 || (v?.infectedCow?.day20 || 0) >= 1 || (v?.flyingBear?.day20 || 0) >= 1 || (v?.miningBear?.day20 || 0) >= 1 || (v?.torpedoBear?.day20 || 0) >= 1;
+        const hasKilledDay4Variant = (v?.tinyBear?.day4 || 0) >= 1 || (v?.infectedPig?.day4 || 0) >= 1 || (v?.infectedCow?.day4 || 0) >= 1 || (v?.infectedSheep?.day4 || 0) >= 1;
+        const hasKilledDay8Variant = (v?.tinyBear?.day8 || 0) >= 1 || (v?.infectedBear?.day8 || 0) >= 1 || (v?.infectedPig?.day8 || 0) >= 1 || (v?.infectedCow?.day8 || 0) >= 1 || (v?.infectedSheep?.day8 || 0) >= 1 || (v?.flyingBear?.day15 || 0) >= 1;
+        const hasKilledDay13Variant = (v?.tinyBear?.day13 || 0) >= 1 || (v?.infectedBear?.day13 || 0) >= 1 || (v?.buffBear?.day13 || 0) >= 1 || (v?.infectedPig?.day13 || 0) >= 1 || (v?.infectedCow?.day13 || 0) >= 1 || (v?.infectedSheep?.day13 || 0) >= 1 || (v?.miningBear?.original || 0) >= 1 || (v?.flyingBear?.day15 || 0) >= 1;
+        const hasKilledDay20Variant = (v?.tinyBear?.day20 || 0) >= 1 || (v?.infectedBear?.day20 || 0) >= 1 || (v?.buffBear?.day20 || 0) >= 1 || (v?.infectedPig?.day20 || 0) >= 1 || (v?.infectedCow?.day20 || 0) >= 1 || (v?.infectedSheep?.day20 || 0) >= 1 || (v?.flyingBear?.day20 || 0) >= 1 || (v?.miningBear?.day20 || 0) >= 1 || (v?.torpedoBear?.day20 || 0) >= 1;
 
         // Check for day 4+ variant unlock - only when day 4 variants can actually spawn
         const dayUnlock4 = currentDay >= 4 && (codex.mobs.mapleBearSeen || codex.mobs.infectedBearSeen);
@@ -858,7 +878,7 @@ function checkVariantUnlock(player, codexParam = null) {
             const tinyBearDay4Unlock = currentDay >= 8 && (codex.mobs.variantKills.tinyBear.day4 || 0) >= 3;
             const infectedBearDay4Unlock = currentDay >= 8 && (codex.mobs.variantKills.infectedBear.day4 || 0) >= 3;
             // Note: buffBear doesn't have day4 variant (only original, day13, day20), so it's excluded from this check
-            const otherMobDay4Unlock = currentDay >= 8 && ((codex.mobs.variantKills.infectedPig.day4 || 0) >= 3 || (codex.mobs.variantKills.infectedCow.day4 || 0) >= 3);
+            const otherMobDay4Unlock = currentDay >= 8 && ((codex.mobs.variantKills.infectedPig.day4 || 0) >= 3 || (codex.mobs.variantKills.infectedCow.day4 || 0) >= 3 || (codex.mobs.variantKills.infectedSheep?.day4 || 0) >= 3);
 
             const killUnlock = tinyBearDay4Unlock || infectedBearDay4Unlock || otherMobDay4Unlock;
             
@@ -905,7 +925,7 @@ function checkVariantUnlock(player, codexParam = null) {
             const tinyBearDay8Unlock = currentDay >= 13 && (codex.mobs.variantKills.tinyBear.day8 || 0) >= 3;
             const infectedBearDay8Unlock = currentDay >= 13 && (codex.mobs.variantKills.infectedBear.day8 || 0) >= 3;
             const buffBearDay13Unlock = currentDay >= 13 && (codex.mobs.variantKills.buffBear?.original || 0) >= 3;
-            const otherMobDay8Unlock = currentDay >= 13 && ((codex.mobs.variantKills.infectedPig.day8 || 0) >= 3 || (codex.mobs.variantKills.infectedCow.day8 || 0) >= 3);
+            const otherMobDay8Unlock = currentDay >= 13 && ((codex.mobs.variantKills.infectedPig.day8 || 0) >= 3 || (codex.mobs.variantKills.infectedCow.day8 || 0) >= 3 || (codex.mobs.variantKills.infectedSheep?.day8 || 0) >= 3);
 
             const killUnlock = tinyBearDay8Unlock || infectedBearDay8Unlock || buffBearDay13Unlock || otherMobDay8Unlock;
             
@@ -951,7 +971,7 @@ function checkVariantUnlock(player, codexParam = null) {
             const tinyBearDay13Unlock = currentDay >= 20 && (codex.mobs.variantKills.tinyBear.day13 || 0) >= 5;
             const infectedBearDay13Unlock = currentDay >= 20 && (codex.mobs.variantKills.infectedBear.day13 || 0) >= 5;
             const buffBearDay13Unlock = currentDay >= 20 && (codex.mobs.variantKills.buffBear.day13 || 0) >= 5;
-            const otherMobDay13Unlock = currentDay >= 20 && ((codex.mobs.variantKills.infectedPig.day13 || 0) >= 5 || (codex.mobs.variantKills.infectedCow.day13 || 0) >= 5);
+            const otherMobDay13Unlock = currentDay >= 20 && ((codex.mobs.variantKills.infectedPig.day13 || 0) >= 5 || (codex.mobs.variantKills.infectedCow.day13 || 0) >= 5 || (codex.mobs.variantKills.infectedSheep?.day13 || 0) >= 5);
 
             const killUnlock20 = tinyBearDay13Unlock || infectedBearDay13Unlock || buffBearDay13Unlock || otherMobDay13Unlock;
             
@@ -1223,7 +1243,9 @@ function updateMaxSnowLevel(player, snowCount) {
     const currentMax = maxSnowLevels.get(player.id) || { maxLevel: 0, achievedAt: 0 };
     if (snowCount > currentMax.maxLevel) {
         maxSnowLevels.set(player.id, { maxLevel: snowCount, achievedAt: Date.now() });
-        console.log(`[SNOW] ${player.name} achieved new max snow level: ${snowCount.toFixed(1)}`);
+        if (isInfectionDebugEnabled()) {
+            console.warn(`[SNOW] ${player.name} achieved new max snow level: ${snowCount.toFixed(1)}`);
+        }
         
         // Mark codex based on achievement level
         try {
@@ -1389,7 +1411,7 @@ function isStandingOnInfectedGround(player) {
 function isInInfectedBiome(player) {
     try {
         const biomeId = getBiomeIdAt(player.dimension, player.location);
-        return biomeId && (biomeId === "mb:infected_biome" || biomeId.includes("infected_biome"));
+        return isInfectedComponentBiome(biomeId);
     } catch {
         return false;
     }
@@ -1835,6 +1857,7 @@ function sendDiscoveryMessage(player, codex, messageType = "interesting", itemTy
                 infected_bear: CHAT_INFO + "An infected bear... This creature is dangerous and corrupted!",
                 infected_pig: CHAT_INFO + "An infected pig... This creature is dangerous and corrupted!",
                 infected_cow: CHAT_INFO + "An infected cow... This creature is dangerous and corrupted!",
+                infected_sheep: CHAT_INFO + "An infected sheep... This creature is dangerous and corrupted!",
                 flying_bear: CHAT_INFO + "A flying Maple Bear... the white powder rains from the sky now.",
                 mining_bear: CHAT_INFO + "A mining Maple Bear... it digs careful powder lanes straight to you.",
                 default: CHAT_INFO + "This creature is dangerous... I should remember its behavior."
@@ -2579,7 +2602,9 @@ function handleSnowConsumption(player, item) {
                     setPlayerProperty(player, MAJOR_INFECTED_BEFORE_PROPERTY, true);
                 }
         
-        console.log(`[SNOW] ${player.name} converted minor infection to major infection by eating snow`);
+        if (isInfectionDebugEnabled()) {
+            console.warn(`[INFECTION] ${player.name} converted minor infection to major infection by eating snow`);
+        }
         
         // Track infection experience
         trackInfectionExperience(player, "snow", 0);
@@ -2650,7 +2675,9 @@ function handleSnowConsumption(player, item) {
         player.playSound("mob.enderman.teleport", { pitch: 1.0, volume: 0.4 * volumeMultiplier });
         player.playSound("mob.zombie.ambient", { pitch: 0.8, volume: 0.6 * volumeMultiplier });
         
-        console.log(`[SNOW] ${player.name} started major infection by eating snow`);
+        if (isInfectionDebugEnabled()) {
+            console.warn(`[INFECTION] ${player.name} started major infection by eating snow`);
+        }
         
         // Track infection experience
         trackInfectionExperience(player, "snow", 0);
@@ -2962,7 +2989,7 @@ function handleMapleBearKillTracking(entity, killer) {
         if (entityType === MAPLE_BEAR_ID || entityType === MAPLE_BEAR_DAY4_ID || entityType === MAPLE_BEAR_DAY8_ID || entityType === MAPLE_BEAR_DAY13_ID || entityType === MAPLE_BEAR_DAY20_ID ||
             entityType === INFECTED_BEAR_ID || entityType === INFECTED_BEAR_DAY8_ID || entityType === INFECTED_BEAR_DAY13_ID || entityType === INFECTED_BEAR_DAY20_ID ||
             entityType === BUFF_BEAR_ID || entityType === BUFF_BEAR_DAY13_ID || entityType === BUFF_BEAR_DAY20_ID ||
-            entityType === INFECTED_PIG_ID || entityType === INFECTED_COW_ID ||
+            entityType === INFECTED_PIG_ID || entityType === INFECTED_COW_ID || entityType === INFECTED_SHEEP_ID ||
             entityType === FLYING_BEAR_ID || entityType === FLYING_BEAR_DAY15_ID || entityType === FLYING_BEAR_DAY20_ID ||
             entityType === MINING_BEAR_ID || entityType === MINING_BEAR_DAY20_ID ||
             entityType === TORPEDO_BEAR_ID || entityType === TORPEDO_BEAR_DAY20_ID) {
@@ -3032,9 +3059,10 @@ function cleanupOldDustedDirt() {
 const DUSTED_DIRT_CONVERTIBLE_BLOCKS = [
     "minecraft:grass_block",
     "minecraft:dirt",
-    "minecraft:coarse_dirt",
     "minecraft:podzol",
     "minecraft:mycelium",
+    "minecraft:crimson_nylium",
+    "minecraft:warped_nylium",
     "minecraft:stone",
     "minecraft:cobblestone",
     "minecraft:mossy_cobblestone"
@@ -3066,10 +3094,13 @@ function applyQueuedDustedDirtWrite(job) {
             return false;
         }
 
-        block.setType("mb:dusted_dirt");
-        try {
-            dimension.runCommand(`particle minecraft:snowflake ${x} ${y + 1} ${z}`);
-        } catch { /* particle is cosmetic */ }
+        block.setType(dustedGroundIdForVanilla(block.typeId));
+        try { handlePlayerPlacedInfectionBlock(block); } catch { /* foliage follow-up */ }
+        trySpawnParticle(dimension, "minecraft:snowflake", {
+            x: x + 0.5,
+            y: y + 1,
+            z: z + 0.5
+        });
         return true;
     } catch (error) {
         job.retries = (job.retries ?? 0) + 1;
@@ -3147,7 +3178,7 @@ function spreadDustedDirt(location, dimension, killerType, victimType) {
             killerSizeMultiplier = 0.9;
         }
         // Infected animals are medium
-        else if (killerType === INFECTED_PIG_ID || killerType === INFECTED_COW_ID) {
+        else if (isInfectedLivestock(killerType)) {
             killerSizeMultiplier = 1.05;
         }
 
@@ -3183,12 +3214,21 @@ function spreadDustedDirt(location, dimension, killerType, victimType) {
         }
 
         // Apply all multipliers
+        const blockSpreadDiff = Number(getAddonDifficultyState()?.blockSpreadMultiplier);
+        const spreadDiff = Number.isFinite(blockSpreadDiff) && blockSpreadDiff > 0 ? blockSpreadDiff : 1;
         const totalMultiplier = victimSizeMultiplier * killerSizeMultiplier * worldInfectionMultiplier;
         const spreadRadius = Math.max(2, Math.min(8, Math.floor(baseRadius * totalMultiplier))); // Increased max from 6 to 8
-        const spreadChance = Math.min(0.85, baseChance * totalMultiplier); // Increased max from 0.7 to 0.85
+        const spreadChance = Math.min(0.85, baseChance * totalMultiplier * spreadDiff); // Increased max from 0.7 to 0.85
         const maxBlocks = Math.max(4, Math.min(20, Math.floor(baseMaxBlocks * totalMultiplier))); // Increased max from 25 to 20, min from 2 to 4
 
         let blocksConverted = 0;
+        let burstBiomeId;
+        try {
+            burstBiomeId = dimension.getBiome?.(location)?.id;
+        } catch {
+            burstBiomeId = undefined;
+        }
+        const burstBiomeMult = getResistantSoilBiomeSpreadMult(burstBiomeId);
 
         // Create a circular/spherical spread pattern (like powder falling from air)
         // Generate candidate positions within the radius
@@ -3241,6 +3281,8 @@ function spreadDustedDirt(location, dimension, killerType, victimType) {
             try {
                 const block = dimension.getBlock({ x: candidate.x, y: candidate.y, z: candidate.z });
                 if (!block || !DUSTED_DIRT_CONVERTIBLE_BLOCKS.includes(block.typeId)) continue;
+                const burstChance = getGroundConvertChanceMult(block.typeId) * burstBiomeMult;
+                if (Math.random() > burstChance) continue;
                 if (dustedDirtTrackedOrQueued() >= DUSTED_DIRT_MAX_BLOCKS) break;
 
                 const key = `${candidate.x},${candidate.y},${candidate.z},${dimension.id}`;
@@ -3317,7 +3359,7 @@ function handleInfectedPlayerDeath(player, source) {
         FLYING_BEAR_ID, FLYING_BEAR_DAY15_ID, FLYING_BEAR_DAY20_ID,
         MINING_BEAR_ID, MINING_BEAR_DAY20_ID,
         TORPEDO_BEAR_ID, TORPEDO_BEAR_DAY20_ID,
-        INFECTED_PIG_ID, INFECTED_COW_ID
+        INFECTED_PIG_ID, INFECTED_COW_ID, INFECTED_SHEEP_ID
     ];
 
     const killedByMapleBear = Boolean(killerType && mapleBearTypes.includes(killerType));
@@ -3432,7 +3474,7 @@ world.afterEvents.entityDie.subscribe((event) => {
             FLYING_BEAR_ID, FLYING_BEAR_DAY15_ID, FLYING_BEAR_DAY20_ID,
             MINING_BEAR_ID, MINING_BEAR_DAY20_ID,
             TORPEDO_BEAR_ID, TORPEDO_BEAR_DAY20_ID,
-            INFECTED_PIG_ID, INFECTED_COW_ID
+            INFECTED_PIG_ID, INFECTED_COW_ID, INFECTED_SHEEP_ID
         ];
 
         if (mapleBearTypes.includes(killerType)) {
@@ -3518,6 +3560,27 @@ world.afterEvents.entityDie.subscribe((event) => {
             
         } catch (error) {
             // console.warn("Error handling infected cow death:", error);
+        }
+    }
+
+    if (entity.typeId === INFECTED_SHEEP_ID) {
+        try {
+            const collectedMutton = entity.getDynamicProperty("mb_collected_mutton") || 0;
+            if (collectedMutton > 0) {
+                const bonusMutton = Math.min(collectedMutton, 16);
+                for (let i = 0; i < bonusMutton; i++) {
+                    const dropLocation = {
+                        x: entity.location.x + (Math.random() - 0.5) * 3,
+                        y: entity.location.y + 0.5,
+                        z: entity.location.z + (Math.random() - 0.5) * 3
+                    };
+                    entity.dimension.spawnItem(new ItemStack("minecraft:mutton", 1), dropLocation);
+                }
+                entity.dimension.runCommand(`particle minecraft:heart ${Math.floor(entity.location.x)} ${Math.floor(entity.location.y + 1)} ${Math.floor(entity.location.z)} 1 1 1 0.1 10`);
+            }
+            entity.setDynamicProperty("mb_collected_mutton", 0);
+        } catch {
+            /* ignore */
         }
     }
     
@@ -3632,6 +3695,12 @@ world.afterEvents.entityDie.subscribe((event) => {
                 }
             }
             
+            try {
+                infectLeavesInTorpedoBlast(dimension, loc, 5);
+            } catch {
+                /* ignore */
+            }
+
             // Place snow layers on blocks nearby (5 block radius) - only if there are nearby blocks
             const explosionRadius = 5;
             const centerX = Math.floor(loc.x);
@@ -3715,7 +3784,7 @@ world.afterEvents.entityDie.subscribe((event) => {
                                 }
                                 // Replace vanilla snow layer with custom snow layer
                                 if (blockType === "minecraft:snow_layer") {
-                                    try { topSolidBlock.setType("mb:snow_layer"); } catch { topSolidBlock.setType(SNOW_LAYER_BLOCK); }
+                                    applyInfectionSnowLayer(topSolidBlock);
                                     if (isDebugEnabled("main", "snow_placement")) console.warn(`[SNOW PLACEMENT] Death (${checkX},${topSolidY},${checkZ}) replaced vanilla snow with mb:snow_layer`);
                                     continue;
                                 }
@@ -3731,19 +3800,19 @@ world.afterEvents.entityDie.subscribe((event) => {
                                         const blockAbove = dimension.getBlock({ x: checkX, y: topSolidY + 1, z: checkZ });
                                         const blockBelow = dimension.getBlock({ x: checkX, y: topSolidY - 1, z: checkZ });
                                         if (blockAbove && SNOW_TWO_BLOCK_PLANTS.has(blockAbove.typeId)) {
-                                            try { topSolidBlock.setType("mb:snow_layer"); } catch { topSolidBlock.setType(SNOW_LAYER_BLOCK); }
+                                            applyInfectionSnowLayer(topSolidBlock);
                                             try { blockAbove.setType("minecraft:air"); } catch { }
                                             if (isDebugEnabled("main", "snow_placement")) console.warn(`[SNOW PLACEMENT] Death (${checkX},${topSolidY},${checkZ}) 2-block: bottom→snow, top→air`);
                                         } else if (blockBelow && SNOW_TWO_BLOCK_PLANTS.has(blockBelow.typeId)) {
-                                            try { blockBelow.setType("mb:snow_layer"); } catch { blockBelow.setType(SNOW_LAYER_BLOCK); }
+                                            applyInfectionSnowLayer(blockBelow);
                                             try { topSolidBlock.setType("minecraft:air"); } catch { }
                                             if (isDebugEnabled("main", "snow_placement")) console.warn(`[SNOW PLACEMENT] Death (${checkX},${topSolidY},${checkZ}) 2-block: was top, bottom→snow, this→air`);
                                         } else {
-                                            try { topSolidBlock.setType("mb:snow_layer"); } catch { topSolidBlock.setType(SNOW_LAYER_BLOCK); }
+                                            applyInfectionSnowLayer(topSolidBlock);
                                             if (isDebugEnabled("main", "snow_placement")) console.warn(`[SNOW PLACEMENT] Death (${checkX},${topSolidY},${checkZ}) replaced ${blockType} with snow`);
                                         }
                                     } else {
-                                        try { topSolidBlock.setType("mb:snow_layer"); } catch { topSolidBlock.setType(SNOW_LAYER_BLOCK); }
+                                        applyInfectionSnowLayer(topSolidBlock);
                                         if (isDebugEnabled("main", "snow_placement")) console.warn(`[SNOW PLACEMENT] Death (${checkX},${topSolidY},${checkZ}) replaced ${blockType} with snow`);
                                     }
                                 } else {
@@ -3762,27 +3831,23 @@ world.afterEvents.entityDie.subscribe((event) => {
                                                 const blockAboveSnow = dimension.getBlock({ x: checkX, y: snowY + 1, z: checkZ });
                                                 const blockBelowSnow = dimension.getBlock({ x: checkX, y: snowY - 1, z: checkZ });
                                                 if (blockAboveSnow && SNOW_TWO_BLOCK_PLANTS.has(blockAboveSnow.typeId)) {
-                                                    try { snowBlock.setType("mb:snow_layer"); } catch { snowBlock.setType(SNOW_LAYER_BLOCK); }
+                                                    applyInfectionSnowLayer(snowBlock);
                                                     try { blockAboveSnow.setType("minecraft:air"); } catch { }
                                                     if (isDebugEnabled("main", "snow_placement")) console.warn(`[SNOW PLACEMENT] Death (${checkX},${snowY},${checkZ}) 2-block above: bottom→snow, top→air`);
                                                 } else if (blockBelowSnow && SNOW_TWO_BLOCK_PLANTS.has(blockBelowSnow.typeId)) {
-                                                    try { blockBelowSnow.setType("mb:snow_layer"); } catch { blockBelowSnow.setType(SNOW_LAYER_BLOCK); }
+                                                    applyInfectionSnowLayer(blockBelowSnow);
                                                     try { snowBlock.setType("minecraft:air"); } catch { }
                                                     if (isDebugEnabled("main", "snow_placement")) console.warn(`[SNOW PLACEMENT] Death (${checkX},${snowY},${checkZ}) 2-block above: was top, bottom→snow, this→air`);
                                                 } else {
-                                                    try { snowBlock.setType("mb:snow_layer"); } catch { snowBlock.setType(SNOW_LAYER_BLOCK); }
+                                                    applyInfectionSnowLayer(snowBlock);
                                                     if (isDebugEnabled("main", "snow_placement")) console.warn(`[SNOW PLACEMENT] Death (${checkX},${snowY},${checkZ}) replaced above ${snowBlockType} with snow`);
                                                 }
                                             } else {
-                                                try { snowBlock.setType("mb:snow_layer"); } catch { snowBlock.setType(SNOW_LAYER_BLOCK); }
+                                                applyInfectionSnowLayer(snowBlock);
                                                 if (isDebugEnabled("main", "snow_placement")) console.warn(`[SNOW PLACEMENT] Death (${checkX},${snowY},${checkZ}) replaced above ${snowBlockType} with snow`);
                                             }
                                         } else if (snowBlock.isAir !== undefined && snowBlock.isAir) {
-                                            try {
-                                                snowBlock.setType("mb:snow_layer");
-                                            } catch {
-                                                snowBlock.setType(SNOW_LAYER_BLOCK);
-                                            }
+                                            applyInfectionSnowLayer(snowBlock);
                                             if (isDebugEnabled("main", "snow_placement")) console.warn(`[SNOW PLACEMENT] Death (${checkX},${snowY},${checkZ}) placed snow on air`);
                                         }
                                     }
@@ -3817,7 +3882,7 @@ world.afterEvents.entityHurt.subscribe((event) => {
 });
 
 // --- Anger spread: infected (bear/pig/cow) hit by player → target that player ---
-const INFECTED_ANGER_TYPES = [INFECTED_BEAR_ID, INFECTED_BEAR_DAY8_ID, INFECTED_BEAR_DAY13_ID, INFECTED_BEAR_DAY20_ID, INFECTED_PIG_ID, INFECTED_COW_ID];
+const INFECTED_ANGER_TYPES = [INFECTED_BEAR_ID, INFECTED_BEAR_DAY8_ID, INFECTED_BEAR_DAY13_ID, INFECTED_BEAR_DAY20_ID, INFECTED_PIG_ID, INFECTED_COW_ID, INFECTED_SHEEP_ID];
 world.afterEvents.entityHurt.subscribe((event) => {
     if (shouldSleepDayZeroWorldWork("entity_hurt")) return;
     const hurtEntity = event.hurtEntity;
@@ -3840,7 +3905,7 @@ world.afterEvents.entityHurt.subscribe((event) => {
                     MAPLE_BEAR_ID, MAPLE_BEAR_DAY4_ID, MAPLE_BEAR_DAY8_ID, MAPLE_BEAR_DAY13_ID, MAPLE_BEAR_DAY20_ID,
                     INFECTED_BEAR_ID, INFECTED_BEAR_DAY8_ID, INFECTED_BEAR_DAY13_ID, INFECTED_BEAR_DAY20_ID,
                     BUFF_BEAR_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID,
-                    INFECTED_PIG_ID, INFECTED_COW_ID,
+                    INFECTED_PIG_ID, INFECTED_COW_ID, INFECTED_SHEEP_ID,
                     FLYING_BEAR_ID, FLYING_BEAR_DAY15_ID, FLYING_BEAR_DAY20_ID,
                     MINING_BEAR_ID, MINING_BEAR_DAY20_ID,
                     TORPEDO_BEAR_ID, TORPEDO_BEAR_DAY20_ID
@@ -3881,6 +3946,9 @@ world.afterEvents.entityHurt.subscribe((event) => {
             } else if (mobType === INFECTED_COW_ID) {
                 codex.mobs.infectedCowHits = (codex.mobs.infectedCowHits || 0) + 1;
                 checkAndUnlockMobDiscovery(codex, player, "infectedCowKills", "infectedCowMobKills", "infectedCowHits", "infectedCowSeen", 3, "dangerous");
+            } else if (mobType === INFECTED_SHEEP_ID) {
+                codex.mobs.infectedSheepHits = (codex.mobs.infectedSheepHits || 0) + 1;
+                checkAndUnlockMobDiscovery(codex, player, "infectedSheepKills", "infectedSheepMobKills", "infectedSheepHits", "infectedSheepSeen", 3, "dangerous");
             } else if (mobType === FLYING_BEAR_ID || mobType === FLYING_BEAR_DAY15_ID || mobType === FLYING_BEAR_DAY20_ID) {
                 codex.mobs.flyingBearHits = (codex.mobs.flyingBearHits || 0) + 1;
                 checkAndUnlockMobDiscovery(codex, player, "flyingBearKills", "flyingBearMobKills", "flyingBearHits", "flyingBearSeen", 2, "dangerous", "flying_bear");
@@ -3918,7 +3986,7 @@ world.afterEvents.entityHurt.subscribe((event) => {
                 let snowIncrease = 0;
                 if (source.damagingEntity.typeId === MAPLE_BEAR_ID || source.damagingEntity.typeId === MAPLE_BEAR_DAY4_ID || source.damagingEntity.typeId === MAPLE_BEAR_DAY8_ID || source.damagingEntity.typeId === MAPLE_BEAR_DAY13_ID || source.damagingEntity.typeId === MAPLE_BEAR_DAY20_ID) {
                     snowIncrease = SNOW_INCREASE.TINY_BEAR;
-                } else if (source.damagingEntity.typeId === INFECTED_BEAR_ID || source.damagingEntity.typeId === INFECTED_BEAR_DAY8_ID || source.damagingEntity.typeId === INFECTED_BEAR_DAY13_ID || source.damagingEntity.typeId === INFECTED_BEAR_DAY20_ID || source.damagingEntity.typeId === INFECTED_PIG_ID) {
+                } else if (source.damagingEntity.typeId === INFECTED_BEAR_ID || source.damagingEntity.typeId === INFECTED_BEAR_DAY8_ID || source.damagingEntity.typeId === INFECTED_BEAR_DAY13_ID || source.damagingEntity.typeId === INFECTED_BEAR_DAY20_ID || isInfectedLivestock(source.damagingEntity.typeId)) {
                     snowIncrease = SNOW_INCREASE.INFECTED;
                 } else if (source.damagingEntity.typeId === BUFF_BEAR_ID || source.damagingEntity.typeId === BUFF_BEAR_DAY13_ID || source.damagingEntity.typeId === BUFF_BEAR_DAY20_ID) {
                     snowIncrease = SNOW_INCREASE.BUFF_BEAR;
@@ -3986,7 +4054,9 @@ world.afterEvents.entityHurt.subscribe((event) => {
         }
         
         if (hasTemporaryImmunity) {
-            console.log(`[INFECTION] ${player.name} is temporarily immune to infection, hit ignored`);
+            if (isInfectionDebugEnabled()) {
+                console.warn(`[INFECTION] ${player.name} is temporarily immune to infection, hit ignored`);
+            }
             
             // Mark that player now knows they have immunity
             try { 
@@ -4012,7 +4082,9 @@ world.afterEvents.entityHurt.subscribe((event) => {
             const newHitCount = currentHits + 1;
             bearHitCount.set(player.id, newHitCount);
             
-            console.log(`[INFECTION] ${player.name} hit by Maple Bear (${newHitCount}/${hitsNeeded}) - permanently immune`);
+            if (isInfectionDebugEnabled()) {
+                console.warn(`[INFECTION] ${player.name} hit by Maple Bear (${newHitCount}/${hitsNeeded}) - permanently immune`);
+            }
             
             // Ramping hit sounds
             const volumeMultiplier = getPlayerSoundVolume(player);
@@ -4090,7 +4162,9 @@ world.afterEvents.entityHurt.subscribe((event) => {
             const newHitCount = currentHits + 1;
             bearHitCount.set(player.id, newHitCount);
             
-            console.log(`[INFECTION] ${player.name} hit by Maple Bear (${newHitCount}/${hitsNeeded}) - minor infection`);
+            if (isInfectionDebugEnabled()) {
+                console.warn(`[INFECTION] ${player.name} hit by Maple Bear (${newHitCount}/${hitsNeeded}) - minor infection`);
+            }
             
             // Ramping hit sounds
             const volumeMultiplier = getPlayerSoundVolume(player);
@@ -4203,7 +4277,9 @@ world.afterEvents.entityHurt.subscribe((event) => {
         const newHitCount = currentHits + 1;
         bearHitCount.set(player.id, newHitCount);
 
-        console.log(`[INFECTION] ${player.name} hit by Maple Bear (${newHitCount}/${hitsNeeded})`);
+        if (isInfectionDebugEnabled()) {
+            console.warn(`[INFECTION] ${player.name} hit by Maple Bear (${newHitCount}/${hitsNeeded})`);
+        }
 
         // Ramping hit sounds - progressively more disturbing
         if (newHitCount < hitsNeeded) {
@@ -4357,7 +4433,7 @@ function tryRefreshInfectionHudActionBar(player, id, state) {
                 const last = cureReminderLastTick.get(id) ?? 0;
                 if (system.currentTick - last >= 300) {
                     cureReminderLastTick.set(id, system.currentTick);
-                    cureHint = "§aYou have the cure components.";
+                    cureHint = "§aCure ready";
                 }
             }
         }
@@ -4376,7 +4452,9 @@ function tryRefreshInfectionHudActionBar(player, id, state) {
             infectionLine = timerLine;
         }
         if (infectionLine) {
-            setHudActionBarSegment(player, ACTION_BAR_SLOT.INFECTION, `§7Infect§r ${infectionLine}`);
+            const compact = getHudActiveSegmentCount(player) >= 3;
+            const tag = compact ? "§7I§r" : "§7Infect§r";
+            setHudActionBarSegment(player, ACTION_BAR_SLOT.INFECTION, `${tag} ${infectionLine}`);
         } else {
             clearHudActionBarSegment(player, ACTION_BAR_SLOT.INFECTION);
         }
@@ -4526,7 +4604,7 @@ function tickInventoryCodexDiscovery() {
                     }
                     checkKnowledgeProgression(p);
                     foundNugget = true;
-                } else if (!foundDusted && tid === "mb:dusted_dirt") {
+                } else if (!foundDusted && isDustedGroundId(tid)) {
                     markCodex(p, "biomes.dustedDirtSeen");
                     if (!shouldSuppressDiscovery && sendDiscoveryMessage(p, codex, "interesting", "", "biomes.dustedDirtSeen")) {
                         p.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * getPlayerSoundVolume(p) });
@@ -4584,10 +4662,10 @@ function tickBiomeDiscovery() {
                 const z = Math.floor(p.location.z);
                 const belowY = Math.floor(p.location.y - 1);
                 const info = getCachedBlockInfo(p.dimension, { x, y: belowY, z }, 12);
-                onDusted = info.typeId === "mb:dusted_dirt";
+                onDusted = isDustedGroundId(info.typeId);
             } catch { /* ignore */ }
 
-            if ((biomeId && (biomeId === "mb:infected_biome" || biomeId.includes("infected_biome"))) || onDusted) {
+            if (isInfectedComponentBiome(biomeId) || onDusted) {
                 const codex = getCodex(p);
                 if (!codex.biomes.infectedBiomeSeen) {
                     codex.biomes.infectedBiomeSeen = true;
@@ -5500,7 +5578,7 @@ system.runInterval(() => {
                         state.minorGroundWarningSent = true;
                         try {
                             // Mark codex entries for ground infection discovery
-                            if (groundCheck.blockType === "mb:dusted_dirt") {
+                            if (isDustedGroundId(groundCheck.blockType)) {
                                 markCodex(player, "biomes.dustedDirtSeen");
                             } else if (groundCheck.blockType === "mb:snow_layer") {
                                 markCodex(player, "biomes.snowLayerSeen");
@@ -5517,7 +5595,7 @@ system.runInterval(() => {
                         state.groundWarningSent = true;
                         try {
                             // Mark codex entries for ground infection discovery
-                            if (groundCheck.blockType === "mb:dusted_dirt") {
+                            if (isDustedGroundId(groundCheck.blockType)) {
                                 markCodex(player, "biomes.dustedDirtSeen");
                             } else if (groundCheck.blockType === "mb:snow_layer") {
                                 markCodex(player, "biomes.snowLayerSeen");
@@ -5828,7 +5906,7 @@ const SNOW_TRAIL_TYPES = new Set([
     INFECTED_BEAR_ID, INFECTED_BEAR_DAY8_ID, INFECTED_BEAR_DAY13_ID, INFECTED_BEAR_DAY20_ID,
     BUFF_BEAR_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID,
     MINING_BEAR_ID, MINING_BEAR_DAY20_ID,
-    INFECTED_PIG_ID, INFECTED_COW_ID
+    INFECTED_PIG_ID, INFECTED_COW_ID, INFECTED_SHEEP_ID
 ]);
 
 system.runInterval(() => {
@@ -5874,6 +5952,7 @@ system.runInterval(() => {
             // Infected animals (same as infected bears)
             if (t === INFECTED_PIG_ID) trailChance = 0.06;
             if (t === INFECTED_COW_ID) trailChance = 0.08;
+            if (t === INFECTED_SHEEP_ID) trailChance = 0.07;
 
             const trailCooldown = (t === MINING_BEAR_ID || t === MINING_BEAR_DAY20_ID)
                 ? MINING_TRAIL_COOLDOWN_TICKS
@@ -5994,6 +6073,16 @@ world.afterEvents.itemCompleteUse.subscribe((event) => {
             
         } catch (error) {
             console.warn("Error tracking beef consumption:", error);
+        }
+    }
+
+    if (entity.typeId === INFECTED_SHEEP_ID && item?.typeId === "minecraft:mutton") {
+        try {
+            const currentMutton = entity.getDynamicProperty("mb_collected_mutton") || 0;
+            entity.setDynamicProperty("mb_collected_mutton", currentMutton + 1);
+            entity.dimension.runCommand(`particle minecraft:heart ${Math.floor(entity.location.x)} ${Math.floor(entity.location.y + 1)} ${Math.floor(entity.location.z)}`);
+        } catch {
+            /* ignore */
         }
     }
 });
@@ -6284,6 +6373,11 @@ function isMinorInfectionDebugEnabled() {
     );
 }
 
+/** Bear hits + major infection Content Log (Debug Menu → Main Script → Infection). Default OFF. */
+function isInfectionDebugEnabled() {
+    return isDebugEnabled("main", "infection") || isDebugEnabled("main", "all");
+}
+
 /**
  * Calculate scaled minor infection timer based on current day
  * As the world becomes more infected, minor infection progresses faster
@@ -6550,7 +6644,9 @@ function loadInfectionData(player) {
             try {
                 const maxSnow = JSON.parse(maxSnowStr);
                 maxSnowLevels.set(player.id, maxSnow);
-                console.log(`[LOAD] Loaded max snow level for ${player.name}: ${JSON.stringify(maxSnow)}`);
+                if (isInfectionDebugEnabled()) {
+                    console.warn(`[LOAD] Loaded max snow level for ${player.name}: ${JSON.stringify(maxSnow)}`);
+                }
             } catch (error) {
                 console.warn(`[LOAD] Error parsing max snow level for ${player.name}:`, error);
             }
@@ -6749,15 +6845,20 @@ function showInfectionBookReport(player) {
  * @param {Vector3} location - The location to spread effects
  * @param {Dimension} dimension - The dimension to use
  */
+function trySpawnParticle(dimension, particleId, loc) {
+    if (!dimension || !loc) return;
+    try {
+        dimension.spawnParticle(particleId, loc);
+    } catch {
+        /* particle optional */
+    }
+}
+
 function spreadSnowEffect(location, dimension) {
-    const { x, y, z } = location;
-    // Use integer coordinates for Bedrock particle command
-    const pos = `${Math.floor(x)} ${Math.floor(y + 1)} ${Math.floor(z)}`;
-    // Smoke and ash particles
-    dimension.runCommand(`particle minecraft:smoke_particle ${pos}`);
-    dimension.runCommand(`particle minecraft:ash ${pos}`);
-    // Snowflakes (no extra params)
-    dimension.runCommand(`particle minecraft:snowflake ${pos}`);
+    const loc = { x: location.x, y: location.y + 1, z: location.z };
+    trySpawnParticle(dimension, "minecraft:smoke_particle", loc);
+    trySpawnParticle(dimension, "minecraft:ash", loc);
+    trySpawnParticle(dimension, "minecraft:snowflake", loc);
 }
 
 /**
@@ -6782,9 +6883,7 @@ function corruptDroppedItems(origin, dimension) {
                 const loc = item.location;
                 item.remove();
                 dimension.spawnItem(SNOW_ITEM_ID, loc);
-                
-                // Add a small particle effect for the conversion
-                dimension.runCommand(`particle minecraft:snowflake ${loc.x} ${loc.y} ${loc.z} 0.2 0.2 0.2 0.01 5 force`);
+                trySpawnParticle(dimension, "minecraft:snowflake", loc);
             }
         }
     } catch (error) {
@@ -7355,46 +7454,35 @@ world.afterEvents.playerPlaceBlock.subscribe((event) => {
         return;
     }
     
+    if (block.typeId === "mb:snow_layer" || isDustedGroundId(block.typeId)) {
+        try {
+            handlePlayerPlacedInfectionBlock(block);
+        } catch {
+            /* spread optional */
+        }
+    }
+
     // Only handle snow layer blocks
     if (block?.typeId === "mb:snow_layer") {
         const dim = event.player.dimension;
         const belowPos = { x: block.x, y: block.y - 1, z: block.z };
-        
-        const convertible = new Set([
-            "minecraft:dirt",
-            "minecraft:grass_block",
-            "minecraft:podzol",
-            "minecraft:coarse_dirt",
-            "minecraft:mycelium",
-            "minecraft:rooted_dirt",
-            "minecraft:moss_block",
-            "minecraft:farmland",
-            "minecraft:dirt_path",
-            "minecraft:grass_path"
-        ]);
-
-        // Check and convert block underneath
         const belowBlock = dim.getBlock(belowPos);
-        if (belowBlock && convertible.has(belowBlock.typeId)) {
+        if (belowBlock && isDustedGroundId(belowBlock.typeId)) {
             system.run(() => {
                 try {
-                    // Check limit before converting
                     cleanupOldDustedDirt();
                     if (trackedDustedDirtBlocks.size < DUSTED_DIRT_MAX_BLOCKS) {
-                        belowBlock.setType("mb:dusted_dirt");
-                        
-                        // Track this block
                         const key = `${belowPos.x},${belowPos.y},${belowPos.z},${dim.id}`;
                         trackedDustedDirtBlocks.set(key, { tick: system.currentTick, dimension: dim.id });
-                        
-                        // Register in spawn controller cache
                         registerDustedDirtBlock(belowPos.x, belowPos.y, belowPos.z, dim);
                     }
-                    
-                    // Add particle effect
-                        dim.runCommand(`particle minecraft:snowflake ${Math.floor(belowPos.x)} ${Math.floor(belowPos.y + 1)} ${Math.floor(belowPos.z)}`); 
-                    } catch (e) {
-                    // Silently handle errors
+                    trySpawnParticle(dim, "minecraft:snowflake", {
+                        x: belowPos.x + 0.5,
+                        y: belowPos.y + 1,
+                        z: belowPos.z + 0.5
+                    });
+                } catch {
+                    /* Silently handle errors */
                 }
             });
         }
@@ -7547,7 +7635,7 @@ world.afterEvents.entitySpawn.subscribe((event) => {
 // Track block breaks to remove dusted_dirt from cache
 world.afterEvents.playerBreakBlock.subscribe((event) => {
     const permutation = event.brokenBlockPermutation;
-    if (permutation && permutation.type?.id === "mb:dusted_dirt") {
+    if (permutation && isDustedGroundId(permutation.type?.id)) {
         const pos = event.block.location;
         unregisterDustedDirtBlock(pos.x, pos.y, pos.z);
         // Also remove from tracked blocks
@@ -8163,7 +8251,7 @@ function executeMbCommand(sender, subcommand, args = []) {
                 let killed = 0;
                 for (const e of entities) {
                     const id = e.typeId || "";
-                    if (bearPrefixes.some(p => id.startsWith(p)) || id === "mb:infected_pig" || id === "mb:infected_cow") {
+                    if (bearPrefixes.some(p => id.startsWith(p)) || isInfectedLivestock(id)) {
                         e.kill();
                         killed++;
                     }
@@ -8184,19 +8272,20 @@ function executeMbCommand(sender, subcommand, args = []) {
             const targetPlayerName = args[5] || "";
             const dim = sender.dimension;
             const bearPrefixes = ["mb:mb_", "mb:infected", "mb:buff_mb", "mb:flying_mb", "mb:mining_mb", "mb:torpedo_mb"];
-            const isBear = (id) => bearPrefixes.some(p => id.startsWith(p)) || id === "mb:infected_pig" || id === "mb:infected_cow";
+            const isBear = (id) => bearPrefixes.some(p => id.startsWith(p)) || isInfectedLivestock(id);
             const matchFilter = (id) => {
                 if (scope === "all") return true;
                 if (scope === "variant") return id === filter;
                 if (scope === "type") {
                     if (filter === "tiny") return id.startsWith("mb:mb_");
-                    if (filter === "infected") return id.startsWith("mb:infected") && id !== "mb:infected_pig" && id !== "mb:infected_cow";
+                    if (filter === "infected") return id.startsWith("mb:infected") && !isInfectedLivestock(id);
                     if (filter === "buff") return id.startsWith("mb:buff_mb");
                     if (filter === "flying") return id.startsWith("mb:flying_mb");
                     if (filter === "mining") return id.startsWith("mb:mining_mb");
                     if (filter === "torpedo") return id.startsWith("mb:torpedo_mb");
                     if (filter === "infected_pig") return id === "mb:infected_pig";
                     if (filter === "infected_cow") return id === "mb:infected_cow";
+                    if (filter === "infected_sheep") return id === "mb:infected_sheep";
                     return false;
                 }
                 return false;
@@ -8386,7 +8475,7 @@ function executeMbCommand(sender, subcommand, args = []) {
             const target = args[2] ? world.getAllPlayers().find(p => p.name === args[2]) : sender;
             if (!target) { sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `No player named ${args[2]} found.`); return; }
             if (Number.isNaN(value) || value < 0) {
-                sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Usage: set_kill_count <mobKey> <number> [playerName]. Keys: tinyBearKills, infectedBearKills, buffBearKills, flyingBearKills, miningBearKills, torpedoBearKills, infectedPigKills, infectedCowKills.");
+                sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Usage: set_kill_count <mobKey> <number> [playerName]. Keys: tinyBearKills, infectedBearKills, buffBearKills, flyingBearKills, miningBearKills, torpedoBearKills, infectedPigKills, infectedCowKills, infectedSheepKills.");
                 return;
             }
             const codex = getCodex(target);
@@ -8571,6 +8660,14 @@ function initializeDeferredPackServices() {
     }
     try {
         initializeInfectionDirectorWatch();
+    } catch {
+        /* ignore */
+    }
+    try {
+        registerSnowLayerInfectHandler((snowBlock) => {
+            tryInfectUnderSnow(snowBlock, { force: true });
+        });
+        initializeLeafInfectionWatch();
     } catch {
         /* ignore */
     }

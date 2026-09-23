@@ -1,7 +1,50 @@
 # Player-facing changelog
 
 Short bullets for patch notes and in-game **What's new** (`mb_playerChangelog.js` — **`BP/`** for public; **`BP - Dev/`** for internal dev drops).
-Bump **`PLAYER_CHANGELOG_VERSION`** in `mb_playerChangelog.js` when you ship a new beta.
+Bump **`PLAYER_CHANGELOG_VERSION`** in `mb_playerChangelog.js` when you ship a new beta **or** when player-facing work lands so Journal **What's new** shows as unread.
+
+Keep **`docs/development/releases/UNRELEASED_DRAFT.md`** in lockstep. On tag day copy into **`docs/RELEASE_BODY.md`**.
+
+## Unreleased — v0.9.0-beta.5.10 (next public / current Dev notes)
+
+Landed in **`BP/`** + **`BP - Dev/`** after public **beta.5**. Journal **What's new** version is **`0.9.0-beta.5.10`**. Public pack semver stays **`0.9.0-beta.5`** until the next GitHub / store tag. Dev pack display is **`beta.5.10`**.
+
+### Infection & world
+
+- **Dusty grass plants** grow on the ground, not in the air in the trees.
+- **Dusty firefly bushes** do not grow in infected forests. Vanilla firefly bushes by water still convert when infection reaches them.
+- **Podzol** infects to dusty dirt for now. **Coarse dirt** does not infect.
+- **Dusty vines** look like vanilla vines with a white powder tint (not a cream box around the trunk).
+- **Dusty plants** — grass, ferns, mushrooms, mushroom blocks, leaf litter, and vines have infected versions. Nearby living plants convert to those dusty plants, **not** powder plates. Firefly bushes convert too, but they do not grow as infected-biome floor scatter in forests.
+- **Dusty leaf litter** keeps the vanilla leaf shapes: brown dry leaves with powder/“snow” on them (not a torn cream slab).
+- **Dusty tree leaves** keep climbing to the cream / powder stage even when the canopy is only partly converted. A gray or cream leaf can infect healthy neighbors; when a leaf or log **finishes** dusting it checks the six faces so green holes next to cream fill in.
+- **Dusty grass plants** match vanilla blade cutouts with powder colors (thinner at the base so they are not a cream wall on the lawn).
+- **Dusty double tall grass** and **large ferns** are two blocks tall (vanilla top + bottom, powder colors). Converting vanilla tall grass no longer breaks the plant.
+- **Mushroom fields and giant / old-growth taiga** take longer for the powder to crawl (mycelium and podzol biomes). They are **not** a hideout — bears can still walk in, and the ground still infects, just slower.
+- **Mycelium** converts about as slowly as podzol.
+- **Vanilla brown and red mushrooms** resist convert more than grass. They do not fight the infection back.
+- **Tree / leaf infection** climbs the **trunk** from dusty dirt, then the leaves — **one log (or leaf) at a time**, up from the ground or down from the canopy. Mid-dust leaves keep climbing to cream so a tree can finish. Day 100 does not paint a whole oak in one hit.
+- **Infected biomes** grow dusty **floor plants** in new chunks (not ocean floors).
+- **Warped and crimson nylium** infect like overworld grass. Nether roots, sprouts, fungus, twisting vines, and weeping vines convert to dusty plants.
+- Living ground includes grass **and** dirt-like soils (dirt, podzol, mycelium, moss, farmland, paths). **Podzol and mycelium** convert about half as often as dirt/grass. In mushroom fields and giant taiga, grass and dirt also crawl slower. **Coarse dirt** never infects. Stone and sand stay clean.
+
+### Emulsifier
+
+- Powder plates (`mb:snow_layer`) purify to **air**, not vanilla snow.
+- Infected leaves and dusty plants sometimes **vanish** instead of restoring.
+- Dusted dirt on open lawns/floors sometimes comes back as **grass**. Caves stay dirt. In the **Nether**, dusty ground becomes netherrack or matching nylium — never overworld grass.
+
+### Bears
+
+- **Mining Maple Bears** chew **obsidian** and other diamond-slow blocks (crying obsidian, ancient debris, netherite, respawn anchors) in about **five seconds** each. **Buff smash** can still break those, but far less often than stone or dirt. **Bedrock**, the **ancient city portal** (reinforced deepslate), and other survival-unbreakable blocks stay closed. Torpedo path bursts still skip those slow walls so a cube is not deleted in one tick.
+- Older Maple Bears and infected (day 4 / 8 / 13, and the rest of the family) **burn in fire and lava**. Day 20 infected already did.
+
+### Performance & HUD
+
+- Large dusty forests hitch less (no tick on every infected leaf/log). World-load content log no longer errors that those blocks subscribed to `onTick` without `minecraft:tick`.
+- A netherite-fueled emulsifier should stall the world less.
+- Day **100+** sunrise titles and fat action bars stay on screen.
+- Dusty-forest scans stay **player-first** (leaves + grass every slice). Extra wood / powder / tint work **rotates** when the world is busy, and **always rotates when two or more players are in** so joiners are not flooded with block updates. Quiet solo play still does the full extra set. Pack load uses a `textures_list.json` cache.
 
 ## v0.9.0-beta.5
 
@@ -59,6 +102,11 @@ Release notes: [`development/releases/DEV_BETA_4.2.md`](development/releases/DEV
 
 **Copy from here when releasing.** Full draft + dev bullets: [`docs/development/releases/UNRELEASED_DRAFT.md`](development/releases/UNRELEASED_DRAFT.md).  
 **Do not bump version** until release day.
+
+### Infection spread
+
+- **Journal → Settings → Addon Difficulty** now scales **block** infection too (leaves, wood, grass, kill-stain chance): Easy 0.7× / Normal 1× / Hard 1.3×. Scan interval and mob conversion stay as they were.
+- **Dappled Forest / 26.50:** Poplar logs and red / orange / yellow poplar leaves can infect like the other trees. Red shrubs, shelf mushrooms, leaf litter, and brown mushrooms take powder / storms like other forest plants. Snow infected patches can replace Dappled Forest the same way they replace Cherry Grove and Pale Garden (new chunks).
 
 ### Performance
 

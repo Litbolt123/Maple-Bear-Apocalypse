@@ -12,7 +12,7 @@ A **snow storm** that behaves like a dust storm: reduced visibility (foggy), sno
 
 | Piece | Where | Reusable? |
 |-------|--------|------------|
-| **Snow layer placement rules** | `main.js` – `tryPlaceSnowLayerUnder`, torpedo death, buff bear, spawn controller | **Yes** – same rules: no stacking on snow, replace grass/small blocks via `SNOW_REPLACEABLE_BLOCKS` / `SNOW_TWO_BLOCK_PLANTS` from `mb_blockLists.js`. |
+| **Snow layer placement rules** | `main.js` – `tryPlaceSnowLayerUnder`, torpedo death, buff bear, spawn controller | **Yes** – same rules: no stacking on snow, land plants via `SNOW_REPLACEABLE_BLOCKS` / `SNOW_TWO_BLOCK_PLANTS`. **Not** kelp / seagrass / water (`WATER_COLUMN_SNOW_BLOCK_IDS`). |
 | **Particles** | `mb:white_dust_particle`, `dimension.spawnParticle()`, `particle minecraft:snowflake` / `ash` | **Yes** – reuse white dust or add a dedicated “snow storm” particle. |
 | **Weather** | `mb_spawnController.js` – `weatherChanged`, `detectWeatherFromAPI` (rain/thunder/clear) | **Optional** – could trigger storms when vanilla rain in overworld, or keep storms fully script-driven. |
 | **Fog** | RP only – `mb:infected_biome`, `mb:dusted_plain` in biomes; **Script API cannot set fog** (see knowledge doc). | **Limited** – fog is biome/volume driven; we can’t turn fog on/off from script per player. |

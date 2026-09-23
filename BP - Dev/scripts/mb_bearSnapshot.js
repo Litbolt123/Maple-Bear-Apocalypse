@@ -62,6 +62,7 @@ export const ALL_MB_BEAR_TYPES = [
     "mb:infected_day20",
     "mb:infected_pig",
     "mb:infected_cow",
+    "mb:infected_sheep",
     "mb:buff_mb",
     "mb:buff_mb_day13",
     "mb:buff_mb_day20",

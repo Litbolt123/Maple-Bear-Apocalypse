@@ -1,0 +1,21 @@
+---
+description: Document every fix — class of problem, what failed, what worked — so later chats do not repeat it
+alwaysApply: true
+---
+
+# Document every fix
+
+August should not have to re-explain a fix. Chat history is not documentation.
+
+Before changing code, **Read** that repo's `docs/lessons.md` (create it if missing). FFG screenshots also use `docs/structure-refs/SCREENSHOT_LESSONS.md`. Cross-project classes: `C:\Users\Augus\OneDrive\Documents\Obsidian Vault\Atlas\Lessons.md`.
+
+After a fix, a failed approach, or a user correction — **before ending**:
+
+1. Name the **class** (reusable), not one file/line.
+2. Append to `docs/lessons.md`: Symptom · Failed · Worked · Verify · Do not regress.
+3. Update in place if the class already exists.
+4. One dated line in `docs/context-summary.md`.
+5. If it applies to more than one app, also append `Atlas/Lessons.md` and the vault `Projects/<Name>/lessons.md`.
+6. **After August playtests**, write the real result into Obsidian the same turn (vault project lessons + `Atlas/Lessons.md` for shared classes). Repo-only is not enough. How he talks: vault `People/August.md`.
+
+Do not skip this because the chat already "knows." The next chat will not.

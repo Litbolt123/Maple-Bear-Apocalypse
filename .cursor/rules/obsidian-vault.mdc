@@ -1,0 +1,25 @@
+---
+description: Start from August's Obsidian vault before guessing project facts or canonical paths
+alwaysApply: true
+---
+
+# Obsidian vault is the index
+
+August's projects live in many folders. **Do not guess** which copy is canonical. Read the vault first.
+
+Vault: `C:\Users\Augus\OneDrive\Documents\Obsidian Vault`
+
+1. Read `Home.md`
+2. Read `Memories.md` (standing facts)
+3. Read `People/August.md` (how he talks, asks, tests)
+4. Read `Projects/<Name>.md` for the project you are touching
+5. Read `Atlas/Open loops.md` when the question is what is left
+6. Read that repo's `docs/context-summary.md` or `docs/context summary.md` — map of work done
+7. Read that repo's `docs/lessons.md` — what worked and what did not
+8. Follow the **obsidian-vault** skill when the task is about these projects
+
+Canonical source stays on disk. Vault `Sources/` is a **snapshot** (see `Sources.md` last-synced). Edit the repo, not the snapshot, unless the user asked to update the vault.
+
+Do not copy secrets, installer licenses, textures, `.mcstructure`, or Desktop `Work` / 2FA into the vault.
+
+**Do not confuse:** `Projects\the-forgotten` beats the GitHub `The-Forgotten` mirror. Harbor WPF is `GitHub projects\Harbor`, not `Projects\Harbor`. Flashlight `fl:` is Entity Beam → Vibrant Visuals. FFG canonical is the Bridge project.

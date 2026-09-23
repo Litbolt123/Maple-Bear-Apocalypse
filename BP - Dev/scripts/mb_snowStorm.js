@@ -8,7 +8,7 @@ import { getAddonDifficultyState, getWorldPropertyChunked, setWorldPropertyChunk
 import { getCurrentDay } from "./mb_dayTracker.js";
 import { isScriptEnabled, SCRIPT_IDS, isDustStormsEnabled } from "./mb_scriptToggles.js";
 import { getPlayerSoundVolume, isDebugEnabled, getStormParticleDensity, markCodex } from "./mb_codex.js";
-import { SNOW_REPLACEABLE_BLOCKS, SNOW_NEVER_REPLACE_BLOCKS, SNOW_TWO_BLOCK_PLANTS, STORM_PARTICLE_PASS_THROUGH, STORM_DESTRUCT_BLOCKS, STORM_DESTRUCT_GLASS, STORM_DESTRUCT_GLASS_EXCLUDE, isStormSkyPassThroughBlock } from "./mb_blockLists.js";
+import { SNOW_REPLACEABLE_BLOCKS, SNOW_TWO_BLOCK_PLANTS, STORM_PARTICLE_PASS_THROUGH, STORM_DESTRUCT_BLOCKS, STORM_DESTRUCT_GLASS, STORM_DESTRUCT_GLASS_EXCLUDE, isStormSkyPassThroughBlock, isWaterColumnSnowBlock, isWaterColumnSnowTypeId } from "./mb_blockLists.js";
 import { getStormWorkIntervalMultiplier } from "./mb_performanceProfile.js";
 import { getStormStartChanceCampScale } from "./mb_spawnMobilityCamp.js";
 import { STORM_RESERVOIR_INNER_RADIUS_FRACTION, STORM_RESERVOIR_SPAWN_CHANCE_MAX_BUMP } from "./mb_balance.js";
@@ -17,6 +17,7 @@ import { shouldSkipExpensiveEntityQueries } from "./mb_entityQueryGate.js";
 import { safeQueryEntitiesNear } from "./mb_workSpread.js";
 import { tickStormExposureCameraBuzz } from "./mb_infectionCameraShake.js";
 import { enqueueSnowPlacementWave } from "./mb_infectionWriteQueue.js";
+import { applyInfectionSnowLayer } from "./mb_snowPlacement.js";
 
 /** Stretch storm work intervals when lag profile / player count / dev mult asks for lighter load. */
 function scaledStormTicks(baseTicks) {
@@ -492,6 +493,7 @@ function findSurfaceBlock(dimension, x, z) {
             if (block.isAir || block.isLiquid) continue;
             const typeId = block.typeId;
             if (typeId === SNOW_LAYER_BLOCK || typeId === VANILLA_SNOW_LAYER) continue;
+            if (isWaterColumnSnowTypeId(typeId) || STORM_PARTICLE_PASS_THROUGH.has(typeId)) continue;
             return { x, y, z };
         }
         return null;
@@ -638,50 +640,55 @@ function placeOneSnowAttempt(storm) {
 }
 
 /**
- * Place snow layer at location (minor storm - no grass replacement)
- * @param {Dimension} dimension
+ * Place infection powder at the storm surface. Script setType does not fire
+ * onPlace — applyInfectionSnowLayer converts leaves / grass under the powder.
+ * Never replaces grass_block / dirt with snow; those stay and get infected.
+ * @param {import("@minecraft/server").Dimension} dimension
  * @param {number} x
  * @param {number} y Top solid block Y
  * @param {number} z
- * @returns {boolean} Success
+ * @param {{ replaceVanillaSnow?: boolean }} [opts]
+ * @returns {boolean}
  */
-function tryPlaceSnowLayerMinor(dimension, x, y, z) {
+function tryPlaceStormSnowLayer(dimension, x, y, z, opts = {}) {
     try {
         const placementY = y + 1;
         const blockBelow = dimension.getBlock({ x, y, z });
         const blockAbove = dimension.getBlock({ x, y: placementY, z });
-        
         if (!blockBelow || !blockAbove) return false;
-        
+        if (isWaterColumnSnowBlock(blockBelow) || isWaterColumnSnowBlock(blockAbove)) return false;
+
         const belowType = blockBelow.typeId;
         const aboveType = blockAbove.typeId;
-        
-        // Never place on snow
-        if (belowType === SNOW_LAYER_BLOCK || belowType === VANILLA_SNOW_LAYER) return false;
+
         if (aboveType === SNOW_LAYER_BLOCK || aboveType === VANILLA_SNOW_LAYER) return false;
-        
-        // Never replace full ground blocks (dirt, grass_block, etc.)
-        if (SNOW_NEVER_REPLACE_BLOCKS.has(belowType)) return false;
-        
-        // Minor storms: Don't replace grass/small blocks - only place on solid blocks
-        if (SNOW_REPLACEABLE_BLOCKS.has(belowType)) return false; // Skip grass/foliage
-        if (SNOW_REPLACEABLE_BLOCKS.has(aboveType)) return false; // Skip grass/foliage above
-        
-        // Only place if block below is solid and above is air
-        if (!blockBelow.isAir && !blockBelow.isLiquid && blockAbove.isAir) {
-            try {
-                blockAbove.setType(SNOW_LAYER_BLOCK);
-                return true;
-            } catch {
-                try {
-                    blockAbove.setType(VANILLA_SNOW_LAYER);
-                    return true;
-                } catch {
-                    return false;
+        if (belowType === SNOW_LAYER_BLOCK) return false;
+
+        if (opts.replaceVanillaSnow && belowType === VANILLA_SNOW_LAYER) {
+            return applyInfectionSnowLayer(blockBelow);
+        }
+
+        if (SNOW_REPLACEABLE_BLOCKS.has(belowType) || SNOW_TWO_BLOCK_PLANTS.has(belowType)) {
+            if (SNOW_TWO_BLOCK_PLANTS.has(aboveType)) {
+                try { blockAbove.setType("minecraft:air"); } catch { /* ignore */ }
+            }
+            return applyInfectionSnowLayer(blockBelow);
+        }
+
+        if (SNOW_REPLACEABLE_BLOCKS.has(aboveType) || SNOW_TWO_BLOCK_PLANTS.has(aboveType)) {
+            if (blockBelow.isAir || blockBelow.isLiquid) return false;
+            if (SNOW_TWO_BLOCK_PLANTS.has(aboveType)) {
+                const upper = dimension.getBlock({ x, y: placementY + 1, z });
+                if (upper && SNOW_TWO_BLOCK_PLANTS.has(upper.typeId)) {
+                    try { upper.setType("minecraft:air"); } catch { /* ignore */ }
                 }
             }
+            return applyInfectionSnowLayer(blockAbove);
         }
-        
+
+        if (!blockBelow.isAir && !blockBelow.isLiquid && blockAbove.isAir) {
+            return applyInfectionSnowLayer(blockAbove);
+        }
         return false;
     } catch {
         return false;
@@ -689,64 +696,27 @@ function tryPlaceSnowLayerMinor(dimension, x, y, z) {
 }
 
 /**
- * Place snow layer at location (major storm - no grass replacement, same as minor)
- * @param {Dimension} dimension 
- * @param {number} x 
+ * Place snow layer at location (minor storm).
+ * @param {import("@minecraft/server").Dimension} dimension
+ * @param {number} x
  * @param {number} y Top solid block Y
- * @param {number} z 
- * @returns {boolean} Success
+ * @param {number} z
+ * @returns {boolean}
+ */
+function tryPlaceSnowLayerMinor(dimension, x, y, z) {
+    return tryPlaceStormSnowLayer(dimension, x, y, z, { replaceVanillaSnow: false });
+}
+
+/**
+ * Place snow layer at location (major storm).
+ * @param {import("@minecraft/server").Dimension} dimension
+ * @param {number} x
+ * @param {number} y Top solid block Y
+ * @param {number} z
+ * @returns {boolean}
  */
 function tryPlaceSnowLayerMajor(dimension, x, y, z) {
-    try {
-        const placementY = y + 1;
-        const blockBelow = dimension.getBlock({ x, y, z });
-        const blockAbove = dimension.getBlock({ x, y: placementY, z });
-        
-        if (!blockBelow || !blockAbove) return false;
-        
-        const belowType = blockBelow.typeId;
-        const aboveType = blockAbove.typeId;
-        
-        // Never place on custom snow; vanilla snow is handled below (replacement)
-        if (belowType === SNOW_LAYER_BLOCK) return false;
-        if (aboveType === SNOW_LAYER_BLOCK || aboveType === VANILLA_SNOW_LAYER) return false;
-        
-        // Never replace full ground blocks (dirt, grass_block, etc.)
-        if (SNOW_NEVER_REPLACE_BLOCKS.has(belowType)) return false;
-        
-        // Do not place snow on top of grass/foliage - skip like other scripts
-        if (SNOW_REPLACEABLE_BLOCKS.has(belowType)) return false;
-        if (SNOW_REPLACEABLE_BLOCKS.has(aboveType)) return false;
-        
-        // Replace vanilla snow layer with custom (single handling of VANILLA_SNOW_LAYER)
-        if (belowType === VANILLA_SNOW_LAYER) {
-            try {
-                blockBelow.setType(SNOW_LAYER_BLOCK);
-                return true;
-            } catch {
-                return false;
-            }
-        }
-        
-        // Place in air above solid block
-        if (!blockBelow.isAir && !blockBelow.isLiquid && blockAbove.isAir) {
-            try {
-                blockAbove.setType(SNOW_LAYER_BLOCK);
-                return true;
-            } catch {
-                try {
-                    blockAbove.setType(VANILLA_SNOW_LAYER);
-                    return true;
-                } catch {
-                    return false;
-                }
-            }
-        }
-        
-        return false;
-    } catch {
-        return false;
-    }
+    return tryPlaceStormSnowLayer(dimension, x, y, z, { replaceVanillaSnow: true });
 }
 
 // ============================================================================
@@ -1443,7 +1413,7 @@ system.runInterval(() => {
                     "minecraft:small_fireball", "minecraft:firework_rocket",
                     "minecraft:villager", "minecraft:villager_v2", "minecraft:wandering_trader"
                 ]);
-                const mbPrefixes = ["mb:mb_day", "mb:infected", "mb:buff_mb", "mb:flying_mb", "mb:mining_mb", "mb:torpedo_mb", "mb:infected_pig", "mb:infected_cow"];
+                const mbPrefixes = ["mb:mb_day", "mb:infected", "mb:buff_mb", "mb:flying_mb", "mb:mining_mb", "mb:torpedo_mb", "mb:infected_pig", "mb:infected_cow", "mb:infected_sheep"];
                 let damaged = 0;
                 try {
                     const mobs = safeQueryEntitiesNear(
@@ -1705,7 +1675,7 @@ export function getStormSpawnTiles(dimension, playerPos, minDistSq, maxDistSq, l
             const surface = findSurfaceBlock(dimension, x, z);
             if (!surface) continue;
             const above = dimension.getBlock({ x: surface.x, y: surface.y + 1, z: surface.z });
-            if (!above?.isAir) continue;
+            if (!above?.isAir || above.isLiquid) continue;
             tiles.push({ x: surface.x, y: surface.y, z: surface.z });
             if (tiles.length >= limit) return tiles;
         }

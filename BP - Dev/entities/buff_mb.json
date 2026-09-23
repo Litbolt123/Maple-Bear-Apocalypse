@@ -104,7 +104,6 @@
 				"total_supply": 60,
 				"suffocate_time": -60
 			},
-			"minecraft:fire_immune": false,
 			"minecraft:behavior.hurt_by_target": {
 				"priority": 1
 			},

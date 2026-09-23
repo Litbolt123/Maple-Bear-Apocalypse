@@ -1,0 +1,41 @@
+{
+	"format_version": "1.26.10",
+	"minecraft:block": {
+		"description": {
+			"identifier": "mb:infected_brown_mushroom_block",
+			"menu_category": {
+				"category": "nature"
+			},
+			"is_experimental": false
+		},
+		"components": {
+			"minecraft:geometry": "minecraft:geometry.full_block",
+			"minecraft:material_instances": {
+				"*": {
+					"texture": "infected_brown_mushroom_block",
+					"render_method": "opaque"
+				}
+			},
+			"minecraft:display_name": "Infected Brown Mushroom Block",
+			"minecraft:map_color": {
+				"color": "#E8E0D4"
+			},
+			"minecraft:destruction_particles": {
+				"texture": "infected_brown_mushroom_block"
+			},
+			"minecraft:destructible_by_mining": {
+				"seconds_to_destroy": 0.4,
+				"use_efficiency": true
+			},
+			"minecraft:destructible_by_explosion": {
+				"explosion_resistance": 0.2
+			},
+			"minecraft:light_dampening": 15,
+			"minecraft:collision_box": true,
+			"minecraft:selection_box": true,
+			"minecraft:loot": "loot_tables/blocks/infected_brown_mushroom_block.json",
+			"mb:infected_foliage": {},
+			"tag:minecraft:is_shears_item_destructible": {}
+		}
+	}
+}

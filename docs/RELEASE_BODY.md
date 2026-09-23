@@ -1,4 +1,7 @@
-<!-- UNRELEASED DRAFT: see docs/development/releases/UNRELEASED_DRAFT.md — do not publish until next tag -->
+<!-- UNRELEASED DRAFT: see docs/development/releases/UNRELEASED_DRAFT.md — do not publish until next tag.
+     Next notes (beta.5.1 / after public beta.5): dusty plants + infected biome floor plants; nylium + nether foliage;
+     emulsifier powder→air, leaf vanish, dirt→grass; older bears burn; day-100 HUD; dusty-forest / netherite hitch.
+     This file is still the last GitHub tag body (v0.9.0-beta.4). Replace it from UNRELEASED_DRAFT on the next tag. -->
 
 ## The Maple Bear Apocalypse — v0.9.0-beta.4
 

@@ -1,0 +1,64 @@
+{
+	"format_version": "1.26.10",
+	"minecraft:block": {
+		"description": {
+			"identifier": "mb:infected_vine",
+			"menu_category": {
+				"category": "nature"
+			},
+			"is_experimental": false,
+			"states": {
+				"mb:north": [1, 0],
+				"mb:east": [1, 0],
+				"mb:south": [1, 0],
+				"mb:west": [1, 0]
+			}
+		},
+		"components": {
+			"minecraft:geometry": {
+				"identifier": "geometry.infected_vine",
+				"bone_visibility": {
+					"north": "q.block_state('mb:north') == 1",
+					"east": "q.block_state('mb:east') == 1",
+					"south": "q.block_state('mb:south') == 1",
+					"west": "q.block_state('mb:west') == 1"
+				}
+			},
+			"minecraft:material_instances": {
+				"*": {
+					"texture": "infected_vine",
+					"render_method": "alpha_test_single_sided",
+					"ambient_occlusion": false,
+					"face_dimming": false
+				}
+			},
+			"minecraft:display_name": "Infected Vines",
+			"minecraft:map_color": {
+				"color": "#E8E0D4"
+			},
+			"minecraft:destruction_particles": {
+				"texture": "infected_vine"
+			},
+			"minecraft:destructible_by_mining": {
+				"seconds_to_destroy": 0.05,
+				"use_efficiency": true
+			},
+			"minecraft:destructible_by_explosion": {
+				"explosion_resistance": 0.05
+			},
+			"minecraft:light_dampening": 0,
+			"minecraft:collision_box": false,
+			"minecraft:selection_box": {
+				"origin": [-8, 0, -8],
+				"size": [16, 16, 16]
+			},
+			"minecraft:loot": "loot_tables/blocks/infected_vine.json",
+			"mb:infected_foliage": {},
+			"tag:minecraft:is_shears_item_destructible": {},
+			"minecraft:flammable": {
+				"catch_chance_modifier": 30,
+				"destroy_chance_modifier": 60
+			}
+		}
+	}
+}

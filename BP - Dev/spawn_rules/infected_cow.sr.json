@@ -12,7 +12,10 @@
 					"mb:dusted_dirt",
 					"minecraft:grass_block"
 				],
-				"minecraft:spawns_underground": {},
+				"minecraft:spawns_on_block_prevented_filter": [
+					"minecraft:water",
+					"minecraft:flowing_water"
+				],
 				"minecraft:brightness_filter": {
 					"min": 0,
 					"max": 15,
@@ -27,16 +30,25 @@
 					"max_size": 3
 				},
 				"minecraft:biome_filter": {
-					"any_of": [
+					"all_of": [
 						{
-							"test": "has_biome_tag",
-							"operator": "==",
-							"value": "infected_biome"
+							"any_of": [
+								{
+									"test": "has_biome_tag",
+									"operator": "==",
+									"value": "infected_biome"
+								},
+								{
+									"test": "has_biome_tag",
+									"operator": "==",
+									"value": "animal"
+								}
+							]
 						},
 						{
 							"test": "has_biome_tag",
-							"operator": "==",
-							"value": "animal"
+							"operator": "!=",
+							"value": "ocean"
 						}
 					]
 				},

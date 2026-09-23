@@ -1,0 +1,177 @@
+{
+	"format_version": "1.26.10",
+	"minecraft:block": {
+		"description": {
+			"identifier": "mb:infected_stripped_cherry_log",
+			"menu_category": {
+				"category": "nature"
+			},
+			"is_experimental": false,
+			"states": {
+				"mb:dust": [
+					0,
+					1,
+					2,
+					3
+				],
+				"mb:axis": [
+					"y",
+					"x",
+					"z"
+				]
+			}
+		},
+		"components": {
+			"minecraft:geometry": "minecraft:geometry.full_block",
+			"minecraft:material_instances": {
+				"*": {
+					"texture": "infected_cherry_stripped_side_0",
+					"render_method": "opaque"
+				},
+				"up": {
+					"texture": "infected_cherry_stripped_top_0",
+					"render_method": "opaque"
+				},
+				"down": {
+					"texture": "infected_cherry_stripped_top_0",
+					"render_method": "opaque"
+				}
+			},
+			"minecraft:display_name": "Infected Cherry Stripped Log",
+			"minecraft:map_color": {
+				"color": "#C8C0B0"
+			},
+			"minecraft:destructible_by_mining": {
+				"seconds_to_destroy": 2,
+				"use_efficiency": true
+			},
+			"minecraft:destructible_by_explosion": {
+				"explosion_resistance": 1
+			},
+			"minecraft:light_dampening": 15,
+			"minecraft:collision_box": true,
+			"minecraft:flammable": {
+				"catch_chance_modifier": 5,
+				"destroy_chance_modifier": 5
+			},
+			"minecraft:loot": "loot_tables/blocks/infected_stripped_cherry_log.json",
+			"mb:infected_wood": {},
+			"tag:minecraft:is_axe_item_destructible": {},
+			"tag:minecraft:is_hoe_item_destructible": {}
+		},
+		"permutations": [
+			{
+				"condition": "q.block_state('mb:dust') == 0",
+				"components": {
+					"minecraft:material_instances": {
+						"*": {
+							"texture": "infected_cherry_stripped_side_0",
+							"render_method": "opaque"
+						},
+						"up": {
+							"texture": "infected_cherry_stripped_top_0",
+							"render_method": "opaque"
+						},
+						"down": {
+							"texture": "infected_cherry_stripped_top_0",
+							"render_method": "opaque"
+						}
+					},
+					"minecraft:destruction_particles": {
+						"texture": "infected_cherry_stripped_side_0"
+					}
+				}
+			},
+			{
+				"condition": "q.block_state('mb:dust') == 1",
+				"components": {
+					"minecraft:material_instances": {
+						"*": {
+							"texture": "infected_cherry_stripped_side_1",
+							"render_method": "opaque"
+						},
+						"up": {
+							"texture": "infected_cherry_stripped_top_1",
+							"render_method": "opaque"
+						},
+						"down": {
+							"texture": "infected_cherry_stripped_top_1",
+							"render_method": "opaque"
+						}
+					},
+					"minecraft:destruction_particles": {
+						"texture": "infected_cherry_stripped_side_1"
+					}
+				}
+			},
+			{
+				"condition": "q.block_state('mb:dust') == 2",
+				"components": {
+					"minecraft:material_instances": {
+						"*": {
+							"texture": "infected_cherry_stripped_side_2",
+							"render_method": "opaque"
+						},
+						"up": {
+							"texture": "infected_cherry_stripped_top_2",
+							"render_method": "opaque"
+						},
+						"down": {
+							"texture": "infected_cherry_stripped_top_2",
+							"render_method": "opaque"
+						}
+					},
+					"minecraft:destruction_particles": {
+						"texture": "infected_cherry_stripped_side_2"
+					}
+				}
+			},
+			{
+				"condition": "q.block_state('mb:dust') == 3",
+				"components": {
+					"minecraft:material_instances": {
+						"*": {
+							"texture": "infected_cherry_stripped_side_3",
+							"render_method": "opaque"
+						},
+						"up": {
+							"texture": "infected_cherry_stripped_top_3",
+							"render_method": "opaque"
+						},
+						"down": {
+							"texture": "infected_cherry_stripped_top_3",
+							"render_method": "opaque"
+						}
+					},
+					"minecraft:destruction_particles": {
+						"texture": "infected_cherry_stripped_side_3"
+					}
+				}
+			},
+			{
+				"condition": "q.block_state('mb:axis') == 'x'",
+				"components": {
+					"minecraft:transformation": {
+						"rotation": [
+							0,
+							0,
+							90
+						]
+					}
+				}
+			},
+			{
+				"condition": "q.block_state('mb:axis') == 'z'",
+				"components": {
+					"minecraft:transformation": {
+						"rotation": [
+							90,
+							0,
+							0
+						]
+					}
+				}
+			}
+		]
+	}
+}

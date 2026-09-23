@@ -3,10 +3,391 @@
 	"mb:dusted_dirt": {
 		"sound": "dirt_with_roots"
 	},
+	"mb:dusted_podzol": {
+		"sound": "dirt_with_roots"
+	},
 	"mb:snow_layer": {
 		"sound": "mb:snow_layer"
 	},
 	"mb:emulsifier_machine": {
 		"sound": "metal"
+	},
+	"mb:infected_oak_leaves": {
+		"sound": "grass"
+	},
+	"mb:infected_oak_leaves_1": {
+		"sound": "grass"
+	},
+	"mb:infected_oak_leaves_2": {
+		"sound": "grass"
+	},
+	"mb:infected_oak_leaves_3": {
+		"sound": "grass"
+	},
+	"mb:infected_birch_leaves": {
+		"sound": "grass"
+	},
+	"mb:infected_birch_leaves_1": {
+		"sound": "grass"
+	},
+	"mb:infected_birch_leaves_2": {
+		"sound": "grass"
+	},
+	"mb:infected_birch_leaves_3": {
+		"sound": "grass"
+	},
+	"mb:infected_spruce_leaves": {
+		"sound": "grass"
+	},
+	"mb:infected_spruce_leaves_1": {
+		"sound": "grass"
+	},
+	"mb:infected_spruce_leaves_2": {
+		"sound": "grass"
+	},
+	"mb:infected_spruce_leaves_3": {
+		"sound": "grass"
+	},
+	"mb:infected_jungle_leaves": {
+		"sound": "grass"
+	},
+	"mb:infected_jungle_leaves_1": {
+		"sound": "grass"
+	},
+	"mb:infected_jungle_leaves_2": {
+		"sound": "grass"
+	},
+	"mb:infected_jungle_leaves_3": {
+		"sound": "grass"
+	},
+	"mb:infected_acacia_leaves": {
+		"sound": "grass"
+	},
+	"mb:infected_acacia_leaves_1": {
+		"sound": "grass"
+	},
+	"mb:infected_acacia_leaves_2": {
+		"sound": "grass"
+	},
+	"mb:infected_acacia_leaves_3": {
+		"sound": "grass"
+	},
+	"mb:infected_dark_oak_leaves": {
+		"sound": "grass"
+	},
+	"mb:infected_dark_oak_leaves_1": {
+		"sound": "grass"
+	},
+	"mb:infected_dark_oak_leaves_2": {
+		"sound": "grass"
+	},
+	"mb:infected_dark_oak_leaves_3": {
+		"sound": "grass"
+	},
+	"mb:infected_mangrove_leaves": {
+		"sound": "grass"
+	},
+	"mb:infected_mangrove_leaves_1": {
+		"sound": "grass"
+	},
+	"mb:infected_mangrove_leaves_2": {
+		"sound": "grass"
+	},
+	"mb:infected_mangrove_leaves_3": {
+		"sound": "grass"
+	},
+	"mb:infected_cherry_leaves": {
+		"sound": "grass"
+	},
+	"mb:infected_cherry_leaves_1": {
+		"sound": "grass"
+	},
+	"mb:infected_cherry_leaves_2": {
+		"sound": "grass"
+	},
+	"mb:infected_cherry_leaves_3": {
+		"sound": "grass"
+	},
+	"mb:infected_azalea_leaves": {
+		"sound": "grass"
+	},
+	"mb:infected_azalea_leaves_1": {
+		"sound": "grass"
+	},
+	"mb:infected_azalea_leaves_2": {
+		"sound": "grass"
+	},
+	"mb:infected_azalea_leaves_3": {
+		"sound": "grass"
+	},
+	"mb:infected_flowering_azalea_leaves": {
+		"sound": "grass"
+	},
+	"mb:infected_flowering_azalea_leaves_1": {
+		"sound": "grass"
+	},
+	"mb:infected_flowering_azalea_leaves_2": {
+		"sound": "grass"
+	},
+	"mb:infected_flowering_azalea_leaves_3": {
+		"sound": "grass"
+	},
+	"mb:infected_pale_oak_leaves": {
+		"sound": "grass"
+	},
+	"mb:infected_pale_oak_leaves_1": {
+		"sound": "grass"
+	},
+	"mb:infected_pale_oak_leaves_2": {
+		"sound": "grass"
+	},
+	"mb:infected_pale_oak_leaves_3": {
+		"sound": "grass"
+	},
+	"mb:infected_oak_log": {
+		"sound": "wood"
+	},
+	"mb:infected_oak_wood": {
+		"sound": "wood"
+	},
+	"mb:infected_stripped_oak_log": {
+		"sound": "wood"
+	},
+	"mb:infected_stripped_oak_wood": {
+		"sound": "wood"
+	},
+	"mb:infected_birch_log": {
+		"sound": "wood"
+	},
+	"mb:infected_birch_wood": {
+		"sound": "wood"
+	},
+	"mb:infected_stripped_birch_log": {
+		"sound": "wood"
+	},
+	"mb:infected_stripped_birch_wood": {
+		"sound": "wood"
+	},
+	"mb:infected_spruce_log": {
+		"sound": "wood"
+	},
+	"mb:infected_spruce_wood": {
+		"sound": "wood"
+	},
+	"mb:infected_stripped_spruce_log": {
+		"sound": "wood"
+	},
+	"mb:infected_stripped_spruce_wood": {
+		"sound": "wood"
+	},
+	"mb:infected_jungle_log": {
+		"sound": "wood"
+	},
+	"mb:infected_jungle_wood": {
+		"sound": "wood"
+	},
+	"mb:infected_stripped_jungle_log": {
+		"sound": "wood"
+	},
+	"mb:infected_stripped_jungle_wood": {
+		"sound": "wood"
+	},
+	"mb:infected_acacia_log": {
+		"sound": "wood"
+	},
+	"mb:infected_acacia_wood": {
+		"sound": "wood"
+	},
+	"mb:infected_stripped_acacia_log": {
+		"sound": "wood"
+	},
+	"mb:infected_stripped_acacia_wood": {
+		"sound": "wood"
+	},
+	"mb:infected_dark_oak_log": {
+		"sound": "wood"
+	},
+	"mb:infected_dark_oak_wood": {
+		"sound": "wood"
+	},
+	"mb:infected_stripped_dark_oak_log": {
+		"sound": "wood"
+	},
+	"mb:infected_stripped_dark_oak_wood": {
+		"sound": "wood"
+	},
+	"mb:infected_mangrove_log": {
+		"sound": "wood"
+	},
+	"mb:infected_mangrove_wood": {
+		"sound": "wood"
+	},
+	"mb:infected_stripped_mangrove_log": {
+		"sound": "wood"
+	},
+	"mb:infected_stripped_mangrove_wood": {
+		"sound": "wood"
+	},
+	"mb:infected_cherry_log": {
+		"sound": "wood"
+	},
+	"mb:infected_cherry_wood": {
+		"sound": "wood"
+	},
+	"mb:infected_stripped_cherry_log": {
+		"sound": "wood"
+	},
+	"mb:infected_stripped_cherry_wood": {
+		"sound": "wood"
+	},
+	"mb:infected_pale_oak_log": {
+		"sound": "wood"
+	},
+	"mb:infected_pale_oak_wood": {
+		"sound": "wood"
+	},
+	"mb:infected_stripped_pale_oak_log": {
+		"sound": "wood"
+	},
+	"mb:infected_stripped_pale_oak_wood": {
+		"sound": "wood"
+	},
+	"mb:infected_crimson_log": {
+		"sound": "stem"
+	},
+	"mb:infected_crimson_wood": {
+		"sound": "stem"
+	},
+	"mb:infected_stripped_crimson_log": {
+		"sound": "stem"
+	},
+	"mb:infected_stripped_crimson_wood": {
+		"sound": "stem"
+	},
+	"mb:infected_warped_log": {
+		"sound": "stem"
+	},
+	"mb:infected_warped_wood": {
+		"sound": "stem"
+	},
+	"mb:infected_stripped_warped_log": {
+		"sound": "stem"
+	},
+	"mb:infected_stripped_warped_wood": {
+		"sound": "stem"
+	},
+	"mb:infected_nether_wart_block": {
+		"sound": "nether_wart"
+	},
+	"mb:infected_warped_wart_block": {
+		"sound": "nether_wart"
+	},
+	"mb:infected_red_poplar_leaves": {
+		"sound": "grass"
+	},
+	"mb:infected_red_poplar_leaves_1": {
+		"sound": "grass"
+	},
+	"mb:infected_red_poplar_leaves_2": {
+		"sound": "grass"
+	},
+	"mb:infected_red_poplar_leaves_3": {
+		"sound": "grass"
+	},
+	"mb:infected_orange_poplar_leaves": {
+		"sound": "grass"
+	},
+	"mb:infected_orange_poplar_leaves_1": {
+		"sound": "grass"
+	},
+	"mb:infected_orange_poplar_leaves_2": {
+		"sound": "grass"
+	},
+	"mb:infected_orange_poplar_leaves_3": {
+		"sound": "grass"
+	},
+	"mb:infected_yellow_poplar_leaves": {
+		"sound": "grass"
+	},
+	"mb:infected_yellow_poplar_leaves_1": {
+		"sound": "grass"
+	},
+	"mb:infected_yellow_poplar_leaves_2": {
+		"sound": "grass"
+	},
+	"mb:infected_yellow_poplar_leaves_3": {
+		"sound": "grass"
+	},
+	"mb:infected_poplar_log": {
+		"sound": "wood"
+	},
+	"mb:infected_poplar_wood": {
+		"sound": "wood"
+	},
+	"mb:infected_stripped_poplar_log": {
+		"sound": "wood"
+	},
+	"mb:infected_stripped_poplar_wood": {
+		"sound": "wood"
+	},
+	"mb:infected_short_grass": {
+		"sound": "grass"
+	},
+	"mb:infected_tall_grass": {
+		"sound": "grass"
+	},
+	"mb:infected_fern": {
+		"sound": "grass"
+	},
+	"mb:infected_large_fern": {
+		"sound": "grass"
+	},
+	"mb:infected_firefly_bush": {
+		"sound": "grass"
+	},
+	"mb:infected_brown_mushroom": {
+		"sound": "grass"
+	},
+	"mb:infected_red_mushroom": {
+		"sound": "grass"
+	},
+	"mb:infected_red_shrub": {
+		"sound": "grass"
+	},
+	"mb:infected_leaf_litter": {
+		"sound": "grass"
+	},
+	"mb:infected_vine": {
+		"sound": "grass"
+	},
+	"mb:infected_brown_mushroom_block": {
+		"sound": "wood"
+	},
+	"mb:infected_red_mushroom_block": {
+		"sound": "wood"
+	},
+	"mb:infected_mushroom_stem": {
+		"sound": "wood"
+	},
+	"mb:infected_warped_roots": {
+		"sound": "grass"
+	},
+	"mb:infected_crimson_roots": {
+		"sound": "grass"
+	},
+	"mb:infected_nether_sprouts": {
+		"sound": "grass"
+	},
+	"mb:infected_warped_fungus": {
+		"sound": "grass"
+	},
+	"mb:infected_crimson_fungus": {
+		"sound": "grass"
+	},
+	"mb:infected_twisting_vines": {
+		"sound": "grass"
+	},
+	"mb:infected_weeping_vines": {
+		"sound": "grass"
 	}
 }

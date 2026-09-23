@@ -5,7 +5,8 @@
 		"components": {
             "minecraft:sky_color": { "sky_color": "#C8D2E1" },
             "minecraft:fog_appearance": { "fog_identifier": "mb:infected_biome" },
-            "minecraft:water_appearance": { "surface_color": "#F0F2F4" }
+            "minecraft:water_appearance": { "surface_color": "#F0F2F4" },
+            "minecraft:foliage_appearance": { "color": "#C4C0B4" }
 		}
 	}
 }

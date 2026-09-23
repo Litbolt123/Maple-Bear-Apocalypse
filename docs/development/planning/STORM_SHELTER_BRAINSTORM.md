@@ -1,6 +1,6 @@
 # Storm Shelter System — Brainstorm
 
-**Goal**: Only players with a clear path from the storm (sky) to them should be affected by storm infection. Players in caves, houses, or underground bunkers should be safe.
+**Goal**: Only players with a clear path from the storm (sky) to them should be affected by storm infection. Players in caves, houses, or underground bunkers should be safe **from that storm**. Shelter is not a win for the whole addon — see `docs/design/PLAYER_GOAL_AND_LOOP.md`.
 
 ---
 

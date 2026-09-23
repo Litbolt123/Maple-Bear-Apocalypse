@@ -1,0 +1,79 @@
+{
+	"format_version": "1.26.10",
+	"minecraft:block": {
+		"description": {
+			"identifier": "mb:infected_crimson_fungus",
+			"menu_category": {
+				"category": "nature"
+			},
+			"is_experimental": false
+		},
+		"components": {
+			"minecraft:geometry": "minecraft:geometry.cross",
+			"minecraft:material_instances": {
+				"*": {
+					"texture": "infected_crimson_fungus",
+					"render_method": "alpha_test_single_sided",
+					"ambient_occlusion": false,
+					"face_dimming": false
+				}
+			},
+			"minecraft:display_name": "Infected Crimson Fungus",
+			"minecraft:map_color": {
+				"color": "#E8E0D4"
+			},
+			"minecraft:destruction_particles": {
+				"texture": "infected_crimson_fungus"
+			},
+			"minecraft:destructible_by_mining": {
+				"seconds_to_destroy": 0.05,
+				"use_efficiency": true
+			},
+			"minecraft:destructible_by_explosion": {
+				"explosion_resistance": 0.05
+			},
+			"minecraft:light_dampening": 0,
+			"minecraft:collision_box": false,
+			"minecraft:selection_box": {
+				"origin": [
+					-6,
+					0,
+					-6
+				],
+				"size": [
+					12,
+					13,
+					12
+				]
+			},
+			"minecraft:loot": "loot_tables/blocks/infected_crimson_fungus.json",
+			"mb:infected_foliage": {},
+			"tag:minecraft:is_shears_item_destructible": {},
+			"minecraft:placement_filter": {
+				"conditions": [
+					{
+						"allowed_faces": [
+							"up"
+						],
+						"block_filter": [
+							"minecraft:grass_block",
+							"minecraft:dirt",
+							"minecraft:coarse_dirt",
+							"minecraft:podzol",
+							"minecraft:mycelium",
+							"mb:dusted_dirt",
+							"mb:dusted_podzol",
+							"minecraft:crimson_nylium",
+							"minecraft:warped_nylium",
+							"minecraft:netherrack"
+						]
+					}
+				]
+			},
+			"minecraft:flammable": {
+				"catch_chance_modifier": 30,
+				"destroy_chance_modifier": 60
+			}
+		}
+	}
+}

@@ -20,6 +20,7 @@
 3. **Corruption vs purification** — gear can spread or carry powder; golden apple + purified dense snow cleans it.
 4. **Journal discovery** — codex Items entries; purification knowledge unlocks extra lore on base entries.
 5. **Anti–Maple Bear** — combat bonus vs all `mb:*` addon mobs (same set as spawn telemetry / `ALL_MB_MOB_TYPES`).
+6. **Help, not a win button** — gear feeds the keep-playing loop ([PLAYER_GOAL_AND_LOOP.md](PLAYER_GOAL_AND_LOOP.md)). Partial, hungry for repair/trips. Do not ship one item that ends the apocalypse.
 
 ---
 
@@ -356,6 +357,7 @@ POOL C — signature item (player kill, rare %)
 2. **Unpurified arm repair:** dense snow only, or dense + iron?
 3. **Spine blast:** keep MB bonus multiplier on top of “hurts everything,” or equal blast + cured as bear-hunter only?
 4. **Dense snow block:** gameplay effect (fuel, emulsifier, zone marker, etc.).
+5. **Emulsifier detox fuel (2026-09-01 brainstorm, not scheduled):** Mix today's fuel amounts with "snow" (maybe a **detox orb**) so the machine no longer eats raw ingots. Condensed "snow" by combining powder with itself — use this dense chain, do not invent a second one. See `docs/development/planning/IDEA_BRAINSTORM.md` (Later brainstorms).
 
 ---
 

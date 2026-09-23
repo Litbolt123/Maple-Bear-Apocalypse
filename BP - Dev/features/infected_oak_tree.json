@@ -1,0 +1,87 @@
+{
+	"format_version": "1.13.0",
+	"minecraft:tree_feature": {
+		"description": {
+			"identifier": "mb:infected_oak_tree"
+		},
+		"trunk": {
+			"trunk_height": {
+				"range_min": 4,
+				"range_max": 7
+			},
+			"trunk_block": "minecraft:oak_log"
+		},
+		"canopy": {
+			"canopy_offset": {
+				"min": -3,
+				"max": 0
+			},
+			"variation_chance": [
+				{ "numerator": 1, "denominator": 2 },
+				{ "numerator": 1, "denominator": 2 },
+				{ "numerator": 1, "denominator": 2 },
+				{ "numerator": 1, "denominator": 1 }
+			],
+			"leaf_block": "minecraft:oak_leaves"
+		},
+		"base_block": [
+			"minecraft:dirt",
+			"minecraft:grass_block"
+		],
+		"may_grow_on": [
+			"minecraft:dirt",
+			"minecraft:grass_block",
+			"minecraft:podzol",
+			"minecraft:dirt_with_roots",
+			"minecraft:moss_block",
+			"mb:dusted_dirt"
+		],
+		"may_replace": [
+			"minecraft:air",
+			"minecraft:water",
+			"minecraft:flowing_water",
+			"minecraft:short_grass",
+			"minecraft:tall_grass",
+			"minecraft:tallgrass",
+			"minecraft:fern",
+			"minecraft:large_fern",
+			"minecraft:deadbush",
+			"minecraft:vine",
+			"minecraft:moss_carpet",
+			"minecraft:oak_leaves",
+			"minecraft:birch_leaves",
+			"minecraft:spruce_leaves",
+			"minecraft:jungle_leaves",
+			"minecraft:acacia_leaves",
+			"minecraft:dark_oak_leaves",
+			"minecraft:cherry_leaves",
+			"minecraft:azalea_leaves",
+			"minecraft:azalea_leaves_flowered",
+			"minecraft:mangrove_leaves",
+			"minecraft:double_plant",
+			"minecraft:sunflower",
+			"minecraft:lilac",
+			"minecraft:rose_bush",
+			"minecraft:peony",
+			"minecraft:reeds",
+			"minecraft:seagrass",
+			"minecraft:kelp",
+			"minecraft:waterlily",
+			"mb:infected_oak_leaves",
+			"mb:infected_oak_leaves_1",
+			"mb:infected_oak_leaves_2",
+			"mb:infected_oak_leaves_3",
+			"mb:infected_birch_leaves",
+			"mb:snow_layer"
+		],
+		"may_grow_through": [
+			"minecraft:air",
+			"minecraft:water",
+			"minecraft:flowing_water",
+			"minecraft:short_grass",
+			"minecraft:tall_grass",
+			"minecraft:dirt",
+			"minecraft:grass_block"
+		]
+	}
+}
