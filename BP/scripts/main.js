@@ -5272,7 +5272,18 @@ system.runInterval(() => {
     // Only check players who are on infected ground
     if (playersOnInfectedGround.size === 0) return;
 
-    const _fastPlayers = spreadPlayersForWork(world.getAllPlayers(), "groundFast");
+    // After day 3, spreadPlayersForWork returns everyone. With 2+ players, force one
+    // on-ground player per pass. Timers are in seconds, so each player still finishes.
+    const _worldPlayers = world.getAllPlayers();
+    const _onGroundPlayers = [];
+    for (const player of _worldPlayers) {
+        if (player?.isValid && playersOnInfectedGround.has(player.id)) _onGroundPlayers.push(player);
+    }
+    const _fastPlayers = spreadPlayersForWork(
+        _onGroundPlayers,
+        "groundFast",
+        _worldPlayers.length >= 2
+    );
     const ambientCountByPlayer = buildSharedAmbientCounts(_fastPlayers);
     for (const player of _fastPlayers) {
         try {

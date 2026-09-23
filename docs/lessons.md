@@ -2,6 +2,13 @@
 
 Short log so the same fix is not re-taught. Newest first.
 
+## 2026-09-23 — Ground fast path round-robin after day 3
+
+- **Symptom:** `spreadPlayersForWork` only rotates players through day 3. At day 100 the infected-ground fast loop still checks every player every pass.
+- **Failed:** Turning the day-3 gate off globally would also rotate biome, inventory, and other callers.
+- **Worked:** Optional `forceRoundRobin` on `spreadPlayersForWork`, used only by the ground fast path when the world has 2+ players. Rotate the on-ground list, one player per pass. Timers stay in seconds, so each player still finishes.
+- **Verify:** Change C in `docs/development/testing/infection-spread-efficiency-check.md`. Two players on infected ground both still infect. Solo cadence unchanged.
+
 ## 2026-09-23 — Infection writes must drain, not drop
 
 - **Symptom:** Day-100 hitch from kill `setType` bursts and storm snow waves, plus a full `dustedDirtCache` walk per player on infected ground.

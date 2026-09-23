@@ -48,9 +48,25 @@ Preserves: ambient pressure, LOS walls, the 100-block threshold, per-player infe
 | Day 100 with 2+ players on the infected ground does not hitch every second the way a full-cache walk per player did. Spread still looks fast. | |
 | Self-test cache **cells** stays well below **entries** on a large world (the index is in use). | |
 
+## Change C — ground-check round-robin (2+ players)
+
+The infected-ground **fast** path (about once a second) used to run the ground and ambient check for every player on infected ground. After day 3, `spreadPlayersForWork` returns everyone. With **2 or more players in the world**, that path now forces the same round-robin: **one player who is on infected ground per pass**. A solo world is unchanged. One person on the patch, with others elsewhere, is still checked every pass.
+
+This does not touch block writes, the runJob queue, storm placement, or storm duration. Change A and Change B stay. The shared ambient sample still runs, but only for the player whose turn it is (a one-player pocket that pass).
+
+Preserves: ground infection, snow 2× speed, jump-still-counts, decay, per-player timers. Timers are in seconds (about 180s of ground exposure to infect), so a turn every few seconds still finishes. Slightly slower or uneven between players is expected. Day-100 block spread is unchanged and still fast.
+
+| Check | Pass |
+| --- | --- |
+| Two players standing on infected ground both still become infected. It may take a bit longer than one player, and their timers may tick on alternating seconds. | |
+| Jumping on infected ground still counts. Stepping off still decays. Snow still speeds ground infection. | |
+| One player in the world is not round-robined (same cadence as before). | |
+| Day 100 with 2+ players: block spread still looks fast. The ground check does not walk every player on every pass. | |
+| Bears, storms, kill spread, and the write queue still finish. No half-converted patch. Self-test queue still returns to empty. | |
+
 ## Not in this change
 
-Block cleanup, mining-AI stretch, storm size/duration clamps, and ground-check round-robin are not in this branch.
+Block cleanup and mining-AI stretch are not in this branch. Storm placement and duration are not clamped.
 
 ## Static check
 

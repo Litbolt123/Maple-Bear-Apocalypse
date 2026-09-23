@@ -975,13 +975,16 @@ export function claimSpreadSlice(category, baseIntervalTicks) {
 
 /**
  * Pick one player per call (round-robin) while throttling MP; otherwise all players.
+ * `forceRoundRobin` keeps the rotation after day 3. The infected-ground fast path uses that
+ * when two or more players are in the world so day 100 does not run every ground check every pass.
  * @param {import("@minecraft/server").Player[]} players
  * @param {string} category
+ * @param {boolean} [forceRoundRobin]
  * @returns {import("@minecraft/server").Player[]}
  */
-export function spreadPlayersForWork(players, category) {
+export function spreadPlayersForWork(players, category, forceRoundRobin = false) {
     if (!players?.length) return [];
-    if (!isVillageEntitySpreadActive() || players.length <= 1) return players;
+    if ((!forceRoundRobin && !isVillageEntitySpreadActive()) || players.length <= 1) return players;
     let i = playerRotate.get(category) ?? 0;
     const picked = players[i % players.length];
     playerRotate.set(category, (i + 1) % players.length);

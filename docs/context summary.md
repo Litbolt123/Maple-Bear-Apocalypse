@@ -8,6 +8,11 @@ Running log of **what changed and why** (gameplay, scripts, assets, docs). Used 
 
 ---
 
+## 2026-09-23 — Ground-check round-robin (fast path, 2+ players)
+
+- Infected-ground fast loop calls `spreadPlayersForWork(..., forceRoundRobin)` when the world has 2+ players. One on-ground player per pass after day 3. Solo unchanged. Does not touch the write queue, ambient index, or storm scale.
+- Checklist section Change C in `docs/development/testing/infection-spread-efficiency-check.md`. PR #6 stays draft.
+
 ## 2026-09-23 — Infection spread efficiency (Change A + B only)
 
 - **Change A:** Kill `spreadDustedDirt` writes and storm snow placement go through `mb_infectionWriteQueue.js`. One `system.runJob` generator (`Generator<void, void, void>`, Script API 2.10.0) drains until empty. Dust slice is 24 so a ≤20-block kill finishes in one resume. Storm placement count and duration stay on the day curve (~8.7× at day 100). No `fillBlocks`, no per-block tick, no `clearJob` while work remains.
