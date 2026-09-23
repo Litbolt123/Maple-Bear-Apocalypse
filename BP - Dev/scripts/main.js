@@ -12,6 +12,7 @@ import {
 import { getCodex, getDefaultCodex, markCodex, markSubsectionUnlock, markSectionUnlock, showCodexBook, saveCodex, recordBiomeVisit, getBiomeInfectionLevel, shareKnowledge, isDebugEnabled, showBasicJournalUI, showFirstTimeWelcomeScreen, getPlayerSoundVolume, getPlayerSettings, checkKnowledgeProgression, showEmulsifierMachineUI, getInfectionCueEmitterTier, getInfectionCueHearOthersTier, getInfectionCameraShakeEnabled, ensurePlayerChangelogMigration } from "./mb_codex.js";
 import { initializeDayTracking, getCurrentDay, setCurrentDay, getInfectionMessage, checkDailyEventsForAllPlayers, getDayDisplayInfo, recordDailyEvent, mbiHandleMilestoneDay, isMilestoneDay } from "./mb_dayTracker.js";
 import { registerDustedDirtBlock, unregisterDustedDirtBlock, countNearbyDustedDirtBlocks, upsertEmulsifierZoneAtBlock, removeEmulsifierZoneAtBlock, getEmulsifierZoneAtBlock, getZoneFuelQueueForUI, isInsideEmulsifierNoSpawnZone } from "./mb_spawnController.js";
+import { enqueueDustedDirtConversion, getDustedDirtQueueLength, setDustedDirtWriteApplier, WRITE_RETRY } from "./mb_infectionWriteQueue.js";
 import { initializePropertyHandler, getPlayerProperty, setPlayerProperty, getWorldProperty, setWorldProperty, getAddonDifficultyState, flushPlayerPropertyToDisk, clearPlayerPropertyToDisk } from "./mb_dynamicPropertyHandler.js";
 import { initializeAdaptivePerformanceWatch, getPerfWallStress01, getPerfMobPressureForSpawn01, getPlayerThriftTier } from "./mb_performanceProfile.js";
 import { getBearSnapshot, getBearSnapshotsForDimensions } from "./mb_bearSnapshot.js";
@@ -183,6 +184,8 @@ const GROUND_MAJOR_DECAY_SECONDS_PER_TICK = 1; // Doubled from 0.5 - Every check
 
 const AMBIENT_PRESSURE_RADIUS = 32;
 const AMBIENT_PRESSURE_THRESHOLD = 100;
+/** Players within this distance share one ambient cache sample (same pocket). */
+const AMBIENT_CLUSTER_RADIUS = 32;
 const AMBIENT_WARNING_SECONDS = 600; // 10 minutes
 const AMBIENT_INFECTION_SECONDS = 630; // 10 minutes + 30 seconds
 const GROUND_NAUSIA_DURATION_TICKS = 100; // 5 seconds when standing on infected ground triggers warning
@@ -3026,12 +3029,69 @@ function cleanupOldDustedDirt() {
     }
 }
 
-// Spread dusted dirt like sculk when Maple Bears kill things
+const DUSTED_DIRT_CONVERTIBLE_BLOCKS = [
+    "minecraft:grass_block",
+    "minecraft:dirt",
+    "minecraft:coarse_dirt",
+    "minecraft:podzol",
+    "minecraft:mycelium",
+    "minecraft:stone",
+    "minecraft:cobblestone",
+    "minecraft:mossy_cobblestone"
+];
+
+/**
+ * Apply one queued kill-spread write. Selection already happened; this only commits it.
+ * Unloaded chunks retry a few resumes so a started spread still finishes.
+ * @returns {true | false | "retry"}
+ */
+function applyQueuedDustedDirtWrite(job) {
+    const { x, y, z, dimension, key } = job;
+    try {
+        if (!dimension || typeof dimension.getBlock !== "function") return false;
+        const block = dimension.getBlock({ x, y, z });
+        if (!block) {
+            job.retries = (job.retries ?? 0) + 1;
+            if (job.retries <= 8) return WRITE_RETRY;
+            return false;
+        }
+        if (!DUSTED_DIRT_CONVERTIBLE_BLOCKS.includes(block.typeId)) return false;
+
+        trackedDustedDirtBlocks.set(key, { tick: system.currentTick, dimension: dimension.id });
+        try {
+            registerDustedDirtBlock(x, y, z, dimension);
+        } catch (registerError) {
+            trackedDustedDirtBlocks.delete(key);
+            console.warn(`[DUSTED_DIRT] Failed to register block at ${x},${y},${z}:`, registerError);
+            return false;
+        }
+
+        block.setType("mb:dusted_dirt");
+        try {
+            dimension.runCommand(`particle minecraft:snowflake ${x} ${y + 1} ${z}`);
+        } catch { /* particle is cosmetic */ }
+        return true;
+    } catch (error) {
+        job.retries = (job.retries ?? 0) + 1;
+        if (job.retries <= 8) return WRITE_RETRY;
+        console.warn(`[DUSTED_DIRT] Failed to write block at ${x},${y},${z}:`, error);
+        return false;
+    }
+}
+
+setDustedDirtWriteApplier(applyQueuedDustedDirtWrite);
+
+function dustedDirtTrackedOrQueued() {
+    return trackedDustedDirtBlocks.size + getDustedDirtQueueLength();
+}
+
+// Spread dusted dirt like sculk when Maple Bears kill things.
+// Candidate picks stay on the death tick. Block writes go to the host job queue.
 function spreadDustedDirt(location, dimension, killerType, victimType) {
     try {
         // Check if we're at the limit before spreading
         cleanupOldDustedDirt();
-        if (trackedDustedDirtBlocks.size >= DUSTED_DIRT_MAX_BLOCKS) {
+        if (dustedDirtTrackedOrQueued() >= DUSTED_DIRT_MAX_BLOCKS) {
             return; // Don't spread more if at limit
         }
         
@@ -3173,60 +3233,27 @@ function spreadDustedDirt(location, dimension, killerType, victimType) {
         // Sort by distance (closer first) to create natural spread pattern
         candidates.sort((a, b) => a.distance - b.distance);
         
-        // Convert blocks up to maxBlocks limit
+        // Pick convertible blocks now (reads). Writes drain on the host job so the death tick
+        // does not apply the whole burst. Every picked block stays queued until it is written.
         for (const candidate of candidates) {
             if (blocksConverted >= maxBlocks) break;
-            
+
             try {
                 const block = dimension.getBlock({ x: candidate.x, y: candidate.y, z: candidate.z });
+                if (!block || !DUSTED_DIRT_CONVERTIBLE_BLOCKS.includes(block.typeId)) continue;
+                if (dustedDirtTrackedOrQueued() >= DUSTED_DIRT_MAX_BLOCKS) break;
 
-                // Only convert certain blocks to dusted dirt
-                const convertibleBlocks = [
-                    'minecraft:grass_block',
-                    'minecraft:dirt',
-                    'minecraft:coarse_dirt',
-                    'minecraft:podzol',
-                    'minecraft:mycelium',
-                    'minecraft:stone',
-                    'minecraft:cobblestone',
-                    'minecraft:mossy_cobblestone'
-                ];
-
-                if (block && convertibleBlocks.includes(block.typeId)) {
-                    // Check limit before converting
-                    if (trackedDustedDirtBlocks.size >= DUSTED_DIRT_MAX_BLOCKS) break;
-                    
-                    const key = `${candidate.x},${candidate.y},${candidate.z},${dimension.id}`;
-                    
-                    // Track this block BEFORE converting (atomicity)
-                    try {
-                        trackedDustedDirtBlocks.set(key, { tick: system.currentTick, dimension: dimension.id });
-                        
-                        // Register in spawn controller cache
-                        try {
-                            registerDustedDirtBlock(candidate.x, candidate.y, candidate.z, dimension);
-                        } catch (registerError) {
-                            // If registration fails, revert tracking
-                            trackedDustedDirtBlocks.delete(key);
-                            console.warn(`[DUSTED_DIRT] Failed to register block at ${candidate.x},${candidate.y},${candidate.z}:`, registerError);
-                            // Block hasn't been converted yet, so no revert needed
-                            continue;
-                        }
-                        
-                        // Now convert the block (tracking is guaranteed)
-                        block.setType('mb:dusted_dirt');
-                        blocksConverted++;
-                        
-                        // Add particle effect for each conversion
-                        dimension.runCommand(`particle minecraft:snowflake ${candidate.x} ${candidate.y + 1} ${candidate.z}`);
-                    } catch (trackError) {
-                        // If tracking fails, don't convert the block
-                        console.warn(`[DUSTED_DIRT] Failed to track block at ${candidate.x},${candidate.y},${candidate.z}:`, trackError);
-                        // Block not converted, so no revert needed
-                    }
-                }
-            } catch (e) {
-                // Ignore errors for individual blocks
+                const key = `${candidate.x},${candidate.y},${candidate.z},${dimension.id}`;
+                enqueueDustedDirtConversion({
+                    x: candidate.x,
+                    y: candidate.y,
+                    z: candidate.z,
+                    dimension,
+                    key
+                });
+                blocksConverted++;
+            } catch {
+                // Unloaded cell: skip this candidate. Started writes are the ones already queued.
             }
         }
 
@@ -5149,6 +5176,94 @@ system.runInterval(() => {
     }
 }, 8); // Poll often; claimSpreadSlice gates real work (slower on day 0–1)
 
+function clusterPlayersByPocket(players, radius) {
+    const radiusSq = radius * radius;
+    const parent = players.map((_, index) => index);
+    const find = (index) => {
+        let cursor = index;
+        while (parent[cursor] !== cursor) {
+            parent[cursor] = parent[parent[cursor]];
+            cursor = parent[cursor];
+        }
+        return cursor;
+    };
+    for (let i = 0; i < players.length; i++) {
+        const a = players[i];
+        const dimA = a.dimension?.id;
+        const locA = a.location;
+        if (!dimA || !locA) continue;
+        for (let j = i + 1; j < players.length; j++) {
+            const b = players[j];
+            if (b.dimension?.id !== dimA || !b.location) continue;
+            const dx = locA.x - b.location.x;
+            const dy = locA.y - b.location.y;
+            const dz = locA.z - b.location.z;
+            if ((dx * dx + dy * dy + dz * dz) <= radiusSq) {
+                parent[find(i)] = find(j);
+            }
+        }
+    }
+    const groups = new Map();
+    for (let i = 0; i < players.length; i++) {
+        const root = find(i);
+        let group = groups.get(root);
+        if (!group) {
+            group = [];
+            groups.set(root, group);
+        }
+        group.push(players[i]);
+    }
+    return Array.from(groups.values());
+}
+
+/**
+ * One spatial ambient sample per player pocket. Players in the cluster share the count.
+ * Line-of-sight walls still apply, from the cluster centroid. Per-player timers stay outside.
+ * @param {import("@minecraft/server").Player[]} players
+ * @returns {Map<string, number>}
+ */
+function buildSharedAmbientCounts(players) {
+    const eligible = [];
+    for (const player of players) {
+        if (!player?.isValid) continue;
+        if (!playersOnInfectedGround.has(player.id)) continue;
+        if (introInProgress.has(player.id)) continue;
+        try {
+            const gameMode = player.getGameMode?.();
+            if (gameMode === "creative" || gameMode === "spectator") continue;
+        } catch { /* still sample */ }
+        eligible.push(player);
+    }
+
+    const byId = new Map();
+    const clusters = clusterPlayersByPocket(eligible, AMBIENT_CLUSTER_RADIUS);
+    for (const cluster of clusters) {
+        let sx = 0;
+        let sy = 0;
+        let sz = 0;
+        for (const player of cluster) {
+            sx += player.location.x;
+            sy += player.location.y;
+            sz += player.location.z;
+        }
+        const countN = cluster.length;
+        const center = { x: sx / countN, y: sy / countN, z: sz / countN };
+        let count = 0;
+        try {
+            count = countNearbyDustedDirtBlocks(
+                center,
+                cluster[0].dimension,
+                AMBIENT_PRESSURE_RADIUS,
+                AMBIENT_PRESSURE_THRESHOLD
+            );
+        } catch {
+            count = 0;
+        }
+        for (const player of cluster) byId.set(player.id, count);
+    }
+    return byId;
+}
+
 // Fast check loop: Processes ground exposure for players on infected ground (more frequent)
 system.runInterval(() => {
     if (shouldSleepDayZeroWorldWork("ground")) return;
@@ -5158,6 +5273,7 @@ system.runInterval(() => {
     if (playersOnInfectedGround.size === 0) return;
 
     const _fastPlayers = spreadPlayersForWork(world.getAllPlayers(), "groundFast");
+    const ambientCountByPlayer = buildSharedAmbientCounts(_fastPlayers);
     for (const player of _fastPlayers) {
         try {
             if (!playersOnInfectedGround.has(player.id)) continue;
@@ -5229,7 +5345,7 @@ system.runInterval(() => {
             let ambientActive = false;
             let ambientCount = 0;
             try {
-                ambientCount = countNearbyDustedDirtBlocks(player.location, player.dimension, AMBIENT_PRESSURE_RADIUS, AMBIENT_PRESSURE_THRESHOLD);
+                ambientCount = ambientCountByPlayer.get(player.id) ?? 0;
                 ambientActive = ambientCount >= AMBIENT_PRESSURE_THRESHOLD;
                 if ((isDebugEnabled("ground_infection", "ambient") || isDebugEnabled("ground_infection", "all")) && ambientActive) {
                     console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Ambient pressure active (${ambientCount} blocks >= ${AMBIENT_PRESSURE_THRESHOLD})`);

@@ -3353,8 +3353,42 @@ const CHUNK_TRIM_INTERVAL = SCAN_INTERVAL * 20; // Check for chunks to trim ever
 // ============================================================================
 
 // Global cache for dusted_dirt block positions
-// key: "x,y,z" -> { x, y, z, tick, dimension, chunkKey }
+// key: "x,y,z" -> { x, y, z, tick, dimension, chunkKey, cellKey }
 const dustedDirtCache = new Map();
+/** 16-block cells so ambient samples touch nearby pockets, not the whole hour-long map. */
+const DUSTED_DIRT_CELL = 16;
+/** cellKey -> entry[] (same objects as dustedDirtCache) */
+const dustedDirtByCell = new Map();
+
+function dustCellKey(x, y, z) {
+    return `${Math.floor(x / DUSTED_DIRT_CELL)},${Math.floor(y / DUSTED_DIRT_CELL)},${Math.floor(z / DUSTED_DIRT_CELL)}`;
+}
+
+function indexDustedDirtEntry(entry) {
+    const cellKey = dustCellKey(entry.x, entry.y, entry.z);
+    entry.cellKey = cellKey;
+    let bucket = dustedDirtByCell.get(cellKey);
+    if (!bucket) {
+        bucket = [];
+        dustedDirtByCell.set(cellKey, bucket);
+    }
+    bucket.push(entry);
+}
+
+function unindexDustedDirtEntry(entry) {
+    if (!entry?.cellKey) return;
+    const bucket = dustedDirtByCell.get(entry.cellKey);
+    if (!bucket) return;
+    const idx = bucket.indexOf(entry);
+    if (idx >= 0) bucket.splice(idx, 1);
+    if (bucket.length === 0) dustedDirtByCell.delete(entry.cellKey);
+}
+
+function deleteDustedDirtCacheKey(key) {
+    const entry = dustedDirtCache.get(key);
+    if (entry) unindexDustedDirtEntry(entry);
+    dustedDirtCache.delete(key);
+}
 // Track active chunks (chunks player is currently near)
 // key: "chunkX,chunkZ" -> lastVisitTick
 const activeChunks = new Map();
@@ -3573,7 +3607,7 @@ function trimOldChunks() {
     let removedCount = 0;
     for (const [key, value] of dustedDirtCache.entries()) {
         if (value.chunkKey && chunksToRemove.includes(value.chunkKey)) {
-            dustedDirtCache.delete(key);
+            deleteDustedDirtCacheKey(key);
             removedCount++;
         }
     }
@@ -3617,7 +3651,10 @@ export function registerDustedDirtBlock(x, y, z, dimension = null) {
         dimension: dimensionId,
         chunkKey: chunkKey
     };
+    const previous = dustedDirtCache.get(key);
+    if (previous) unindexDustedDirtEntry(previous);
     dustedDirtCache.set(key, entry);
+    indexDustedDirtEntry(entry);
     
     // Track chunk (even if not currently active)
     if (!chunkLastVisit.has(chunkKey)) {
@@ -3634,7 +3671,14 @@ export function registerDustedDirtBlock(x, y, z, dimension = null) {
 
 export function unregisterDustedDirtBlock(x, y, z) {
     const key = `${Math.floor(x)},${Math.floor(y)},${Math.floor(z)}`;
-    dustedDirtCache.delete(key);
+    deleteDustedDirtCacheKey(key);
+}
+
+export function getDustedDirtCacheStats() {
+    return {
+        entries: dustedDirtCache.size,
+        cells: dustedDirtByCell.size
+    };
 }
 
 export function countNearbyDustedDirtBlocks(center, dimension, radius, limit = 100) {
@@ -3667,20 +3711,36 @@ export function countNearbyDustedDirtBlocks(center, dimension, radius, limit = 1
     let count = 0;
     const eye = { x: center.x, y: center.y + 1.5, z: center.z };
 
-    for (const value of dustedDirtCache.values()) {
-        if (value?.chunkKey && !activeChunks.has(value.chunkKey)) continue;
-        if (value?.dimension && value.dimension !== dimensionId) continue;
+    // Cells that can overlap the sphere. This replaces a full dustedDirtCache walk.
+    // Active-chunk filtering followed one spawn anchor and skipped the other player's pocket.
+    const minCX = Math.floor((center.x - radius) / DUSTED_DIRT_CELL);
+    const maxCX = Math.floor((center.x + radius) / DUSTED_DIRT_CELL);
+    const minCY = Math.floor((center.y - radius) / DUSTED_DIRT_CELL);
+    const maxCY = Math.floor((center.y + radius) / DUSTED_DIRT_CELL);
+    const minCZ = Math.floor((center.z - radius) / DUSTED_DIRT_CELL);
+    const maxCZ = Math.floor((center.z + radius) / DUSTED_DIRT_CELL);
 
-        const dx = value.x - center.x;
-        const dy = value.y - center.y;
-        const dz = value.z - center.z;
-        if ((dx * dx + dy * dy + dz * dz) > radiusSq) continue;
+    for (let cx = minCX; cx <= maxCX; cx++) {
+        for (let cy = minCY; cy <= maxCY; cy++) {
+            for (let cz = minCZ; cz <= maxCZ; cz++) {
+                const bucket = dustedDirtByCell.get(`${cx},${cy},${cz}`);
+                if (!bucket) continue;
+                for (const value of bucket) {
+                    if (value?.dimension && value.dimension !== dimensionId) continue;
 
-        const blockCenter = { x: value.x + 0.5, y: value.y + 0.5, z: value.z + 0.5 };
-        if (!hasInfectionExposureLineOfSight(resolvedDimension, eye, blockCenter)) continue;
+                    const dx = value.x - center.x;
+                    const dy = value.y - center.y;
+                    const dz = value.z - center.z;
+                    if ((dx * dx + dy * dy + dz * dz) > radiusSq) continue;
 
-        count++;
-        if (count >= limit) break;
+                    const blockCenter = { x: value.x + 0.5, y: value.y + 0.5, z: value.z + 0.5 };
+                    if (!hasInfectionExposureLineOfSight(resolvedDimension, eye, blockCenter)) continue;
+
+                    count++;
+                    if (count >= limit) return count;
+                }
+            }
+        }
     }
 
     return count;
@@ -4180,7 +4240,7 @@ function validateDustedDirtCache(dimension) {
     }
 
     for (const key of toRemove) {
-        dustedDirtCache.delete(key);
+        deleteDustedDirtCacheKey(key);
     }
 
     if (q.idx >= q.pairs.length) {

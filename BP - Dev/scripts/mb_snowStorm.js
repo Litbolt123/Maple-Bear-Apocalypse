@@ -16,6 +16,7 @@ import { shouldPauseDayZeroAddonLoops } from "./mb_dayZeroPerfBisect.js";
 import { shouldSkipExpensiveEntityQueries } from "./mb_entityQueryGate.js";
 import { safeQueryEntitiesNear } from "./mb_workSpread.js";
 import { tickStormExposureCameraBuzz } from "./mb_infectionCameraShake.js";
+import { enqueueSnowPlacementWave } from "./mb_infectionWriteQueue.js";
 
 /** Stretch storm work intervals when lag profile / player count / dev mult asks for lighter load. */
 function scaledStormTicks(baseTicks) {
@@ -580,12 +581,68 @@ function getStormSizeMultiplier(progress) {
     return 1.0 - ((progress - 0.75) / 0.25) * 0.7; // Ramp down: 1.0 -> 0.3
 }
 
+function stormRadiusNow(storm, currentTick) {
+    const duration = storm.endTick - storm.startTick;
+    const progress = duration > 0 ? Math.min(1, Math.max(0, (currentTick - storm.startTick) / duration)) : 1;
+    const mult = getStormSizeMultiplier(progress);
+    const baseR = storm.type === "major" ? BASE_STORM_RADIUS_MAJOR : BASE_STORM_RADIUS_MINOR;
+    return baseR * mult * (storm.intensity ?? 1);
+}
+
+function cancelStormSnowWave(storm) {
+    if (!storm?._snowPending) return;
+    storm._snowPending.cancelled = true;
+    storm._snowPending = null;
+}
+
+/**
+ * One snow-placement attempt for the shared host write job.
+ * Placement count and attempt budget stay on the wave; this does not clamp them.
+ * @returns {true | false | "pause" | "stop"}
+ */
+function placeOneSnowAttempt(storm) {
+    if (!storm || storm.enabled === false) return "pause";
+    const currentTick = system.currentTick;
+    if (currentTick >= storm.endTick) return "stop";
+
+    let dimension;
+    try {
+        dimension = world.getDimension("overworld");
+    } catch {
+        return "pause";
+    }
+    if (!dimension) return "pause";
+
+    const radius = stormRadiusNow(storm, currentTick);
+    if (radius < 5) return "pause";
+
+    const players = dimension.getPlayers?.() ?? [];
+    const angle = Math.random() * Math.PI * 2;
+    const distance = Math.random() * radius * 0.9;
+    const x = Math.floor(storm.centerX + Math.cos(angle) * distance);
+    const z = Math.floor(storm.centerZ + Math.sin(angle) * distance);
+    const nearPlayer = players.some((p) => p?.isValid && Math.hypot(p.location.x - x, p.location.z - z) <= 96);
+    if (!nearPlayer) return false;
+
+    const surface = findSurfaceBlock(dimension, x, z);
+    if (!surface) return false;
+    const place = storm.type === "major" ? tryPlaceSnowLayerMajor : tryPlaceSnowLayerMinor;
+    if (place(dimension, surface.x, surface.y, surface.z)) {
+        totalSnowPlacedThisStorm++;
+        if (isDebugEnabled("snow_storm", "placement") || isDebugEnabled("snow_storm", "all")) {
+            console.warn(`[SNOW STORM] Placed snow at (${surface.x}, ${surface.y + 1}, ${surface.z})`);
+        }
+        return true;
+    }
+    return false;
+}
+
 /**
  * Place snow layer at location (minor storm - no grass replacement)
- * @param {Dimension} dimension 
- * @param {number} x 
+ * @param {Dimension} dimension
+ * @param {number} x
  * @param {number} y Top solid block Y
- * @param {number} z 
+ * @param {number} z
  * @returns {boolean} Success
  */
 function tryPlaceSnowLayerMinor(dimension, x, y, z) {
@@ -1131,6 +1188,9 @@ system.runInterval(() => {
         const currentTick = system.currentTick;
 
         const beforeCount = storms.length;
+        for (const storm of storms) {
+            if (storm.endTick <= currentTick) cancelStormSnowWave(storm);
+        }
         storms = storms.filter(s => s.endTick > currentTick);
         if (storms.length < beforeCount) {
             syncPrimaryStorm();
@@ -1324,19 +1384,16 @@ system.runInterval(() => {
         }
 
         if (phase === 4) {
-            const PLACEMENT_NEAR_PLAYER = 96;
             const dbgPlace = isDebugEnabled("snow_storm", "placement") || isDebugEnabled("snow_storm", "all");
             for (const { storm, currentRadius } of stormData) {
-                if (!isStormCenterNearAnyPlayerHorizontal(storm, players, STORM_PLAYER_LITE_DISTANCE_BLOCKS)) {
-                    storm._snowPending = null;
-                    continue;
-                }
-                const placeInterval = scaledStormTicks(storm.type === "major" ? MAJOR_PLACEMENT_INTERVAL : PLACEMENT_INTERVAL);
-                if (currentRadius < 5) {
-                    storm._snowPending = null;
+                if (!isStormCenterNearAnyPlayerHorizontal(storm, players, STORM_PLAYER_LITE_DISTANCE_BLOCKS) || currentRadius < 5) {
+                    // Player left the storm, or the storm is still tiny. Same stop as before.
+                    // This is not a tick-budget drop: a wave that stays in range drains to its target.
+                    cancelStormSnowWave(storm);
                     continue;
                 }
 
+                const placeInterval = scaledStormTicks(storm.type === "major" ? MAJOR_PLACEMENT_INTERVAL : PLACEMENT_INTERVAL);
                 const lastPlace = storm._snowLastPlaceTick ?? -1e9;
                 if (!storm._snowPending && currentTick - lastPlace >= placeInterval) {
                     storm._snowLastPlaceTick = currentTick;
@@ -1347,45 +1404,23 @@ system.runInterval(() => {
                     );
                     const placementCount = Math.max(1, Math.floor(basePlacementCount * storm.intensity));
                     const attemptMultiplier = storm.type === "major" ? 5 : 3;
-                    storm._snowPending = {
+                    const wave = {
                         target: placementCount,
+                        maxAttempts: placementCount * attemptMultiplier,
                         placed: 0,
                         iter: 0,
-                        maxAttempts: placementCount * attemptMultiplier,
-                        placeFunc: storm.type === "major" ? tryPlaceSnowLayerMajor : tryPlaceSnowLayerMinor
+                        cancelled: false,
+                        attemptsPerResume: STORM_SNOW_MAX_ATTEMPTS_PER_TICK,
+                        attempt: () => placeOneSnowAttempt(storm),
+                        onDone: (placed, iter) => {
+                            if (storm._snowPending === wave) storm._snowPending = null;
+                            if (dbgPlace) {
+                                console.warn(`[SNOW STORM] Placement: ${placed}/${placementCount} placed, ${iter} attempts`);
+                            }
+                        }
                     };
-                }
-
-                const pend = storm._snowPending;
-                if (!pend) continue;
-
-                let batch = 0;
-                while (pend.placed < pend.target && pend.iter < pend.maxAttempts && batch < STORM_SNOW_MAX_ATTEMPTS_PER_TICK) {
-                    pend.iter++;
-                    batch++;
-                    const angle = Math.random() * Math.PI * 2;
-                    const distance = Math.random() * currentRadius * 0.9;
-                    const x = Math.floor(storm.centerX + Math.cos(angle) * distance);
-                    const z = Math.floor(storm.centerZ + Math.sin(angle) * distance);
-
-                    const nearPlayer = players.some(p => p?.isValid && Math.hypot(p.location.x - x, p.location.z - z) <= PLACEMENT_NEAR_PLAYER);
-                    if (!nearPlayer) continue;
-
-                    const surface = findSurfaceBlock(overworld, x, z);
-                    if (!surface) continue;
-                    if (pend.placeFunc(overworld, surface.x, surface.y, surface.z)) {
-                        pend.placed++;
-                        totalSnowPlacedThisStorm++;
-                        if (dbgPlace) console.warn(`[SNOW STORM] Placed snow at (${surface.x}, ${surface.y + 1}, ${surface.z})`);
-                    }
-                }
-
-                if (pend.placed >= pend.target || pend.iter >= pend.maxAttempts) {
-                    // Avoid spamming Content Log on empty waves (e.g. storm away from loaded chunks); use snow_storm→placement debug for details.
-                    if (dbgPlace) {
-                        console.warn(`[SNOW STORM] Placement: ${pend.placed}/${pend.target} placed, ${pend.iter} attempts`);
-                    }
-                    storm._snowPending = null;
+                    storm._snowPending = wave;
+                    enqueueSnowPlacementWave(wave);
                 }
             }
             return;
@@ -1801,6 +1836,7 @@ export function getStorms() {
 export function endStormById(id) {
     const idx = storms.findIndex(s => s.id === id);
     if (idx < 0) return false;
+    cancelStormSnowWave(storms[idx]);
     storms.splice(idx, 1);
     syncPrimaryStorm();
     saveStormState();

@@ -20,7 +20,7 @@ Behavior pack scripts cannot run under Node.js end-to-end (`@minecraft/server` e
 
 | Where | What it does |
 |-------|----------------|
-| **Journal → Developer Tools → Systems → Script self-test (in-game)** | Runs **`mb_devScriptSelfTest.js`**: day, infection rate, addon difficulty, spawn-load snapshot, storm count, which script toggles are off, `SPAWN_CONFIGS` / cap counts, dimensions, block below feet, player count; then **`import()`** on every **`mb_*.js`** in the pack (38 files; `main.js` is entry only). Failures list per-file errors. Full plain text is also **`console.warn`**’d (Content Log). **Pin:** “Script self-test (in-game)” on the main menu. |
+| **Journal → Developer Tools → Systems → Script self-test (in-game)** | Runs **`mb_devScriptSelfTest.js`**: day, infection rate, addon difficulty, spawn-load snapshot, storm count, infection write-queue depth (dust queued, snow waves, job idle/running), which script toggles are off, `SPAWN_CONFIGS` / cap counts, dimensions, block below feet, player count; then **`import()`** on every listed **`mb_*.js`** (`main.js` is entry only). Failures list per-file errors. Full plain text is also **`console.warn`**’d (Content Log). **Pin:** “Script self-test (in-game)” on the main menu. Spread feel checks: `infection-spread-efficiency-check.md`. |
 
 This does **not** execute every script file; it samples APIs the addon already uses. Use **`npm run check`** on your PC for full static validation.
 

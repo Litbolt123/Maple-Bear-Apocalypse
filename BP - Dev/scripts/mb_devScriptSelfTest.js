@@ -16,6 +16,8 @@ import { getBearSnapshot, invalidateBearSnapshots, ALL_MB_BEAR_TYPES } from "./m
 import { isEntityValid } from "./mb_sharedCache.js";
 import { getInfectionDirectorSpawnModifiers } from "./mb_infectionDirector.js";
 import { getAbandonedVillageSelfTestLines } from "./mb_abandonedVillageWorldgen.js";
+import { getInfectionWriteQueueSnapshot } from "./mb_infectionWriteQueue.js";
+import { getDustedDirtCacheStats } from "./mb_spawnController.js";
 
 /**
  * Every `mb_*.js` under `BP/scripts/` (same order as `npm run test:scripts` / filesystem).
@@ -48,6 +50,7 @@ const SELF_TEST_MODULE_IMPORTS = [
     "./mb_infectionDirector.js",
     "./mb_infectionAudio.js",
     "./mb_infectionExposureLos.js",
+    "./mb_infectionWriteQueue.js",
     "./mb_itemFinder.js",
     "./mb_itemRegistry.js",
     "./mb_journalWhatsNew.js",
@@ -128,6 +131,22 @@ export async function runInGameScriptSelfTest(player) {
             push(`§7Active dust storms §f${getActiveStormCount()}`);
         } catch (e) {
             push(`§cStorm count: §f${e?.message || e}`);
+        }
+
+        try {
+            const q = getInfectionWriteQueueSnapshot();
+            const cache = getDustedDirtCacheStats();
+            push(
+                `§7Infection writes §fdust=${q.dustQueued} §7snowWaves=§f${q.snowWaves} §7(${q.snowPlaced}/${q.snowTarget}) §7job=§f${q.jobRunning ? "running" : "idle"} §7slice=§f${q.writeSlice}`
+            );
+            push(`§7Dusted cache §fentries=${cache.entries} §7cells=§f${cache.cells} §8(ambient reads cells near the pocket)`);
+            if (q.dustQueued === 0 && q.snowWaves === 0 && !q.jobRunning) {
+                push("§aInfection write queue empty");
+            } else {
+                push("§6Infection write queue still draining §8(should hit empty; do not treat a mid-wave count as a stall)");
+            }
+        } catch (e) {
+            push(`§cInfection write queue: §f${e?.message || e}`);
         }
 
         const ids = Object.values(SCRIPT_IDS);

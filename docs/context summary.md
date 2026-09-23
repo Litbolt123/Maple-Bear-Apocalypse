@@ -8,6 +8,13 @@ Running log of **what changed and why** (gameplay, scripts, assets, docs). Used 
 
 ---
 
+## 2026-09-23 — Infection spread efficiency (Change A + B only)
+
+- **Change A:** Kill `spreadDustedDirt` writes and storm snow placement go through `mb_infectionWriteQueue.js`. One `system.runJob` generator (`Generator<void, void, void>`, Script API 2.10.0) drains until empty. Dust slice is 24 so a ≤20-block kill finishes in one resume. Storm placement count and duration stay on the day curve (~8.7× at day 100). No `fillBlocks`, no per-block tick, no `clearJob` while work remains.
+- **Change B:** Ground ambient pressure samples `dustedDirtByCell` once per 32-block player pocket per ground-check, shared by that pocket. LOS, the 100-block threshold, and per-player timers stay.
+- Mirrored in `BP - Dev/scripts` and `BP/scripts`. `mb_buildConfig.js` untouched. Not published.
+- Playtest gate: `docs/development/testing/infection-spread-efficiency-check.md`. In-game self-test prints queue depth. No Bedrock multiplayer run in this environment.
+
 ## 2026-07-16 — Git commit v0.9.0-beta.5 (label only, no Bridge export)
 
 - Committed **`ef84823`** on `main`: `chore: v0.9.0-beta.5 — camera shake, mining drops, perf, and respawn fixes`.
