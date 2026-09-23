@@ -30,6 +30,7 @@ Entity IDs live in `BP/scripts/mb_spawnEntityIds.js`. Shake tiers in `mb_infecti
 | **Infected bear (day 20)** | `mb:infected_day20` | Ascended; dust saturation | **76%** |
 | **Infected pig** | `mb:infected_pig` | Spreads infection to other mobs | **62%** |
 | **Infected cow** | `mb:infected_cow` | Livestock vector | **62%** |
+| **Infected sheep** | `mb:infected_sheep` | Livestock vector (Samples sheep + pig hostile delta) | **62%** |
 
 ---
 

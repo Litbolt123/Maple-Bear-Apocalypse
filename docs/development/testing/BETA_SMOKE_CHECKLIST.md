@@ -4,6 +4,8 @@ Run before tagging a beta. Record **addon version** (see `BP/scripts/mb_buildCon
 
 | Beta version | Date (YYYY-MM-DD) | Tester | Pass / fail | Notes |
 |--------------|-------------------|--------|-------------|-------|
+| v0.9.0-beta.5.1 (dev notes / next public) | | | | Dusty foliage, nylium, emulsifier purify, fire, HUD, hitch |
+| v0.9.0-beta.5 | | | | Camera feel, cures, mining, day-0 perf, death |
 | v0.9.0-beta.4.2 (dev) | | | | Dev Patreon: snow buzz, day-0 perf, villages opt-in |
 | v0.9.0-beta.4 | 2026-05-19 | | Pass | User playtest: lag, buff cap, death explosions |
 | v0.9.0-beta.3 | | | | |
@@ -21,7 +23,7 @@ Run before tagging a beta. Record **addon version** (see `BP/scripts/mb_buildCon
 
 ## Optional (dev)
 
-- [ ] **Settings** shows `v0.9.0-beta.4.2 (dev build)` (dev pack).
+- [ ] **Settings** / What's new shows **Beta 5.1** (`v0.9.0-beta.5.1` on the Dev pack).
 - [ ] Eat snow → camera buzz; toggle **Settings → Camera shake** off → no buzz.
 - [ ] Day 0 fresh world, script villages **OFF** — no periodic hitches walking in plains.
 - [ ] Spawn debug → **Bear telemetry** ON → content log shows `[BEAR TELEMETRY]` lines (dev pack only).

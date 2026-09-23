@@ -8,6 +8,12 @@ This document contains tasks specifically for team members who work on **texture
 
 ## 🎨 TEXTURE WORK
 
+### Infected sheep (August playtest 2026-08-31 — remade)
+
+**Owner:** Compoohter. Wool uses **`snow_layer` TOP** (`geometry.'snow'_layer` UP uv 0,0 / 16x16 on the 32x32 sheet). Keep Samples sheep UV / geo. Face still a sheep. Do not go back to brown mud blotches.
+
+Rebuild: `python tools/buildInfectedSheepTexture.py`. Verify in-game next to infected pig/cow and a snow layer.
+
 ### Missing or Inconsistent Textures
 
 1. **Codex UI Icons** -  Consider creating custom icons for:

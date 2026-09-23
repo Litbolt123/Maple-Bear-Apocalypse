@@ -1,6 +1,6 @@
 import { system, world } from "@minecraft/server";
 import { triggerBuffBurstCameraBuzz } from "./mb_infectionCameraShake.js";
-import { UNBREAKABLE_BLOCKS } from "./mb_miningBlockList.js";
+import { UNBREAKABLE_BLOCKS, isSlowBreakBlockId, rollBuffSlowBreak, isInstantDestroyBlocked } from "./mb_miningBlockList.js";
 import { SNOW_REPLACEABLE_BLOCKS, SNOW_TWO_BLOCK_PLANTS } from "./mb_blockLists.js";
 import { isDebugEnabled } from "./mb_codex.js";
 import { isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
@@ -11,6 +11,8 @@ import { isAddonBearActivityDormant, shouldDecimateZeroBearAiWake } from "./mb_e
 import { isBearAiBootstrapDeferred, registerBearAiStartCallback } from "./mb_bearAiBootstrap.js";
 import { BUFF_CONVERSION_SPAWN_TAG } from "./mb_mainMobConversion.js";
 import { queryEntitiesSpread, safeQueryEntitiesNear } from "./mb_workSpread.js";
+import { infectVegetationInBlast } from "./mb_leafInfection.js";
+import { applyInfectionSnowLayer, blastGroundBand, applyBlastDustedGround } from "./mb_snowPlacement.js";
 
 // Debug helper functions
 function getDebugGeneral() {
@@ -151,6 +153,10 @@ function breakBlocksAboveEntity(entity, maxHeight, config) {
             continue;
         }
         if (UNBREAKABLE_BLOCKS.has(typeId)) continue;
+        if (isSlowBreakBlockId(typeId) && !rollBuffSlowBreak()) {
+            broken++;
+            break;
+        }
         
         try {
             block.setType("minecraft:air");
@@ -176,14 +182,18 @@ function handleTwoBlockPlant(dimension, checkX, topSolidY, checkZ, topSolidBlock
     const blockType = topSolidBlock.typeId;
     if (!SNOW_TWO_BLOCK_PLANTS.has(blockType)) return;
     if (blockAbove && SNOW_TWO_BLOCK_PLANTS.has(blockAbove.typeId)) {
-        try { topSolidBlock.setType("mb:snow_layer"); } catch { topSolidBlock.setType("minecraft:snow_layer"); }
+        placeBuffSnow(topSolidBlock);
         try { blockAbove.setType("minecraft:air"); } catch { }
     } else if (blockBelow && SNOW_TWO_BLOCK_PLANTS.has(blockBelow.typeId)) {
-        try { blockBelow.setType("mb:snow_layer"); } catch { blockBelow.setType("minecraft:snow_layer"); }
+        placeBuffSnow(blockBelow);
         try { topSolidBlock.setType("minecraft:air"); } catch { }
     } else {
-        try { topSolidBlock.setType("mb:snow_layer"); } catch { topSolidBlock.setType("minecraft:snow_layer"); }
+        placeBuffSnow(topSolidBlock);
     }
+}
+
+function placeBuffSnow(block) {
+    applyInfectionSnowLayer(block);
 }
 
 /**
@@ -281,7 +291,7 @@ function createBuffExplosion(source) {
                     if (typeId === "minecraft:air" || typeId === "minecraft:cave_air" || typeId === "minecraft:void_air") {
                         continue;
                     }
-                    if (UNBREAKABLE_BLOCKS.has(typeId)) continue;
+                    if (isInstantDestroyBlocked(typeId)) continue;
                     
                     try {
                         block.setType("minecraft:air");
@@ -297,6 +307,12 @@ function createBuffExplosion(source) {
         if (getDebugBlockBreaking()) {
             const tag = excludeEntityId ? excludeEntityId.substring(0, 8) : "????";
             console.warn(`[BUFF AI] Entity ${tag} created explosion at (${centerX}, ${centerY}, ${centerZ}), broke ${blocksBroken} blocks`);
+        }
+
+        try {
+            infectVegetationInBlast(dimension, loc, EXPLOSION_RADIUS);
+        } catch {
+            /* ignore */
         }
         
         // Launch players and mobs away from explosion (like knockback roar)
@@ -380,6 +396,8 @@ function createBuffExplosion(source) {
             for (let dz = -SNOW_SPRAY_RADIUS; dz <= SNOW_SPRAY_RADIUS; dz++) {
                 const dist = Math.hypot(dx, dz);
                 if (dist > SNOW_SPRAY_RADIUS) continue;
+                const groundBand = blastGroundBand(dist, SNOW_SPRAY_RADIUS);
+                if (groundBand === "skip") continue;
                 
                 const checkX = centerX + dx;
                 const checkZ = centerZ + dz;
@@ -416,6 +434,10 @@ function createBuffExplosion(source) {
                 
                 // Place snow on top of the solid block found
                 if (topSolidY !== null && topSolidBlock) {
+                    if (groundBand === "dust") {
+                        applyBlastDustedGround(topSolidBlock);
+                        continue;
+                    }
                     try {
                         const snowCheckY = topSolidY + 1;
                         const existingSnowBlock = dimension.getBlock({ x: checkX, y: snowCheckY, z: checkZ });
@@ -429,7 +451,7 @@ function createBuffExplosion(source) {
                         
                         // Replace vanilla snow layer with custom snow layer
                         if (blockType === "minecraft:snow_layer") {
-                            try { topSolidBlock.setType("mb:snow_layer"); } catch { topSolidBlock.setType("minecraft:snow_layer"); }
+                            applyInfectionSnowLayer(topSolidBlock);
                             continue;
                         }
                         
@@ -438,7 +460,7 @@ function createBuffExplosion(source) {
                             if (SNOW_TWO_BLOCK_PLANTS.has(blockType)) {
                                 handleTwoBlockPlant(dimension, checkX, topSolidY, checkZ, topSolidBlock);
                             } else {
-                                try { topSolidBlock.setType("mb:snow_layer"); } catch { topSolidBlock.setType("minecraft:snow_layer"); }
+                                applyInfectionSnowLayer(topSolidBlock);
                             }
                         } else {
                             // Place snow in the air above the solid block
@@ -454,22 +476,17 @@ function createBuffExplosion(source) {
                                     if (SNOW_TWO_BLOCK_PLANTS.has(snowBlockType)) {
                                         handleTwoBlockPlant(dimension, checkX, snowY, checkZ, snowBlock, true);
                                     } else {
-                                        try { snowBlock.setType("mb:snow_layer"); } catch { snowBlock.setType("minecraft:snow_layer"); }
+                                        applyInfectionSnowLayer(snowBlock);
                                     }
                                 } else if (snowBlock.isAir !== undefined && snowBlock.isAir) {
-                                    // Place snow on air above solid block
-                                    try {
-                                        snowBlock.setType("mb:snow_layer");
-                                    } catch {
-                                        snowBlock.setType("minecraft:snow_layer");
-                                    }
+                                    applyInfectionSnowLayer(snowBlock);
                                 }
                             }
                         }
                     } catch {
                         // Skip errors
                     }
-                } else {
+                } else if (groundBand === "snow") {
                     // No solid block found - this might be where blocks were broken
                     // Try to find the ground below by searching further down
                     for (let dy = -6; dy >= -10; dy--) {
@@ -489,11 +506,7 @@ function createBuffExplosion(source) {
                                     const snowY = checkY + 1;
                                     const snowBlock = dimension.getBlock({ x: checkX, y: snowY, z: checkZ });
                                     if (snowBlock && (snowBlock.isAir !== undefined && snowBlock.isAir)) {
-                                        try {
-                                            snowBlock.setType("mb:snow_layer");
-                                        } catch {
-                                            snowBlock.setType("minecraft:snow_layer");
-                                        }
+                                        applyInfectionSnowLayer(snowBlock);
                                     }
                                     break; // Found ground, placed snow
                                 }

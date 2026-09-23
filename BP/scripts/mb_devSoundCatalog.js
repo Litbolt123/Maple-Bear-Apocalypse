@@ -53,7 +53,7 @@ export const DEV_SOUND_CATEGORIES = [
     },
     {
         id: "infected_livestock",
-        title: "Infected pig & cow",
+        title: "Infected livestock",
         sounds: [
             { soundId: "mob.infected_pig.boost", label: "Pig boost" },
             { soundId: "mob.infected_pig.death", label: "Pig death" },
@@ -62,7 +62,9 @@ export const DEV_SOUND_CATEGORIES = [
             { soundId: "mob.infected_cow.hurt", label: "Cow hurt" },
             { soundId: "mob.infected_cow.milk", label: "Cow milk" },
             { soundId: "mob.infected_cow.say", label: "Cow say" },
-            { soundId: "mob.infected_cow.step", label: "Cow step" }
+            { soundId: "mob.infected_cow.step", label: "Cow step" },
+            { soundId: "mob.sheep.say", label: "Sheep say (vanilla, pitched down)" },
+            { soundId: "mob.sheep.step", label: "Sheep step (vanilla, pitched down)" }
         ]
     },
     {

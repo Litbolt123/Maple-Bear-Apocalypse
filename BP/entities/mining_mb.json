@@ -257,7 +257,6 @@
 				"total_supply": 22,
 				"suffocate_time": -22
 			},
-			"minecraft:fire_immune": false,
 			"minecraft:physics": {
 				"has_collision": true,
 				"has_gravity": true

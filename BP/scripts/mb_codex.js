@@ -30,6 +30,14 @@ import {
     setAllScriptToggles,
     areAllScriptTogglesOff
 } from "./mb_scriptToggles.js";
+import {
+    getBlockSpreadSpeedMultiplier,
+    setBlockSpreadSpeedMultiplier,
+    getLeafSnowConvertChance,
+    getGreenerySpreadChance,
+    BLOCK_SPREAD_SPEED_MIN,
+    BLOCK_SPREAD_SPEED_MAX
+} from "./mb_balance.js";
 import { recordDailyEvent, getCurrentDay, getDayDisplayInfo, cancelAndClearDayNarrativeHud } from "./mb_dayTracker.js";
 import { playerInfection, curedPlayers, formatTicksDuration, formatMillisDuration, formatInfectionHudTimeRemaining, HITS_TO_INFECT, bearHitCount, maxSnowLevels, MINOR_INFECTION_TYPE, MAJOR_INFECTION_TYPE, MINOR_HITS_TO_INFECT, IMMUNE_HITS_TO_INFECT, PERMANENT_IMMUNITY_PROPERTY, MINOR_CURE_GOLDEN_APPLE_PROPERTY, MINOR_CURE_GOLDEN_CARROT_PROPERTY } from "./main.js";
 import { CHAT_ACHIEVEMENT, CHAT_DANGER, CHAT_SUCCESS, CHAT_WARNING, CHAT_INFO, CHAT_DEV, CHAT_HIGHLIGHT, CHAT_SPECIAL } from "./mb_chatColors.js";
@@ -594,6 +602,7 @@ export function getDefaultCodex() {
             infectedBearSeen: false, 
             infectedPigSeen: false, 
             infectedCowSeen: false,
+            infectedSheepSeen: false,
             buffBearSeen: false,
             flyingBearSeen: false,
             miningBearSeen: false,
@@ -602,6 +611,7 @@ export function getDefaultCodex() {
             infectedBearKills: 0,
             infectedPigKills: 0,
             infectedCowKills: 0,
+            infectedSheepKills: 0,
             buffBearKills: 0,
             flyingBearKills: 0,
             miningBearKills: 0,
@@ -610,6 +620,7 @@ export function getDefaultCodex() {
             infectedBearMobKills: 0,
             infectedPigMobKills: 0,
             infectedCowMobKills: 0,
+            infectedSheepMobKills: 0,
             buffBearMobKills: 0,
             flyingBearMobKills: 0,
             miningBearMobKills: 0,
@@ -618,6 +629,7 @@ export function getDefaultCodex() {
             infectedBearHits: 0,
             infectedPigHits: 0,
             infectedCowHits: 0,
+            infectedSheepHits: 0,
             buffBearHits: 0,
             flyingBearHits: 0,
             miningBearHits: 0,
@@ -1076,13 +1088,13 @@ export function fullyUnlockCodex(player) {
 
     // Mobs: all seen + variant unlocks + high kill counts so all variant text shows
     const killCount = 200;
-    const mobKeys = ["mapleBearSeen", "infectedBearSeen", "infectedPigSeen", "infectedCowSeen", "buffBearSeen", "flyingBearSeen", "miningBearSeen", "torpedoBearSeen"];
+    const mobKeys = ["mapleBearSeen", "infectedBearSeen", "infectedPigSeen", "infectedCowSeen", "infectedSheepSeen", "buffBearSeen", "flyingBearSeen", "miningBearSeen", "torpedoBearSeen"];
     for (const k of mobKeys) {
         if (codex.mobs) codex.mobs[k] = true;
     }
-    const countKeys = ["tinyBearKills", "infectedBearKills", "infectedPigKills", "infectedCowKills", "buffBearKills", "flyingBearKills", "miningBearKills", "torpedoBearKills",
-        "tinyBearMobKills", "infectedBearMobKills", "infectedPigMobKills", "infectedCowMobKills", "buffBearMobKills", "flyingBearMobKills", "miningBearMobKills", "torpedoBearMobKills",
-        "tinyBearHits", "infectedBearHits", "infectedPigHits", "infectedCowHits", "buffBearHits", "flyingBearHits", "miningBearHits", "torpedoBearHits"];
+    const countKeys = ["tinyBearKills", "infectedBearKills", "infectedPigKills", "infectedCowKills", "infectedSheepKills", "buffBearKills", "flyingBearKills", "miningBearKills", "torpedoBearKills",
+        "tinyBearMobKills", "infectedBearMobKills", "infectedPigMobKills", "infectedCowMobKills", "infectedSheepMobKills", "buffBearMobKills", "flyingBearMobKills", "miningBearMobKills", "torpedoBearMobKills",
+        "tinyBearHits", "infectedBearHits", "infectedPigHits", "infectedCowHits", "infectedSheepHits", "buffBearHits", "flyingBearHits", "miningBearHits", "torpedoBearHits"];
     for (const k of countKeys) {
         if (codex.mobs) codex.mobs[k] = killCount;
     }
@@ -1340,6 +1352,7 @@ export function shareKnowledge(fromPlayer, toPlayer) {
                 case 'buffBearSeen': friendlyName = 'Buff Maple Bear'; break;
                 case 'infectedPigSeen': friendlyName = 'Infected Pig'; break;
                     case 'infectedCowSeen': friendlyName = 'Infected Cow'; break;
+                    case 'infectedSheepSeen': friendlyName = 'Infected Sheep'; break;
                     case 'flyingBearSeen': friendlyName = 'Flying Maple Bear'; break;
                     case 'miningBearSeen': friendlyName = 'Mining Maple Bear'; break;
                     case 'torpedoBearSeen': friendlyName = 'Torpedo Maple Bear'; break;
@@ -2860,7 +2873,7 @@ export function showCodexBook(player, context) {
         const m = codex.mobs || {};
         if (day === 4) {
             if (mobKey === "mapleBearSeen") return !!m.day4VariantsUnlockedTiny;
-            if (mobKey === "infectedBearSeen" || mobKey === "infectedPigSeen" || mobKey === "infectedCowSeen") return !!m.day4VariantsUnlockedInfected;
+            if (mobKey === "infectedBearSeen" || mobKey === "infectedPigSeen" || mobKey === "infectedCowSeen" || mobKey === "infectedSheepSeen") return !!m.day4VariantsUnlockedInfected;
             if (mobKey === "buffBearSeen") return !!m.day4VariantsUnlockedBuff;
             if (mobKey === "flyingBearSeen" || mobKey === "miningBearSeen" || mobKey === "torpedoBearSeen") return !!m.day4VariantsUnlockedOther;
             return !!m.day4VariantsUnlocked;
@@ -2868,7 +2881,7 @@ export function showCodexBook(player, context) {
         if (day === 8) {
             const g8 = !!m.day8VariantsUnlocked;
             if (mobKey === "mapleBearSeen") return !!(m.day8VariantsUnlockedTiny || g8);
-            if (mobKey === "infectedBearSeen" || mobKey === "infectedPigSeen" || mobKey === "infectedCowSeen") return !!(m.day8VariantsUnlockedInfected || g8);
+            if (mobKey === "infectedBearSeen" || mobKey === "infectedPigSeen" || mobKey === "infectedCowSeen" || mobKey === "infectedSheepSeen") return !!(m.day8VariantsUnlockedInfected || g8);
             if (mobKey === "buffBearSeen") return !!(m.day8VariantsUnlockedBuff || g8);
             if (mobKey === "flyingBearSeen" || mobKey === "miningBearSeen" || mobKey === "torpedoBearSeen") return !!(m.day8VariantsUnlockedOther || g8);
             return g8;
@@ -2876,7 +2889,7 @@ export function showCodexBook(player, context) {
         if (day === 13) {
             const g13 = !!m.day13VariantsUnlocked;
             if (mobKey === "mapleBearSeen") return !!(m.day13VariantsUnlockedTiny || g13);
-            if (mobKey === "infectedBearSeen" || mobKey === "infectedPigSeen" || mobKey === "infectedCowSeen") return !!(m.day13VariantsUnlockedInfected || g13);
+            if (mobKey === "infectedBearSeen" || mobKey === "infectedPigSeen" || mobKey === "infectedCowSeen" || mobKey === "infectedSheepSeen") return !!(m.day13VariantsUnlockedInfected || g13);
             if (mobKey === "buffBearSeen") return !!(m.day13VariantsUnlockedBuff || g13);
             if (mobKey === "flyingBearSeen" || mobKey === "miningBearSeen" || mobKey === "torpedoBearSeen") return !!(m.day13VariantsUnlockedOther || g13);
             return g13;
@@ -2893,6 +2906,7 @@ export function showCodexBook(player, context) {
             { key: "buffBearSeen", title: "Buff Maple Bear", icon: "textures/items/buff_mb_egg" },
             { key: "infectedPigSeen", title: "Infected Pig", icon: "textures/items/infected_pig_spawn_egg" },
             { key: "infectedCowSeen", title: "Infected Cow", icon: "textures/items/infected_cow_egg" },
+            { key: "infectedSheepSeen", title: "Infected Sheep", icon: "textures/items/infected_sheep_egg" },
             { key: "flyingBearSeen", title: "Flying Maple Bear", icon: "textures/items/flying_mb_egg_texture" },
             { key: "miningBearSeen", title: "Mining Maple Bear", icon: "textures/items/infected_day13_egg" },
             { key: "torpedoBearSeen", title: "Torpedo Maple Bear", icon: "textures/items/infected_day20_egg" }
@@ -2915,6 +2929,8 @@ export function showCodexBook(player, context) {
                     killCount = codex.mobs.infectedPigKills || 0;
                 } else if (e.key === "infectedCowSeen") {
                     killCount = codex.mobs.infectedCowKills || 0;
+                } else if (e.key === "infectedSheepSeen") {
+                    killCount = codex.mobs.infectedSheepKills || 0;
                 } else if (e.key === "buffBearSeen") {
                     killCount = codex.mobs.buffBearKills || 0;
                 } else if (e.key === "flyingBearSeen") {
@@ -2962,6 +2978,8 @@ export function showCodexBook(player, context) {
                         killCount = codex.mobs.infectedPigKills || 0;
                     } else if (e.key === "infectedCowSeen") {
                         killCount = codex.mobs.infectedCowKills || 0;
+                    } else if (e.key === "infectedSheepSeen") {
+                        killCount = codex.mobs.infectedSheepKills || 0;
                     } else if (e.key === "buffBearSeen") {
                         killCount = codex.mobs.buffBearKills || 0; // This already includes all variants
                     } else if (e.key === "flyingBearSeen") {
@@ -3005,6 +3023,8 @@ export function showCodexBook(player, context) {
                                 body += `\n§7Drop Rate: 75% chance\n§7Loot: 1-4 "snow" items\n§7Health: 10 HP\n§7Damage: 2\n§7Special: Can infect other mobs`;
                             } else if (e.key === "infectedCowSeen") {
                                 body += `\n§7Drop Rate: 75% chance\n§7Loot: 1-4 "snow" items\n§7Health: 10 HP\n§7Damage: 2`;
+                            } else if (e.key === "infectedSheepSeen") {
+                                body += `\n§7Drop Rate: 75% chance\n§7Loot: snow and mutton\n§7Health: 10 HP\n§7Damage: 1`;
                             } else if (e.key === "buffBearSeen") {
                                 body += `\n§7Drop Rate: 80% chance\n§7Loot: 3-15 "snow" items\n§7Health: 100 HP\n§7Damage: 8`;
                             } else if (e.key === "flyingBearSeen") {
@@ -3038,6 +3058,8 @@ export function showCodexBook(player, context) {
                                     variantInfo += `\n§7Enhanced: 10 HP, 1 Damage, 80% drop rate, 1-5 "snow" items\n§7Special: Enhanced infection spread`;
                                 } else if (e.key === "infectedCowSeen") {
                                     variantInfo += `\n§7Enhanced: 10 HP, 1.5 Damage, 85% drop rate, 2-6 "snow" items\n§7Special: Improved conversion rate`;
+                                } else if (e.key === "infectedSheepSeen") {
+                                    variantInfo += `\n§7Enhanced: 10 HP, 1 Damage, 80% drop rate, 1-5 "snow" items`;
                                 }
                             }
 
@@ -3052,6 +3074,8 @@ export function showCodexBook(player, context) {
                                     variantInfo += `\n§7Advanced: 10 HP, 1 Damage, 90% drop rate, 2-8 "snow" items\n§7Special: Maximum infection spread`;
                                 } else if (e.key === "infectedCowSeen") {
                                     variantInfo += `\n§7Advanced: 10 HP, 1.5 Damage, 95% drop rate, 3-10 "snow" items\n§7Special: Maximum conversion rate`;
+                                } else if (e.key === "infectedSheepSeen") {
+                                    variantInfo += `\n§7Advanced: 10 HP, 1 Damage, 90% drop rate, 2-8 "snow" items`;
                                 }
                             }
 
@@ -3066,6 +3090,8 @@ export function showCodexBook(player, context) {
                                     variantInfo += `\n§7Ultimate: 10 HP, 1 Damage, 95% drop rate, 3-12 "snow" items\n§7Special: Ultimate infection spread`;
                                 } else if (e.key === "infectedCowSeen") {
                                     variantInfo += `\n§7Ultimate: 10 HP, 1.5 Damage, 98% drop rate, 4-15 "snow" items\n§7Special: Ultimate conversion rate`;
+                                } else if (e.key === "infectedSheepSeen") {
+                                    variantInfo += `\n§7Ultimate: 10 HP, 1 Damage, 95% drop rate, 3-12 "snow" items`;
                                 } else if (e.key === "buffBearSeen") {
                                     variantInfo += `\n§7Ultimate: 150 HP, 10 Damage, 98% drop rate, 8-30 "snow" items\n§7Special: Ultimate combat mastery`;
                                 }
@@ -3267,7 +3293,7 @@ export function showCodexBook(player, context) {
                         body = "§eBasic Journal\n§7A simple journal that helps you understand what's happening in your world.\n\n§7Features:\n§7• Explains your goals and objectives\n§7• Provides survival tips\n§7• Shows recipe for Powdery Journal upgrade\n§7• Settings menu for customization\n\n§7This journal is given to all survivors when they first join. Upgrade it to a Powdery Journal for advanced tracking capabilities.";
                     } else if (e.key === "snowBookCrafted") {
                         // Progressive journal information based on usage
-                        const totalKills = (codex.mobs.tinyBearKills || 0) + (codex.mobs.infectedBearKills || 0) + (codex.mobs.infectedPigKills || 0) + (codex.mobs.infectedCowKills || 0) + (codex.mobs.buffBearKills || 0) +
+                        const totalKills = (codex.mobs.tinyBearKills || 0) + (codex.mobs.infectedBearKills || 0) + (codex.mobs.infectedPigKills || 0) + (codex.mobs.infectedCowKills || 0) + (codex.mobs.infectedSheepKills || 0) + (codex.mobs.buffBearKills || 0) +
                             (codex.mobs.flyingBearKills || 0) + (codex.mobs.miningBearKills || 0) + (codex.mobs.torpedoBearKills || 0);
                         const totalInfections = codex.history.totalInfections || 0;
                         
@@ -4008,7 +4034,7 @@ export function showCodexBook(player, context) {
         const m = codex.mobs || {};
         switch (milestoneDay) {
             case 2: return !!m.mapleBearSeen;
-            case 4: return !!(m.infectedBearSeen || m.infectedPigSeen || m.infectedCowSeen);
+            case 4: return !!(m.infectedBearSeen || m.infectedPigSeen || m.infectedCowSeen || m.infectedSheepSeen);
             case 8: return !!m.flyingBearSeen;
             case 11: return (getCurrentDay ? getCurrentDay() : 0) >= 11;
             case 13: return !!m.buffBearSeen;
@@ -4378,7 +4404,8 @@ export function showCodexBook(player, context) {
         { id: "mining", label: "§7Mining §7(mb:mining_mb*)" },
         { id: "torpedo", label: "§4Torpedo §7(mb:torpedo_mb*)" },
         { id: "infected_pig", label: "§dInfected Pig" },
-        { id: "infected_cow", label: "§dInfected Cow" }
+        { id: "infected_cow", label: "§dInfected Cow" },
+        { id: "infected_sheep", label: "§dInfected Sheep" }
     ];
 
     const KILL_BEARS_VARIANTS = [
@@ -4402,7 +4429,8 @@ export function showCodexBook(player, context) {
         { id: "mb:torpedo_mb", label: "Torpedo" },
         { id: "mb:torpedo_mb_day20", label: "Torpedo (day 20)" },
         { id: "mb:infected_pig", label: "Infected Pig" },
-        { id: "mb:infected_cow", label: "Infected Cow" }
+        { id: "mb:infected_cow", label: "Infected Cow" },
+        { id: "mb:infected_sheep", label: "Infected Sheep" }
     ];
 
     function openKillBearsMenu() {
@@ -4768,6 +4796,7 @@ export function showCodexBook(player, context) {
             id: "biome_checker",
             pinCategory: "systems",
             label: "Biome checker",
+            pinInReleaseAdmin: false,
             action: () => pinDevShortcutFromMain(() => openBiomeCheckerHub(player, () => openMain()))
         },
         {
@@ -4890,6 +4919,13 @@ export function showCodexBook(player, context) {
             pinCategory: "infection",
             label: "Clear / set infection",
             action: () => openTargetPlayerMenu("Infection", (name) => openInfectionDevMenu(name))
+        },
+        {
+            id: "block_spread_speed",
+            pinCategory: "infection",
+            label: "Block spread speed",
+            pinInReleaseAdmin: false,
+            action: () => pinDevShortcutFromMain(() => openBlockSpreadSpeedMenu())
         },
         {
             id: "immunity",
@@ -5844,11 +5880,84 @@ export function showCodexBook(player, context) {
         }).catch(() => openDeveloperTools());
     }
 
+    function formatBlockSpreadSpeedLabel(mult) {
+        if (mult <= 0) return "Paused (0x)";
+        if (mult === 1) return "Play (1x)";
+        if (mult === 8) return "Testing fire (8x)";
+        const pretty = Number.isInteger(mult) ? String(mult) : mult.toFixed(2).replace(/\.?0+$/, "");
+        return `${pretty}x`;
+    }
+
+    function openBlockSpreadSpeedMenu() {
+        const current = getBlockSpreadSpeedMultiplier();
+        const day = getCurrentDay();
+        const leafPct = (getLeafSnowConvertChance(day) * 100).toFixed(1);
+        const grassPct = (getGreenerySpreadChance(day) * 100).toFixed(1);
+        const form = new ActionFormData()
+            .title("§cBlock spread speed")
+            .body(
+                "§7Leaf / wood / grass convert chance. §8Does not change mob conversion or scan interval.\n\n" +
+                    `§7Current: §f${formatBlockSpreadSpeedLabel(current)}\n` +
+                    `§7Today (day §f${day}§7): leaves §f${leafPct}% §7· grass §f${grassPct}%\n\n` +
+                    "§8Also × Journal → Settings → Addon Difficulty (Easy 0.7 / Normal 1 / Hard 1.3).\n" +
+                    "§81x = play curve. 8x ≈ the old testing table."
+            );
+        form.button("§8Paused §7(0)");
+        form.button("§2Quarter §7(0.25)");
+        form.button("§aHalf §7(0.5)");
+        form.button("§fPlay §7(1)");
+        form.button("§6Fast §7(2)");
+        form.button("§cVery fast §7(4)");
+        form.button("§4Testing fire §7(8)");
+        form.button("§eCustom §7(0–16)");
+        form.button(DEV_BTN_BACK);
+        form.show(player).then((res) => {
+            const v = getPlayerSoundVolume(player);
+            if (!res || res.canceled || res.selection === 8) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * v });
+                return openDeveloperToolsInfectionMenu();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * v });
+            if (res.selection === 7) return promptCustomBlockSpreadSpeed(current);
+            const presets = [0, 0.25, 0.5, 1, 2, 4, 8];
+            const mult = presets[res.selection];
+            if (mult === undefined) return openDeveloperToolsInfectionMenu();
+            const applied = setBlockSpreadSpeedMultiplier(mult);
+            try { saveAllProperties(); } catch { /* ignore */ }
+            player.sendMessage(CHAT_SUCCESS + "Block spread speed: " + formatBlockSpreadSpeedLabel(applied) + ".");
+            openBlockSpreadSpeedMenu();
+        }).catch(() => openDeveloperToolsInfectionMenu());
+    }
+
+    function promptCustomBlockSpreadSpeed(currentValue = 1) {
+        const modal = new ModalFormData()
+            .title("§cCustom block spread speed")
+            .textField(`Multiplier (${BLOCK_SPREAD_SPEED_MIN}–${BLOCK_SPREAD_SPEED_MAX}). 1=play, 0=pause, 8=testing fire`, String(currentValue));
+        modal.show(player).then((res) => {
+            if (!res || res.canceled) return openBlockSpreadSpeedMenu();
+            const rawInput = res.formValues?.[0] ?? "";
+            const parsed = parseFloat(rawInput);
+            if (!Number.isFinite(parsed)) {
+                player.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Invalid value.");
+                return openBlockSpreadSpeedMenu();
+            }
+            const applied = setBlockSpreadSpeedMultiplier(parsed);
+            try { saveAllProperties(); } catch { /* ignore */ }
+            player.sendMessage(CHAT_SUCCESS + "Block spread speed: " + formatBlockSpreadSpeedLabel(applied) + ".");
+            openBlockSpreadSpeedMenu();
+        }).catch(() => openBlockSpreadSpeedMenu());
+    }
+
     function openDeveloperToolsInfectionMenu() {
         journalPowerToolsBack = () => openDeveloperToolsInfectionMenu();
+        const spd = formatBlockSpreadSpeedLabel(getBlockSpreadSpeedMultiplier());
         const form = new ActionFormData()
             .title("§cInfection & players")
-            .body("§7Per-player infection, immunity, and codex kill counters.");
+            .body(
+                "§7World vegetation spread, then per-player infection / immunity.\n\n" +
+                    `§8Block spread: §f${spd}`
+            );
+        form.button(`§eBlock spread speed${devBtnParen("leaves, wood, grass")}`);
         form.button("§fClear / set infection");
         form.button("§fGrant / remove immunity");
         form.button("§fSet kill counts");
@@ -5856,7 +5965,7 @@ export function showCodexBook(player, context) {
             form.button(`Preview vanilla freeze shake${devBtnParen("15s")}`);
         }
         form.button(DEV_BTN_BACK);
-        const backIdx = INCLUDE_FULL_DEVELOPER_TOOLS ? 4 : 3;
+        const backIdx = INCLUDE_FULL_DEVELOPER_TOOLS ? 5 : 4;
         form.show(player).then((res) => {
             const v = getPlayerSoundVolume(player);
             if (!res || res.canceled || res.selection === backIdx) {
@@ -5865,10 +5974,11 @@ export function showCodexBook(player, context) {
             }
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * v });
             journalPowerToolsBack = () => openDeveloperToolsInfectionMenu();
-            if (res.selection === 0) openTargetPlayerMenu("Infection", (name) => openInfectionDevMenu(name));
-            else if (res.selection === 1) openTargetPlayerMenu("Immunity", (name) => openImmunityDevMenu(name));
-            else if (res.selection === 2) openTargetPlayerMenu("Set Kill Counts", (name) => openSetKillCountMenu(name));
-            else if (INCLUDE_FULL_DEVELOPER_TOOLS && res.selection === 3) {
+            if (res.selection === 0) return openBlockSpreadSpeedMenu();
+            if (res.selection === 1) openTargetPlayerMenu("Infection", (name) => openInfectionDevMenu(name));
+            else if (res.selection === 2) openTargetPlayerMenu("Immunity", (name) => openImmunityDevMenu(name));
+            else if (res.selection === 3) openTargetPlayerMenu("Set Kill Counts", (name) => openSetKillCountMenu(name));
+            else if (INCLUDE_FULL_DEVELOPER_TOOLS && res.selection === 4) {
                 previewVanillaFreezeCameraShake(player, 15);
                 return openDeveloperToolsInfectionMenu();
             }
@@ -5924,7 +6034,7 @@ export function showCodexBook(player, context) {
         const form = new ActionFormData()
             .title("§fHUD & action bar")
             .body(
-                `§7Bedrock allows §fone §7action-bar line. Spawn scan/preset HUDs are §fper player§7; optional §ebroadcast§7 shows them to everyone if any dev has theirs on.\n` +
+                `§7Bedrock allows §fone §7action-bar line (§f~48§7 visible glyphs; extra HUD drops first so day/infection still fit). Spawn scan/preset HUDs are §fper player§7; optional §ebroadcast§7 shows them to everyone if any dev has theirs on.\n` +
                     `${formatHudMergeOrderForMenu()}\n\n` +
                     `§8Your toggles §7scan ${scanPersonal ? "§aON" : "§7OFF"} §8preset ${presetPersonal ? "§aON" : "§7OFF"} §8sim ${simHudPersonal ? "§aON" : "§7OFF"} §8biome ${biomeHudPersonal ? "§aON" : "§7OFF"} §8| §8Broadcast §7(world) ${broadcastHud ? "§aON" : "§7OFF"}\n` +
                     `§8You see §7scan ${scanSee ? "§aON" : "§7OFF"} §8preset ${presetSee ? "§aON" : "§7OFF"} §8biome ${biomeHudSee ? "§aON" : "§7OFF"} §8§o(includes legacy world scan if ever ON)` +
@@ -6063,7 +6173,7 @@ export function showCodexBook(player, context) {
         form.button("§eWorld & day");
         form.button("§6Bears");
         form.button("§3Storm");
-        form.button("§cInfection & players");
+        form.button(`§cInfection & players${devBtnParen("spread speed")}`);
         form.button("§5Audio & debug");
         form.button("§fHUD & action bar");
         if (hasPreview) form.button("§fPublic preview");
@@ -7535,6 +7645,7 @@ export function showCodexBook(player, context) {
         { key: "infectedBearKills", label: "Infected Bear" },
         { key: "infectedPigKills", label: "Infected Pig" },
         { key: "infectedCowKills", label: "Infected Cow" },
+        { key: "infectedSheepKills", label: "Infected Sheep" },
         { key: "buffBearKills", label: "Buff Bear" },
         { key: "flyingBearKills", label: "Flying Bear" },
         { key: "miningBearKills", label: "Mining Bear" },
@@ -8385,7 +8496,7 @@ export function showCodexBook(player, context) {
         form.body(
             `§7Ghost sim clients for stress testing (Developer Tools).\n\n§8Current:\n§7• Sims system: ${simOn ? "§aON" : "§cOFF"}\n§7• Full stress: ${fullStress ? "§aON" : "§cOFF"}\n§7• Content log §8([SIM PLAYERS])§7: ${dbgOn ? "§aON" : "§cOFF"} §8(~100t)\n\n§8Toggle mirrors Journal ? Simulated players ? Content log debug.`
         );
-        form.button(`${dbgOn ? "a" : "c"}Toggle Content log debug`);
+        form.button(`${dbgOn ? "§a" : "§c"}Toggle Content log debug`);
         form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
@@ -8415,15 +8526,15 @@ export function showCodexBook(player, context) {
         const form = new ActionFormData().title("§bMining AI Debug");
         form.body(`§7Toggle debug logging for Mining Bears:\n\n§8Current settings:\n§7• Pitfall: ${mining.pitfall ? "§aON" : "§cOFF"}\n§7• General: ${mining.general ? "§aON" : "§cOFF"}\n§7• Target: ${mining.target ? "§aON" : "§cOFF"}\n§7• Pathfinding: ${mining.pathfinding ? "§aON" : "§cOFF"}\n§7• Vertical: ${mining.vertical ? "§aON" : "§cOFF"}\n§7• Mining: ${mining.mining ? "§aON" : "§cOFF"}\n§7• Movement: ${mining.movement ? "§aON" : "§cOFF"}\n§7• Stair Creation: ${mining.stairCreation ? "§aON" : "§cOFF"}`);
         
-        form.button(`${mining.pitfall ? "a" : "c"}Pitfall Debug`);
-        form.button(`${mining.general ? "a" : "c"}General Logging`);
-        form.button(`${mining.target ? "a" : "c"}Target Detection`);
-        form.button(`${mining.pathfinding ? "a" : "c"}Pathfinding`);
-        form.button(`${mining.vertical ? "a" : "c"}Vertical Mining`);
-        form.button(`${mining.mining ? "a" : "c"}Block Mining`);
-        form.button(`${mining.movement ? "a" : "c"}Movement`);
-        form.button(`${mining.stairCreation ? "a" : "c"}Stair Creation`);
-        form.button(`${mining.all ? "a" : "c"}Toggle All`);
+        form.button(`${mining.pitfall ? "§a" : "§c"}Pitfall Debug`);
+        form.button(`${mining.general ? "§a" : "§c"}General Logging`);
+        form.button(`${mining.target ? "§a" : "§c"}Target Detection`);
+        form.button(`${mining.pathfinding ? "§a" : "§c"}Pathfinding`);
+        form.button(`${mining.vertical ? "§a" : "§c"}Vertical Mining`);
+        form.button(`${mining.mining ? "§a" : "§c"}Block Mining`);
+        form.button(`${mining.movement ? "§a" : "§c"}Movement`);
+        form.button(`${mining.stairCreation ? "§a" : "§c"}Stair Creation`);
+        form.button(`${mining.all ? "§a" : "§c"}Toggle All`);
         form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
@@ -8452,10 +8563,10 @@ export function showCodexBook(player, context) {
         const form = new ActionFormData().title("§bInfected AI Debug");
         form.body(`§7Toggle debug logging for Infected AI (bears/pig/cow):\n\n§8Current settings:\n§7• General: ${infected.general ? "§aON" : "§cOFF"}\n§7• Pathfinding: ${infected.pathfinding ? "§aON" : "§cOFF"}\n§7• Gap Jump: ${infected.gapJump ? "§aON" : "§cOFF"}`);
 
-        form.button(`${infected.general ? "a" : "c"}General Logging`);
-        form.button(`${infected.pathfinding ? "a" : "c"}Pathfinding`);
-        form.button(`${infected.gapJump ? "a" : "c"}Gap Jump`);
-        form.button(`${infected.all ? "a" : "c"}Toggle All`);
+        form.button(`${infected.general ? "§a" : "§c"}General Logging`);
+        form.button(`${infected.pathfinding ? "§a" : "§c"}Pathfinding`);
+        form.button(`${infected.gapJump ? "§a" : "§c"}Gap Jump`);
+        form.button(`${infected.all ? "§a" : "§c"}Toggle All`);
         form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
@@ -8484,12 +8595,12 @@ export function showCodexBook(player, context) {
         const form = new ActionFormData().title("§bTorpedo AI Debug");
         form.body(`§7Toggle debug logging for Torpedo Bears:\n\n§8Current settings:\n§7• General: ${torpedo.general ? "§aON" : "§cOFF"}\n§7• Targeting: ${torpedo.targeting ? "§aON" : "§cOFF"}\n§7• Diving: ${torpedo.diving ? "§aON" : "§cOFF"}\n§7• Block Breaking: ${torpedo.blockBreaking ? "§aON" : "§cOFF"}\n§7• Block Placement: ${torpedo.blockPlacement ? "§aON" : "§cOFF"}`);
         
-        form.button(`${torpedo.general ? "a" : "c"}General Logging`);
-        form.button(`${torpedo.targeting ? "a" : "c"}Targeting`);
-        form.button(`${torpedo.diving ? "a" : "c"}Diving Mechanics`);
-        form.button(`${torpedo.blockBreaking ? "a" : "c"}Block Breaking`);
-        form.button(`${torpedo.blockPlacement ? "a" : "c"}Block Placement`);
-        form.button(`${torpedo.all ? "a" : "c"}Toggle All`);
+        form.button(`${torpedo.general ? "§a" : "§c"}General Logging`);
+        form.button(`${torpedo.targeting ? "§a" : "§c"}Targeting`);
+        form.button(`${torpedo.diving ? "§a" : "§c"}Diving Mechanics`);
+        form.button(`${torpedo.blockBreaking ? "§a" : "§c"}Block Breaking`);
+        form.button(`${torpedo.blockPlacement ? "§a" : "§c"}Block Placement`);
+        form.button(`${torpedo.all ? "§a" : "§c"}Toggle All`);
         form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
@@ -8519,10 +8630,10 @@ export function showCodexBook(player, context) {
         const form = new ActionFormData().title("§bFlying AI Debug");
         form.body(`§7Toggle debug logging for Flying Bears:\n\n§8Current settings:\n§7• General: ${flying.general ? "§aON" : "§cOFF"}\n§7• Targeting: ${flying.targeting ? "§aON" : "§cOFF"}\n§7• Pathfinding: ${flying.pathfinding ? "§aON" : "§cOFF"}`);
         
-        form.button(`${flying.general ? "a" : "c"}General Logging`);
-        form.button(`${flying.targeting ? "a" : "c"}Targeting`);
-        form.button(`${flying.pathfinding ? "a" : "c"}Pathfinding`);
-        form.button(`${flying.all ? "a" : "c"}Toggle All`);
+        form.button(`${flying.general ? "§a" : "§c"}General Logging`);
+        form.button(`${flying.targeting ? "§a" : "§c"}Targeting`);
+        form.button(`${flying.pathfinding ? "§a" : "§c"}Pathfinding`);
+        form.button(`${flying.all ? "§a" : "§c"}Toggle All`);
         form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
@@ -8599,9 +8710,9 @@ export function showCodexBook(player, context) {
             `§7Toggle debug logging for Buff Bears.\n§8Nearby bears (64 blocks): alive time, 15s stuck fuse, and explosion countdown are listed below. §8That list is a snapshot § tap §eRefresh §8to update without leaving.\n\n§8Current settings:\n§7• General: ${buff.general ? "§aON" : "§cOFF"}\n§7• Block Breaking: ${buff.blockBreaking ? "§aON" : "§cOFF"}${countdownText}${scriptNote}`
         );
 
-        form.button(`${buff.general ? "a" : "c"}General Logging`);
-        form.button(`${buff.blockBreaking ? "a" : "c"}Block Breaking`);
-        form.button(`${buff.all ? "a" : "c"}Toggle All`);
+        form.button(`${buff.general ? "§a" : "§c"}General Logging`);
+        form.button(`${buff.blockBreaking ? "§a" : "§c"}Block Breaking`);
+        form.button(`${buff.all ? "§a" : "§c"}Toggle All`);
         form.button("§eRefresh countdown");
         form.button(DEV_BTN_BACK);
 
@@ -8644,16 +8755,16 @@ export function showCodexBook(player, context) {
         const form = new ActionFormData().title("§bSpawn Controller Debug");
         form.body(`§7Toggle debug logging for Spawn Controller:\n\n§8Current settings:\n§7• General: ${spawn.general ? "§aON" : "§cOFF"}\n§7• Discovery: ${spawn.discovery ? "§aON" : "§cOFF"}\n§7• Tile Scanning: ${spawn.tileScanning ? "§aON" : "§cOFF"}\n§7• Cache: ${spawn.cache ? "§aON" : "§cOFF"}\n§7• Validation: ${spawn.validation ? "§aON" : "§cOFF"}\n§7• Distance: ${spawn.distance ? "§aON" : "§cOFF"}\n§7• Spacing: ${spawn.spacing ? "§aON" : "§cOFF"}\n§7• Isolated: ${spawn.isolated ? "§aON" : "§cOFF"}\n§7• Bear telemetry: ${spawn.bearTelemetry ? "§aON" : "§cOFF"}`);
         
-        form.button(`${spawn.general ? "a" : "c"}General Logging`);
-        form.button(`${spawn.discovery ? "a" : "c"}Discovery Phase`);
-        form.button(`${spawn.tileScanning ? "a" : "c"}Tile Scanning`);
-        form.button(`${spawn.cache ? "a" : "c"}Cache`);
-        form.button(`${spawn.validation ? "a" : "c"}Validation`);
-        form.button(`${spawn.distance ? "a" : "c"}Distance`);
-        form.button(`${spawn.spacing ? "a" : "c"}Spacing`);
-        form.button(`${spawn.isolated ? "a" : "c"}Isolated Players`);
-        form.button(`${spawn.bearTelemetry ? "a" : "c"}Bear telemetry §7(log)`);
-        form.button(`${spawn.all ? "a" : "c"}Toggle All`);
+        form.button(`${spawn.general ? "§a" : "§c"}General Logging`);
+        form.button(`${spawn.discovery ? "§a" : "§c"}Discovery Phase`);
+        form.button(`${spawn.tileScanning ? "§a" : "§c"}Tile Scanning`);
+        form.button(`${spawn.cache ? "§a" : "§c"}Cache`);
+        form.button(`${spawn.validation ? "§a" : "§c"}Validation`);
+        form.button(`${spawn.distance ? "§a" : "§c"}Distance`);
+        form.button(`${spawn.spacing ? "§a" : "§c"}Spacing`);
+        form.button(`${spawn.isolated ? "§a" : "§c"}Isolated Players`);
+        form.button(`${spawn.bearTelemetry ? "§a" : "§c"}Bear telemetry §7(log)`);
+        form.button(`${spawn.all ? "§a" : "§c"}Toggle All`);
         form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
@@ -8681,14 +8792,14 @@ export function showCodexBook(player, context) {
     function openMainDebugMenu(settings, fromDevTools = false) {
         const main = settings.main || {};
         const form = new ActionFormData().title("§bMain Script Debug");
-        form.body(`§7Toggle debug logging for Main Script:\n\n§8Current settings:\n§7• Death Events: ${main.death ? "§aON" : "§cOFF"}\n§7• Snow Placement: ${main.snow_placement ? "§aON" : "§cOFF"}\n§7• Mob Conversion: ${main.conversion ? "§aON" : "§cOFF"}\n§7• Infection: ${main.infection ? "§aON" : "§cOFF"}\n§7• Minor Infection: ${main.minorInfection ? "§aON" : "§cOFF"}`);
+        form.body(`§7Toggle debug logging for Main Script:\n\n§8Current settings:\n§7• Death Events: ${main.death ? "§aON" : "§cOFF"}\n§7• Snow Placement: ${main.snow_placement ? "§aON" : "§cOFF"}\n§7• Mob Conversion: ${main.conversion ? "§aON" : "§cOFF"}\n§7• Infection: ${main.infection ? "§aON" : "§cOFF"} §8(bear hits, major, max snow)\n§7• Minor Infection: ${main.minorInfection ? "§aON" : "§cOFF"}`);
         
-        form.button(`${main.death ? "a" : "c"}Death Events`);
-        form.button(`${main.snow_placement ? "a" : "c"}Snow Placement`);
-        form.button(`${main.conversion ? "a" : "c"}Mob Conversion`);
-        form.button(`${main.infection ? "a" : "c"}Infection`);
-        form.button(`${main.minorInfection ? "a" : "c"}Minor Infection`);
-        form.button(`${main.all ? "a" : "c"}Toggle All`);
+        form.button(`${main.death ? "§a" : "§c"}Death Events`);
+        form.button(`${main.snow_placement ? "§a" : "§c"}Snow Placement`);
+        form.button(`${main.conversion ? "§a" : "§c"}Mob Conversion`);
+        form.button(`${main.infection ? "§a" : "§c"}Infection §8(hits / major / snow)`);
+        form.button(`${main.minorInfection ? "§a" : "§c"}Minor Infection`);
+        form.button(`${main.all ? "§a" : "§c"}Toggle All`);
         form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
@@ -8717,14 +8828,14 @@ export function showCodexBook(player, context) {
         const form = new ActionFormData().title("§bBiome Ambience Debug");
         form.body(`§7Toggle debug logging for Biome Ambience:\n\n§8Current settings:\n§7• Biome Check: ${biome.biome_check ? "§aON" : "§cOFF"}\n§7• Player Check: ${biome.player_check ? "§aON" : "§cOFF"}\n§7• Sound Playback: ${biome.sound_playback ? "§aON" : "§cOFF"}\n§7• Loop Status: ${biome.loop_status ? "§aON" : "§cOFF"}\n§7• Initialization: ${biome.initialization ? "§aON" : "§cOFF"}\n§7• Cleanup: ${biome.cleanup ? "§aON" : "§cOFF"}\n§7• Errors: ${biome.errors ? "§aON" : "§cOFF"}`);
         
-        form.button(`${biome.biome_check ? "a" : "c"}Biome Check`);
-        form.button(`${biome.player_check ? "a" : "c"}Player Check`);
-        form.button(`${biome.sound_playback ? "a" : "c"}Sound Playback`);
-        form.button(`${biome.loop_status ? "a" : "c"}Loop Status`);
-        form.button(`${biome.initialization ? "a" : "c"}Initialization`);
-        form.button(`${biome.cleanup ? "a" : "c"}Cleanup`);
-        form.button(`${biome.errors ? "a" : "c"}Errors`);
-        form.button(`${biome.all ? "a" : "c"}Toggle All`);
+        form.button(`${biome.biome_check ? "§a" : "§c"}Biome Check`);
+        form.button(`${biome.player_check ? "§a" : "§c"}Player Check`);
+        form.button(`${biome.sound_playback ? "§a" : "§c"}Sound Playback`);
+        form.button(`${biome.loop_status ? "§a" : "§c"}Loop Status`);
+        form.button(`${biome.initialization ? "§a" : "§c"}Initialization`);
+        form.button(`${biome.cleanup ? "§a" : "§c"}Cleanup`);
+        form.button(`${biome.errors ? "§a" : "§c"}Errors`);
+        form.button(`${biome.all ? "§a" : "§c"}Toggle All`);
         form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
@@ -8754,12 +8865,12 @@ export function showCodexBook(player, context) {
         const form = new ActionFormData().title("§bDynamic Properties Debug");
         form.body(`§7Toggle debug logging for Dynamic Property Handler:\n\n§8Current settings:\n§7• Chunking: ${dp.chunking ? "§aON" : "§cOFF"}\n§7• Caching: ${dp.caching ? "§aON" : "§cOFF"}\n§7• Reads: ${dp.reads ? "§aON" : "§cOFF"}\n§7• Writes: ${dp.writes ? "§aON" : "§cOFF"}\n§7• Errors: ${dp.errors ? "§aON" : "§cOFF"}`);
         
-        form.button(`${dp.chunking ? "a" : "c"}Chunking`);
-        form.button(`${dp.caching ? "a" : "c"}Caching`);
-        form.button(`${dp.reads ? "a" : "c"}Reads`);
-        form.button(`${dp.writes ? "a" : "c"}Writes`);
-        form.button(`${dp.errors ? "a" : "c"}Errors`);
-        form.button(`${dp.all ? "a" : "c"}Toggle All`);
+        form.button(`${dp.chunking ? "§a" : "§c"}Chunking`);
+        form.button(`${dp.caching ? "§a" : "§c"}Caching`);
+        form.button(`${dp.reads ? "§a" : "§c"}Reads`);
+        form.button(`${dp.writes ? "§a" : "§c"}Writes`);
+        form.button(`${dp.errors ? "§a" : "§c"}Errors`);
+        form.button(`${dp.all ? "§a" : "§c"}Toggle All`);
         form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
@@ -8795,12 +8906,12 @@ export function showCodexBook(player, context) {
         const form = new ActionFormData().title("§bCodex/Knowledge Debug");
         form.body(`§7Toggle debug logging for Codex/Knowledge System:\n\n§8Current settings:\n§7• Progressive: ${codex.progressive ? "§aON" : "§cOFF"}\n§7• Experience: ${codex.experience ? "§aON" : "§cOFF"}\n§7• Flags: ${codex.flags ? "§aON" : "§cOFF"}\n§7• Chunking: ${codex.chunking ? "§aON" : "§cOFF"}\n§7• Saving: ${codex.saving ? "§aON" : "§cOFF"}`);
         
-        form.button(`${codex.progressive ? "a" : "c"}Progressive`);
-        form.button(`${codex.experience ? "a" : "c"}Experience`);
-        form.button(`${codex.flags ? "a" : "c"}Flags`);
-        form.button(`${codex.chunking ? "a" : "c"}Chunking`);
-        form.button(`${codex.saving ? "a" : "c"}Saving`);
-        form.button(`${codex.all ? "a" : "c"}Toggle All`);
+        form.button(`${codex.progressive ? "§a" : "§c"}Progressive`);
+        form.button(`${codex.experience ? "§a" : "§c"}Experience`);
+        form.button(`${codex.flags ? "§a" : "§c"}Flags`);
+        form.button(`${codex.chunking ? "§a" : "§c"}Chunking`);
+        form.button(`${codex.saving ? "§a" : "§c"}Saving`);
+        form.button(`${codex.all ? "§a" : "§c"}Toggle All`);
         form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
@@ -8836,13 +8947,13 @@ export function showCodexBook(player, context) {
         const form = new ActionFormData().title("§bGround Infection Timer Debug");
         form.body(`§7Toggle debug logging for Ground Infection Timer:\n\n§8Current settings:\n§7• Timer: ${ground.timer ? "§aON" : "§cOFF"}\n§7• Ground Check: ${ground.groundCheck ? "§aON" : "§cOFF"}\n§7• Ambient Pressure: ${ground.ambient ? "§aON" : "§cOFF"}\n§7• Biome Pressure: ${ground.biome ? "§aON" : "§cOFF"}\n§7• Decay: ${ground.decay ? "§aON" : "§cOFF"}\n§7• Warnings: ${ground.warnings ? "§aON" : "§cOFF"}`);
         
-        form.button(`${ground.timer ? "a" : "c"}Timer Updates`);
-        form.button(`${ground.groundCheck ? "a" : "c"}Ground Detection`);
-        form.button(`${ground.ambient ? "a" : "c"}Ambient Pressure`);
-        form.button(`${ground.biome ? "a" : "c"}Biome Pressure`);
-        form.button(`${ground.decay ? "a" : "c"}Decay Logic`);
-        form.button(`${ground.warnings ? "a" : "c"}Warning Messages`);
-        form.button(`${ground.all ? "a" : "c"}Toggle All`);
+        form.button(`${ground.timer ? "§a" : "§c"}Timer Updates`);
+        form.button(`${ground.groundCheck ? "§a" : "§c"}Ground Detection`);
+        form.button(`${ground.ambient ? "§a" : "§c"}Ambient Pressure`);
+        form.button(`${ground.biome ? "§a" : "§c"}Biome Pressure`);
+        form.button(`${ground.decay ? "§a" : "§c"}Decay Logic`);
+        form.button(`${ground.warnings ? "§a" : "§c"}Warning Messages`);
+        form.button(`${ground.all ? "§a" : "§c"}Toggle All`);
         form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
@@ -8912,11 +9023,11 @@ export function showCodexBook(player, context) {
             
             const form = new ActionFormData().title("§bSnow Storm Debug");
             form.body(body);
-            form.button(`${stormSettings.general ? "a" : "c"}General Logging`);
-            form.button(`${stormSettings.movement ? "a" : "c"}Movement`);
-            form.button(`${stormSettings.placement ? "a" : "c"}Placement`);
-            form.button(`${stormSettings.particles ? "a" : "c"}Particles`);
-            form.button(`${stormSettings.all ? "a" : "c"}Toggle All`);
+            form.button(`${stormSettings.general ? "§a" : "§c"}General Logging`);
+            form.button(`${stormSettings.movement ? "§a" : "§c"}Movement`);
+            form.button(`${stormSettings.placement ? "§a" : "§c"}Placement`);
+            form.button(`${stormSettings.particles ? "§a" : "§c"}Particles`);
+            form.button(`${stormSettings.all ? "§a" : "§c"}Toggle All`);
             form.button("§eRefresh");
             form.button(DEV_BTN_BACK);
 
@@ -8952,11 +9063,11 @@ export function showCodexBook(player, context) {
         const form = new ActionFormData().title("§bEmulsifier Debug");
         form.body(`§7Debug the Emulsifier (purification + persistence).\n\n§8Current:\n§7• General: ${emulsifier.general ? "§aON" : "§cOFF"}\n§7• Persistence: ${emulsifier.persistence ? "§aON" : "§cOFF"}\n§7• Purification: ${emulsifier.purification ? "§aON" : "§cOFF"}\n§7• Zones: ${emulsifier.zones ? "§aON" : "§cOFF"}\n\n§eRun diagnostics to see live state and locate save/purify issues.`);
 
-        form.button(`${emulsifier.general ? "a" : "c"}General`);
-        form.button(`${emulsifier.persistence ? "a" : "c"}Persistence`);
-        form.button(`${emulsifier.purification ? "a" : "c"}Purification`);
-        form.button(`${emulsifier.zones ? "a" : "c"}Zones`);
-        form.button(`${emulsifier.all ? "a" : "c"}Toggle All`);
+        form.button(`${emulsifier.general ? "§a" : "§c"}General`);
+        form.button(`${emulsifier.persistence ? "§a" : "§c"}Persistence`);
+        form.button(`${emulsifier.purification ? "§a" : "§c"}Purification`);
+        form.button(`${emulsifier.zones ? "§a" : "§c"}Zones`);
+        form.button(`${emulsifier.all ? "§a" : "§c"}Toggle All`);
         form.button("§eRun diagnostics (chat)");
         form.button("§6Force reload from world");
         form.button(DEV_BTN_BACK);
@@ -9204,7 +9315,7 @@ export function showCodexBook(player, context) {
                 .toggle("Infection timer on screen (action bar)", { defaultValue: showInfectionTimer })
                 .toggle("Only critical infection/day warnings", { defaultValue: criticalWarningsOnly })
                 .toggle("Day / dawn line on action bar §8(new day at sunrise; auto-hides)", { defaultValue: showDayNarrativeActionBar })
-                .dropdown((hasCheats(player) ? "Addon Difficulty § Spawn: E 0.7§ N 1§ H 1.3§. Major hits (from nothing): E 4 N 3 H 2. Major hits (from minor): E 3 N 2 H 1. Infection decay: E 0.8§ N 1§ H 1.2§. Mining interval: E 1.2§ N 1§ H 0.5§. Torpedo max blocks: E 0.85§ N 1§ H 2§." : "Addon Difficulty") + (canEditDifficulty ? "" : " §8(read-only)"), difficultyOptions, { defaultValueIndex: addonDifficultyIndex });
+                .dropdown((hasCheats(player) ? "Addon Difficulty § Spawn / block spread: E 0.7§ N 1§ H 1.3§. Major hits (from nothing): E 4 N 3 H 2. Major hits (from minor): E 3 N 2 H 1. Infection decay: E 0.8§ N 1§ H 1.2§. Mining interval: E 1.2§ N 1§ H 0.5§. Torpedo max blocks: E 0.85§ N 1§ H 2§." : "Addon Difficulty") + (canEditDifficulty ? "" : " §8(read-only)"), difficultyOptions, { defaultValueIndex: addonDifficultyIndex });
             
             form.show(player).then((res) => {
                 const volumeMultiplier = getPlayerSoundVolume(player);
@@ -9311,6 +9422,7 @@ export function showCodexBook(player, context) {
                 { key: "buffBearSeen", title: "Buff Maple Bear", section: "Mobs" },
                 { key: "infectedPigSeen", title: "Infected Pig", section: "Mobs" },
                 { key: "infectedCowSeen", title: "Infected Cow", section: "Mobs" },
+                { key: "infectedSheepSeen", title: "Infected Sheep", section: "Mobs" },
                 { key: "flyingBearSeen", title: "Flying Maple Bear", section: "Mobs" },
                 { key: "miningBearSeen", title: "Mining Maple Bear", section: "Mobs" },
                 { key: "torpedoBearSeen", title: "Torpedo Maple Bear", section: "Mobs" }

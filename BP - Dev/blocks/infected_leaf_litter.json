@@ -1,0 +1,76 @@
+{
+	"format_version": "1.26.10",
+	"minecraft:block": {
+		"description": {
+			"identifier": "mb:infected_leaf_litter",
+			"menu_category": {
+				"category": "nature"
+			},
+			"is_experimental": false
+		},
+		"components": {
+			"minecraft:geometry": "geometry.infected_leaf_litter",
+			"minecraft:material_instances": {
+				"*": {
+					"texture": "infected_leaf_litter",
+					"render_method": "alpha_test_single_sided",
+					"ambient_occlusion": false,
+					"face_dimming": false
+				}
+			},
+			"minecraft:display_name": "Infected Leaf Litter",
+			"minecraft:map_color": {
+				"color": "#C4B49A"
+			},
+			"minecraft:destruction_particles": {
+				"texture": "infected_leaf_litter"
+			},
+			"minecraft:destructible_by_mining": {
+				"seconds_to_destroy": 0.05,
+				"use_efficiency": true
+			},
+			"minecraft:destructible_by_explosion": {
+				"explosion_resistance": 0.05
+			},
+			"minecraft:light_dampening": 0,
+			"minecraft:collision_box": false,
+			"minecraft:selection_box": {
+				"origin": [
+					-8,
+					0,
+					-8
+				],
+				"size": [
+					16,
+					1,
+					16
+				]
+			},
+			"minecraft:loot": "loot_tables/blocks/infected_leaf_litter.json",
+			"mb:infected_foliage": {},
+			"tag:minecraft:is_shears_item_destructible": {},
+			"minecraft:placement_filter": {
+				"conditions": [
+					{
+						"allowed_faces": [
+							"up"
+						],
+						"block_filter": [
+							"minecraft:grass_block",
+							"minecraft:dirt",
+							"minecraft:coarse_dirt",
+							"minecraft:podzol",
+							"minecraft:mycelium",
+							"mb:dusted_dirt",
+							"mb:dusted_podzol"
+						]
+					}
+				]
+			},
+			"minecraft:flammable": {
+				"catch_chance_modifier": 30,
+				"destroy_chance_modifier": 60
+			}
+		}
+	}
+}

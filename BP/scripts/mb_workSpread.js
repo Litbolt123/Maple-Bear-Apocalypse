@@ -3,6 +3,10 @@
  * when many chunks load at once (first village, fast travel). Systems stay correct but
  * react over a longer window.
  *
+ * Two levels (August 2026-09-19): solo can spend more (one player, one scan set).
+ * Multiplayer multiplies work — cluster / round-robin instead of N full copies.
+ * Do not starve solo to match a four-player budget.
+ *
  * Entity queries use a 3×3 grid of smaller radii around each player (32 blocks per cell)
  * instead of one large sphere (e.g. 128 blocks) per tick.
  */
@@ -60,6 +64,23 @@ export function setMetricsSpreadLoad01(load01) {
 
 export function getMetricsSpreadLoad01() {
     return metricsSpreadLoad01;
+}
+
+/** Valid players currently in the world (solo vs multiplayer budget). */
+export function getOnlinePlayerCount() {
+    try {
+        let n = 0;
+        for (const p of world.getAllPlayers()) {
+            if (p?.isValid) n++;
+        }
+        return n;
+    } catch {
+        return 1;
+    }
+}
+
+export function isMultiplayerSession() {
+    return getOnlinePlayerCount() >= 2;
 }
 
 /** Day 0–1 aggressive spread, or day 2+ when load is high (entity metrics only). */
@@ -975,16 +996,62 @@ export function claimSpreadSlice(category, baseIntervalTicks) {
 
 /**
  * Pick one player per call (round-robin) while throttling MP; otherwise all players.
+ * `forceRoundRobin` keeps the rotation after day 3. The infected-ground fast path uses that
+ * when two or more players are in the world so day 100 does not run every ground check every pass.
  * @param {import("@minecraft/server").Player[]} players
  * @param {string} category
+ * @param {boolean} [forceRoundRobin]
  * @returns {import("@minecraft/server").Player[]}
  */
-export function spreadPlayersForWork(players, category) {
+export function spreadPlayersForWork(players, category, forceRoundRobin = false) {
     if (!players?.length) return [];
-    if (!isVillageEntitySpreadActive() || players.length <= 1) return players;
+    if ((!forceRoundRobin && !isVillageEntitySpreadActive()) || players.length <= 1) return players;
     let i = playerRotate.get(category) ?? 0;
     const picked = players[i % players.length];
     playerRotate.set(category, (i + 1) % players.length);
+    return picked ? [picked] : [];
+}
+
+const VEGETATION_CLUSTER_BLOCKS = 32;
+
+/**
+ * Co-op players in the same 32-block cell share one vegetation scan.
+ * @param {import("@minecraft/server").Player[]} players
+ * @returns {import("@minecraft/server").Player[]}
+ */
+function clusterPlayersByCell(players, cellSize = VEGETATION_CLUSTER_BLOCKS) {
+    const seen = new Set();
+    const out = [];
+    for (const p of players) {
+        if (!p?.isValid) continue;
+        const loc = p.location;
+        if (!loc) continue;
+        const dim = p.dimension?.id ?? "";
+        const cx = Math.floor(loc.x / cellSize);
+        const cy = Math.floor(loc.y / cellSize);
+        const cz = Math.floor(loc.z / cellSize);
+        const key = `${dim}:${cx}:${cy}:${cz}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(p);
+    }
+    return out;
+}
+
+/**
+ * Leaf / grass infection scans. Always one cluster per interval even after
+ * village-day throttle ends — otherwise N players each fire canopy rays.
+ * @param {import("@minecraft/server").Player[]} players
+ * @param {string} [category]
+ * @returns {import("@minecraft/server").Player[]}
+ */
+export function spreadPlayersForVegetationWork(players, category = "leaf_infection") {
+    if (!players?.length) return [];
+    const clustered = clusterPlayersByCell(players);
+    if (clustered.length <= 1) return clustered;
+    let i = playerRotate.get(category) ?? 0;
+    const picked = clustered[i % clustered.length];
+    playerRotate.set(category, (i + 1) % clustered.length);
     return picked ? [picked] : [];
 }
 

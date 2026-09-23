@@ -18,6 +18,7 @@ import {
     INFECTED_BEAR_DAY20_ID,
     INFECTED_PIG_ID,
     INFECTED_COW_ID,
+    INFECTED_SHEEP_ID,
     BUFF_BEAR_ID,
     BUFF_BEAR_DAY13_ID,
     BUFF_BEAR_DAY20_ID,
@@ -51,7 +52,8 @@ export const DEFAULT_PACK_BEAR_CULL_TYPE_IDS = Object.freeze([
     INFECTED_BEAR_DAY13_ID,
     INFECTED_BEAR_DAY20_ID,
     INFECTED_PIG_ID,
-    INFECTED_COW_ID
+    INFECTED_COW_ID,
+    INFECTED_SHEEP_ID
 ]);
 
 const ALL_MB_BEAR_TYPES_SET = new Set(ALL_MB_BEAR_TYPES);
@@ -65,14 +67,15 @@ export const BEAR_CULL_TYPE_GROUPS = Object.freeze([
     },
     {
         id: "infected",
-        label: "Infected + pig/cow",
+        label: "Infected + livestock",
         typeIds: Object.freeze([
             INFECTED_BEAR_ID,
             INFECTED_BEAR_DAY8_ID,
             INFECTED_BEAR_DAY13_ID,
             INFECTED_BEAR_DAY20_ID,
             INFECTED_PIG_ID,
-            INFECTED_COW_ID
+            INFECTED_COW_ID,
+            INFECTED_SHEEP_ID
         ])
     },
     {

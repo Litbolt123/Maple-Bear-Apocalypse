@@ -20,7 +20,7 @@ Behavior pack scripts cannot run under Node.js end-to-end (`@minecraft/server` e
 
 | Where | What it does |
 |-------|----------------|
-| **Journal → Developer Tools → Systems → Script self-test (in-game)** | Runs **`mb_devScriptSelfTest.js`**: day, infection rate, addon difficulty, spawn-load snapshot, storm count, which script toggles are off, `SPAWN_CONFIGS` / cap counts, dimensions, block below feet, player count; then **`import()`** on every **`mb_*.js`** in the pack (38 files; `main.js` is entry only). Failures list per-file errors. Full plain text is also **`console.warn`**’d (Content Log). **Pin:** “Script self-test (in-game)” on the main menu. |
+| **Journal → Developer Tools → Systems → Script self-test (in-game)** | Runs **`mb_devScriptSelfTest.js`**: day, infection rate, addon difficulty, spawn-load snapshot, storm count, infection write-queue depth (dust queued, snow waves, job idle/running), which script toggles are off, `SPAWN_CONFIGS` / cap counts, dimensions, block below feet, player count; then **`import()`** on every listed **`mb_*.js`** (`main.js` is entry only). Failures list per-file errors. Full plain text is also **`console.warn`**’d (Content Log). **Pin:** “Script self-test (in-game)” on the main menu. Spread feel checks: `infection-spread-efficiency-check.md`. |
 
 This does **not** execute every script file; it samples APIs the addon already uses. Use **`npm run check`** on your PC for full static validation.
 
@@ -35,6 +35,7 @@ Use this when you change a file or before a release. **Entry:** `main.js` loads 
 | `main.js` | Entry, subscriptions, infection, items, deaths | New world loads; kill mob near bear → conversion; storm kill; eat snow/cures |
 | `mb_buildConfig.js` | Dev vs release flags | Release: no dev journal; Dev: full tools |
 | `mb_codex.js` | Journal, codex, dev menus | Open journal, search, mark discovery, dev debug menu (dev pack) |
+| `mb_biomeCheckerDev.js` | Biome at feet vs replace list; HUD; **Teleport to biome** | Dev pack: Systems → Biome checker → Teleport to `mb:infected_vanilla_forest`; HUD shows `VAN` |
 | `mb_dayTracker.js` | Day, milestones, action bar | Day advances; milestone messages; merged HUD text |
 | `mb_dynamicPropertyHandler.js` | Properties save/load | Reload world: day, infection, codex persist |
 | `mb_propertyMigration.js` | Migrations on load | Upgrade old world; no property errors in log |
@@ -42,15 +43,18 @@ Use this when you change a file or before a release. **Entry:** `main.js` loads 
 | `mb_balance.js` | Caps, infection rate, conversion constants | Spawn density feels right; conversion rates at low/high day |
 | `mb_spawnEntityIds.js` | ID strings | Spawns/conversions use correct entities (no wrong variant) |
 | `mb_spawnConfigs.js` | Natural spawn tables | Per-type spawn rates by day (spawn controller) |
-| `mb_spawnController.js` | Spawning, tiles, emulsifier | Bears spawn; dev spawn overrides; emulsifier zones |
+| `mb_spawnController.js` | Spawning, tiles, emulsifier | Bears spawn; **3 players**: infected cap rises (Journal Easy/Normal/Hard). Ocean base: seafloor around water, not a mine under the platform. Dev spawn overrides; emulsifier zones. Purify: powder → air; leaves/plants sometimes vanish; dusted dirt sometimes → grass_block |
 | `mb_spawnLoadMetrics.js` | Load metrics for spawn | HUD / journal shows bear/load info when enabled |
 | `mb_spawnMobilityCamp.js` | Cluster / mobility camp | Multiplayer spawn pressure behaves |
 | `mb_mainMobConversion.js` | Bear kill + storm conversion | Pig/cow → infected; mob → bear by day/size; storm deaths |
-| `mb_snowStorm.js` | Storms, exposure | Storm damage; `wasKilledByStorm` conversion path |
+| `mb_snowStorm.js` | Storms, exposure | Storm damage; powder on grass/leaves infects under it; `wasKilledByStorm` conversion |
 | `mb_infectionAudio.js` | Cough, breath, cure sounds | Proximity audio; tiers from codex |
 | `mb_infectionExposureLos.js` | LOS for exposure | Infection cues respect line of sight |
 | `mb_actionBarHud.js` | HUD segments, toasts | Infection + spawn HUD merge; toasts |
 | `mb_biomeAmbience.js` | Biome ambience | Infected biome ambience |
+| `mb_leafInfection.js` | Leaf infection spread | Day 2+: snow on any convertible leaf. Stages 0–2 biome-tint, `_3` cream. Torpedo blast → Snow stage in radius 5 (not duds). |
+| `mb_grassInfection.js` | Grass / nylium / foliage infection | Day 0–1: grass/nylium stays. Day 2+: VAN grass and nether nylium convert to dusted dirt. Nether roots/fungus/sprouts/vines become dusty infected plants. |
+| `mb_woodInfection.js` | Log / wood infection | Day 2+: trunk next to infected leaves or powder dusts. No tick on every vanilla log. |
 | `mb_dimensionAdaptation.js` | Dimension rules | Nether/End behavior if enabled |
 | `mb_blockLists.js` | Block sets | Storm / snow replace lists match gameplay |
 | `mb_chatColors.js` | Message prefixes | Chat messages colored as expected |

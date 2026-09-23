@@ -1,0 +1,15 @@
+{
+	"format_version": "1.13.0",
+	"minecraft:search_feature": {
+		"description": {
+			"identifier": "mb:search_infected_canopy_dust"
+		},
+		"places_feature": "mb:infected_canopy_dust_block",
+		"search_volume": {
+			"min": [0, -16, 0],
+			"max": [0, 0, 0]
+		},
+		"search_axis": "-y",
+		"required_successes": 1
+	}
+}

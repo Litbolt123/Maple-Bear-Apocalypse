@@ -28,12 +28,14 @@ This document captures the core design philosophy, intentions, and vision for th
 - **Underground bases**: Countered by Mining Bears that dig to players
 - **Sky bases**: Countered by Flying Bears and Torpedo Bears
 - **Nether/End**: Will eventually have Maple Bear presence (Nether gets fire/lava-proof variants, End gets more flying/torpedo)
+- **The box is not a win**: An obsidian cube, a fueled emulsifier you never leave, or one craft that **guarantees** survival is the same failure as an uncountered sky base. Help is allowed. Guarantees are not. The player needs a **goal** and a **loop** they keep up with (explore, fight, maintain) — see [PLAYER_GOAL_AND_LOOP.md](PLAYER_GOAL_AND_LOOP.md) (August + Aiden, 2026-09-19).
 - **Only exception**: A few secluded overworld biomes remain relatively safer (no natural spawns or much lower rates)
   - **Mushroom Fields** appears to be the safest biome (not targeted by infected biome replacement)
-  - See [SAFE_BIOMES.md](SAFE_BIOMES.md) for complete list of biomes not targeted by infection
+  - Safer ≠ solved. See [SAFE_BIOMES.md](SAFE_BIOMES.md) for complete list of biomes not targeted by infection
 
 ### Biome Corruption
-- Custom `mb:infected_biome` replaces many vanilla biomes at low densities
+- Custom **snow infected** biomes (`mb:infected_biome_small/medium/large`) replace many vanilla biomes at low densities — dusted-dirt carpet, pale fog, no vanilla trees
+- **Infected vanilla** (test): `mb:infected_vanilla_forest` keeps oak-forest look + infection fog. See [INFECTED_VANILLA_BIOMES.md](INFECTED_VANILLA_BIOMES.md)
 - **Long-term goal**: Infected biome generation increases over time as world corruption evolves
 - Some overworld biomes intentionally excluded from replacement (safer zones)
 
@@ -245,14 +247,15 @@ This document captures the core design philosophy, intentions, and vision for th
 
 ## 🎯 Design Principles
 
-1. **No True Safety**: Every strategy has a counter (underground → mining, sky → flying, etc.)
+1. **No True Safety**: Every strategy has a counter (underground → mining, sky → flying, etc.). A perfect box is not a win either.
 2. **Progressive Horror**: Starts mysterious, gets darker as players go deeper
 3. **Emergent Storytelling**: Mechanics tell the story, not cutscenes
 4. **Co-op First**: Designed for multiplayer but solo-friendly
-5. **Fair Challenge**: Clear progression, discoverable mechanics, no cheap deaths
+5. **Fair Challenge**: Clear progression, discoverable mechanics, no cheap deaths. Struggle, not hopeless, not trivial.
 6. **Ambiguity Early**: New players experience mystery, veterans see darker truth
 7. **World Remembers**: Areas and systems adapt to player behavior
 8. **Addiction Metaphor**: Snow mechanics reflect real addiction patterns (positive → neutral → negative)
+9. **Keep-playing loop**: Player goal is fight and progress you maintain, not a one-shot solution. Help without a guarantee. Exploration and upkeep beat turtling. [PLAYER_GOAL_AND_LOOP.md](PLAYER_GOAL_AND_LOOP.md)
 
 ---
 
@@ -293,6 +296,5 @@ This document captures the core design philosophy, intentions, and vision for th
 
 ---
 
-*Last Updated: Based on comprehensive design discussion with project creators*
-*This document should be updated as the vision evolves*
+*Last updated: 2026-09-19 (player goal / keep-playing loop with Aiden). Update as the vision evolves.*
 

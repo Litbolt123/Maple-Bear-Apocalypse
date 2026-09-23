@@ -1,6 +1,7 @@
-// AUTO-GENERATED FILE. Run tools/updateMiningBlocks.js to refresh.
+// Canonical bear-break lists. tools/updateMiningBlocks.js copies MINING_BREAKABLE_BLOCKS
+// into entity minecraft:break_blocks (script digging does not use that component).
 
-// Blocks that CANNOT be broken (diamond-pickaxe-only and unbreakable)
+/** Survival-unbreakable. Bears never chew these (bedrock, portals, operator blocks). */
 export const UNBREAKABLE_BLOCKS = new Set([
     "minecraft:bedrock",
     "minecraft:barrier",
@@ -9,14 +10,76 @@ export const UNBREAKABLE_BLOCKS = new Set([
     "minecraft:repeating_command_block",
     "minecraft:structure_block",
     "minecraft:structure_void",
+    "minecraft:jigsaw",
+    "minecraft:light_block",
+    "minecraft:deny",
+    "minecraft:allow",
+    "minecraft:end_portal",
+    "minecraft:end_portal_frame",
+    "minecraft:end_gateway",
+    "minecraft:reinforced_deepslate",
+    "minecraft:invisible_bedrock"
+]);
+
+/**
+ * Diamond-slow in survival. Mining chews these on a timer; buff smash rolls a low chance.
+ * Explosions and torpedo path bursts still skip so a cube is not a one-tick delete.
+ */
+export const SLOW_BREAK_BLOCKS = new Set([
     "minecraft:obsidian",
     "minecraft:crying_obsidian",
     "minecraft:ancient_debris",
     "minecraft:netherite_block",
-    "minecraft:respawn_anchor",
-    "minecraft:end_portal_frame",
-    "minecraft:end_gateway"
+    "minecraft:respawn_anchor"
 ]);
+
+/** ~5s at 20 tps. Mining dedicated chew; other solids break in one script hit. */
+export const SLOW_BREAK_TICKS = 100;
+const SLOW_BREAK_STALE_TICKS = 200;
+
+/** Per smash hit while climbing. Stone is 100%; this is the obsidian/etc. roll. */
+export const BUFF_SLOW_BREAK_CHANCE = 0.12;
+
+/** @type {Map<string, { start: number, last: number }>} */
+const slowBreakStarts = new Map();
+
+export function isSlowBreakBlockId(typeId) {
+    return !!typeId && SLOW_BREAK_BLOCKS.has(typeId);
+}
+
+/** Buff smash only. True = destroy this slow block now. */
+export function rollBuffSlowBreak() {
+    return Math.random() < BUFF_SLOW_BREAK_CHANCE;
+}
+
+/** Instant smash (buff explode, torpedo burst) must not melt slow blocks. */
+export function isInstantDestroyBlocked(typeId) {
+    return !!typeId && (UNBREAKABLE_BLOCKS.has(typeId) || SLOW_BREAK_BLOCKS.has(typeId));
+}
+
+/**
+ * @returns {boolean} true when the caller should destroy the block now
+ */
+export function consumeSlowBreakProgress(dimId, x, y, z, typeId, nowTick) {
+    if (!SLOW_BREAK_BLOCKS.has(typeId)) return true;
+    const key = `${dimId}|${x}|${y}|${z}`;
+    let rec = slowBreakStarts.get(key);
+    if (!rec || nowTick - rec.last > SLOW_BREAK_STALE_TICKS) {
+        rec = { start: nowTick, last: nowTick };
+        slowBreakStarts.set(key, rec);
+        if (slowBreakStarts.size > 256) {
+            const oldest = slowBreakStarts.keys().next().value;
+            if (oldest) slowBreakStarts.delete(oldest);
+        }
+        return false;
+    }
+    rec.last = nowTick;
+    if (nowTick - rec.start >= SLOW_BREAK_TICKS) {
+        slowBreakStarts.delete(key);
+        return true;
+    }
+    return false;
+}
 
 // List of blocks that mining bears can break
 // All blocks are breakable by default except those in UNBREAKABLE_BLOCKS
@@ -163,6 +226,17 @@ export const MINING_BREAKABLE_BLOCKS = [
     "minecraft:mangrove_log",
     "minecraft:mangrove_planks",
     "minecraft:mangrove_leaves",
+    "minecraft:pale_oak_log",
+    "minecraft:pale_oak_planks",
+    "minecraft:pale_oak_leaves",
+    "minecraft:poplar_log",
+    "minecraft:poplar_wood",
+    "minecraft:stripped_poplar_log",
+    "minecraft:stripped_poplar_wood",
+    "minecraft:poplar_planks",
+    "minecraft:red_poplar_leaves",
+    "minecraft:orange_poplar_leaves",
+    "minecraft:yellow_poplar_leaves",
     // Additional building blocks
     "minecraft:terracotta",
     "minecraft:white_terracotta",
@@ -304,6 +378,7 @@ export const MINING_BREAKABLE_BLOCK_SET = new Set(MINING_BREAKABLE_BLOCKS);
 /** Never overwritten by abandoned village structure placement (bedrock, fluids, etc.). */
 export const SETTLEMENT_NEVER_REPLACE_IDS = new Set([
     ...UNBREAKABLE_BLOCKS,
+    ...SLOW_BREAK_BLOCKS,
     "minecraft:water",
     "minecraft:flowing_water",
     "minecraft:lava",

@@ -1,0 +1,13 @@
+{
+	"format_version": "1.21.10",
+	"minecraft:weighted_random_feature": {
+		"description": {
+			"identifier": "mb:weighted_infected_oak_trees"
+		},
+		"features": [
+			["mb:infected_oak_tree_partial", 7],
+			["mb:infected_oak_tree", 2],
+			["mb:infected_oak_tree_bare", 1]
+		]
+	}
+}

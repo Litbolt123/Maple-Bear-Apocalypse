@@ -24,6 +24,19 @@ export const TORPEDO_BEAR_DAY20_ID = "mb:torpedo_mb_day20";
 
 export const INFECTED_PIG_ID = "mb:infected_pig";
 export const INFECTED_COW_ID = "mb:infected_cow";
+export const INFECTED_SHEEP_ID = "mb:infected_sheep";
+
+/** Farm animals converted by infection (not Maple Bear variants). */
+export const INFECTED_LIVESTOCK_IDS = Object.freeze([
+    INFECTED_PIG_ID,
+    INFECTED_COW_ID,
+    INFECTED_SHEEP_ID
+]);
+
+/** @param {string} [typeId] */
+export function isInfectedLivestock(typeId) {
+    return typeId === INFECTED_PIG_ID || typeId === INFECTED_COW_ID || typeId === INFECTED_SHEEP_ID;
+}
 
 /** Aliases used by main.js (same strings as tiny/day tier IDs). */
 export const MAPLE_BEAR_ID = TINY_BEAR_ID;

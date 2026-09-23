@@ -6,7 +6,15 @@
 export const INFECTED_BIOME_COMPONENT_IDS = [
     "mb:infected_biome_small",
     "mb:infected_biome_medium",
-    "mb:infected_biome_large"
+    "mb:infected_biome_large",
+    "mb:infected_biome_small_ocean",
+    "mb:infected_biome_medium_ocean",
+    "mb:infected_biome_large_ocean"
+];
+
+/** Test / future: vanilla-looking infected biomes (keep trees/grass). Not snow/dusted carpets. */
+export const INFECTED_VANILLA_BIOME_IDS = [
+    "mb:infected_vanilla_forest"
 ];
 
 /** Reference catalog of vanilla biome ids (dev/biomes stuff) for "missing from replace list". */
@@ -26,6 +34,7 @@ export const VANILLA_BIOME_REFERENCE_CATALOG = [
     "minecraft:cold_taiga_hills",
     "minecraft:cold_taiga_mutated",
     "minecraft:crimson_forest",
+    "minecraft:dappled_forest",
     "minecraft:deep_cold_ocean",
     "minecraft:deep_dark",
     "minecraft:deep_frozen_ocean",
@@ -108,7 +117,9 @@ export const INTENTIONAL_SAFE_OVERWORLD_BIOMES = [
     "minecraft:mega_taiga_hills",
     "minecraft:ice_mountains",
     "minecraft:redwood_taiga_mutated",
-    "minecraft:redwood_taiga_hills_mutated"
+    "minecraft:redwood_taiga_hills_mutated",
+    "minecraft:old_growth_pine_taiga",
+    "minecraft:old_growth_spruce_taiga"
 ];
 
 /** Nether/End ids in catalog but not present in infected biome JSON yet. */
@@ -135,6 +146,7 @@ export const REPLACEMENT_GROUPS = [
             "minecraft:birch_forest_hills_mutated",
             "minecraft:birch_forest_mutated",
             "minecraft:cherry_grove",
+            "minecraft:dappled_forest",
             "minecraft:flower_forest",
             "minecraft:forest",
             "minecraft:forest_hills",
@@ -163,7 +175,7 @@ export const REPLACEMENT_GROUPS = [
         "sizes": [
             "small"
         ],
-        "label": "OW 15% · 31 biomes · e.g. bamboo_jungle"
+        "label": "OW 15% · 32 biomes · e.g. bamboo_jungle"
     },
     {
         "dimension": "minecraft:overworld",
@@ -181,30 +193,15 @@ export const REPLACEMENT_GROUPS = [
     },
     {
         "dimension": "minecraft:overworld",
-        "amount": 0.1,
-        "noiseScale": 60,
+        "amount": 0.12,
+        "noiseScale": 3.5,
         "targets": [
-            "minecraft:beach",
-            "minecraft:cold_beach",
-            "minecraft:cold_ocean",
-            "minecraft:deep_cold_ocean",
-            "minecraft:deep_frozen_ocean",
-            "minecraft:deep_lukewarm_ocean",
-            "minecraft:deep_ocean",
-            "minecraft:deep_warm_ocean",
-            "minecraft:frozen_ocean",
-            "minecraft:frozen_river",
-            "minecraft:legacy_frozen_ocean",
-            "minecraft:lukewarm_ocean",
-            "minecraft:ocean",
-            "minecraft:river",
-            "minecraft:stone_beach",
-            "minecraft:warm_ocean"
+            "minecraft:forest"
         ],
         "sizes": [
-            "small"
+            "vanilla:mb_infected_vanilla_forest"
         ],
-        "label": "OW 10% · 16 biomes · e.g. beach"
+        "label": "OW 12% · 1 biomes · e.g. forest"
     },
     {
         "dimension": "minecraft:overworld",
@@ -218,6 +215,7 @@ export const REPLACEMENT_GROUPS = [
             "minecraft:birch_forest_hills_mutated",
             "minecraft:birch_forest_mutated",
             "minecraft:cherry_grove",
+            "minecraft:dappled_forest",
             "minecraft:flower_forest",
             "minecraft:forest",
             "minecraft:forest_hills",
@@ -246,7 +244,7 @@ export const REPLACEMENT_GROUPS = [
         "sizes": [
             "medium"
         ],
-        "label": "OW 8% · 31 biomes · e.g. bamboo_jungle"
+        "label": "OW 8% · 32 biomes · e.g. bamboo_jungle"
     },
     {
         "dimension": "minecraft:overworld",
@@ -274,6 +272,7 @@ export const REPLACEMENT_GROUPS = [
             "minecraft:birch_forest_hills_mutated",
             "minecraft:birch_forest_mutated",
             "minecraft:cherry_grove",
+            "minecraft:dappled_forest",
             "minecraft:flower_forest",
             "minecraft:forest",
             "minecraft:forest_hills",
@@ -302,7 +301,7 @@ export const REPLACEMENT_GROUPS = [
         "sizes": [
             "large"
         ],
-        "label": "OW 8% · 31 biomes · e.g. bamboo_jungle"
+        "label": "OW 8% · 32 biomes · e.g. bamboo_jungle"
     },
     {
         "dimension": "minecraft:overworld",
@@ -317,60 +316,6 @@ export const REPLACEMENT_GROUPS = [
             "large"
         ],
         "label": "OW 8% · 3 biomes · e.g. deep_dark"
-    },
-    {
-        "dimension": "minecraft:overworld",
-        "amount": 0.06,
-        "noiseScale": 3.5,
-        "targets": [
-            "minecraft:beach",
-            "minecraft:cold_beach",
-            "minecraft:cold_ocean",
-            "minecraft:deep_cold_ocean",
-            "minecraft:deep_frozen_ocean",
-            "minecraft:deep_lukewarm_ocean",
-            "minecraft:deep_ocean",
-            "minecraft:deep_warm_ocean",
-            "minecraft:frozen_ocean",
-            "minecraft:frozen_river",
-            "minecraft:legacy_frozen_ocean",
-            "minecraft:lukewarm_ocean",
-            "minecraft:ocean",
-            "minecraft:river",
-            "minecraft:stone_beach",
-            "minecraft:warm_ocean"
-        ],
-        "sizes": [
-            "medium"
-        ],
-        "label": "OW 6% · 16 biomes · e.g. beach"
-    },
-    {
-        "dimension": "minecraft:overworld",
-        "amount": 0.06,
-        "noiseScale": 0.08,
-        "targets": [
-            "minecraft:beach",
-            "minecraft:cold_beach",
-            "minecraft:cold_ocean",
-            "minecraft:deep_cold_ocean",
-            "minecraft:deep_frozen_ocean",
-            "minecraft:deep_lukewarm_ocean",
-            "minecraft:deep_ocean",
-            "minecraft:deep_warm_ocean",
-            "minecraft:frozen_ocean",
-            "minecraft:frozen_river",
-            "minecraft:legacy_frozen_ocean",
-            "minecraft:lukewarm_ocean",
-            "minecraft:ocean",
-            "minecraft:river",
-            "minecraft:stone_beach",
-            "minecraft:warm_ocean"
-        ],
-        "sizes": [
-            "large"
-        ],
-        "label": "OW 6% · 16 biomes · e.g. beach"
     },
     {
         "dimension": "minecraft:overworld",
@@ -529,9 +474,28 @@ export function normalizeBiomeId(biome) {
     return biome.id ?? null;
 }
 
-export function isInfectedComponentBiome(biomeId) {
+export function isSnowInfectedBiome(biomeId) {
     if (!biomeId) return false;
-    return INFECTED_BIOME_COMPONENT_IDS.includes(biomeId) || biomeId.includes("infected_biome");
+    return INFECTED_BIOME_COMPONENT_IDS.includes(biomeId) || biomeId.startsWith("mb:infected_biome");
+}
+
+export function isVanillaInfectedBiome(biomeId) {
+    if (!biomeId) return false;
+    return INFECTED_VANILLA_BIOME_IDS.includes(biomeId) || biomeId.startsWith("mb:infected_vanilla_");
+}
+
+export function isInfectedComponentBiome(biomeId) {
+    return isSnowInfectedBiome(biomeId) || isVanillaInfectedBiome(biomeId);
+}
+
+/** Location helper — mb_leafInfection biome-tint scan. Do not drop on regen (missing export fails the whole script module). */
+export function isInfectedComponentBiomeAt(dimension, location) {
+    try {
+        const b = dimension?.getBiome?.(location);
+        return isInfectedComponentBiome(normalizeBiomeId(b));
+    } catch {
+        return false;
+    }
 }
 
 export function getReplacementGroupsForTarget(biomeId) {
@@ -610,7 +574,11 @@ export function formatBiomeCheckLines(check) {
     lines.push(`Biome: ${check.biomeId || "§8(unknown)"}`);
     if (check.error) lines.push(`§cError: ${check.error}`);
     if (check.infected) {
-        lines.push("§dStatus: §fInfected component biome §8(mb:…)");
+        if (isVanillaInfectedBiome(check.biomeId)) {
+            lines.push("§dStatus: §fInfected vanilla §8(trees/grass kept)");
+        } else {
+            lines.push("§dStatus: §fSnow infected §8(dusted carpet)");
+        }
     } else if (check.inReplaceList) {
         const g = check.groups[0];
         const pct = g ? `${(g.amount * 100).toFixed(0)}% replace` : "";
@@ -633,7 +601,8 @@ export function formatBiomeCheckHudSegment(check, compact = false) {
     const name = (check.biomeId || "?").replace("minecraft:", "");
     let status;
     if (check.error) status = "§cERR§r";
-    else if (check.infected) status = "§dINF§r";
+    else if (isVanillaInfectedBiome(check.biomeId)) status = "§dVAN§r";
+    else if (check.infected) status = "§dSNW§r";
     else if (check.inReplaceList) {
         const g = check.groups[0];
         const pct = g?.amount != null ? `${Math.round(g.amount * 100)}` : "";

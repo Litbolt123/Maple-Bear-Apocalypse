@@ -8,6 +8,17 @@ This repo ships like **What Am I Doing**: push a **`v*`** Git tag → GitHub Act
 
 ---
 
+## During a beta (do not wait for tag day)
+
+When player-facing work lands, **same turn**:
+
+1. Append bullets to **`docs/development/releases/UNRELEASED_DRAFT.md`**.
+2. Put the same bullets at the top of **`docs/PLAYER_CHANGELOG.md`** under **Unreleased** (or the next `## v…` if you are shipping).
+3. Update **`getPlayerChangelogBody()`** in **`BP - Dev/scripts/mb_playerChangelog.js`**, bump **`PLAYER_CHANGELOG_VERSION`**, then **`npm run sync:bp-from-dev`** so public **`BP/`** matches. Journal **What's new** only shows as unread if that version string changes.
+4. Leave **`docs/RELEASE_BODY.md`** as the last GitHub tag body until you actually tag.
+
+Dev pack **`ADDON_VERSION_PRERELEASE`** can move ahead of public (e.g. `beta.5.1` vs `beta.5`) so Bridge Dev exports match the notes.
+
 ## End-to-end flow
 
 ```

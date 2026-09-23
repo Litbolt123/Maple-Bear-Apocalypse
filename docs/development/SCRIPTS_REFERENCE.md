@@ -21,7 +21,7 @@ One-line (or short) descriptions of each JavaScript module in the behavior pack.
 | File | Purpose |
 |------|---------|
 | **`mb_buildConfig.js`** | Loaded first from `main.js`. Version string, **`INCLUDE_FULL_DEVELOPER_TOOLS`** / **`INCLUDE_ADMIN_TOOLS`**, optional console silencing on release. |
-| **`mb_balance.js`** | Central tuning: **`ENTITY_TYPE_CAPS`**, natural buff spawn cooldown, mob→bear **conversion pressure** constants, **`MB_CONVERSION_BUFF_NEAR_CAP`**, **`getInfectionRate(day)`**. |
+| **`mb_balance.js`** | Central tuning: **`ENTITY_TYPE_CAPS`**, **`getInfectedTypeCap`** (player count × journal Easy/Normal/Hard), natural buff spawn cooldown, mob→bear **conversion pressure** constants, **`MB_CONVERSION_BUFF_NEAR_CAP`**, **`getInfectionRate(day)`** (mobs), **`getBlockSpreadProgress`** (block ramps, cap day 100), **`getBlockSpreadSpeedMultiplier`** (dev override, world property `mb_block_spread_speed_mult`), **`getLeafSnowConvertChance`**, **`getLeafNeighborSpreadChance`**, **`getGreenerySpreadChance`**. |
 | **`mb_scriptToggles.js`** | World properties for enabling/disabling major scripts (mining, infected/flying/torpedo/buff AI, biome ambience, infection audio, spawn controller, storms, dimension adaptation). Developer Tools UI reads/writes these. |
 
 ---
@@ -61,12 +61,18 @@ One-line (or short) descriptions of each JavaScript module in the behavior pack.
 |------|---------|
 | **`mb_spawnEntityIds.js`** | Canonical string IDs for bear tiers and infected pig/cow; **`MAPLE_BEAR_*`** aliases for `main.js`. |
 | **`mb_spawnConfigs.js`** | **`SPAWN_CONFIGS`** (per-type natural spawn curves) and display names for dev toggles. |
-| **`mb_spawnController.js`** | Main spawn system: tiles, scanning, caps, difficulty, emulsifier zones, spawn overrides, dev spawn UI hooks, dusted-dirt registration helpers, much of natural bear spawning. |
+| **`mb_spawnController.js`** | Main spawn system: tiles, scanning, caps, difficulty, emulsifier zones (purify: powder → air; leaves/plants can vanish; dusted dirt can become grass), spawn overrides, dev spawn UI hooks, dusted-dirt registration helpers, much of natural bear spawning. |
 | **`mb_exposureSpawnPressure.js`** | Storm exposure (`stormSeconds`) → modest natural spawn **chance** multiplier; accessor registered from `main.js` (avoids circular import with spawn controller). |
-| **`mb_infectionDirector.js`** | Phase 3 **director** tiers (day bands + spawn-load escalation): spawn **chance** + **attempt** modifiers; HUD toasts on day-band changes (`initializeInfectionDirectorWatch` from `main.js`). |
+| **`mb_infectionDirector.js`** | Phase 3 **director** tiers (day bands + spawn-load escalation): spawn **chance** + **attempt** modifiers; HUD toasts on day-band changes. **`getWorldInfectionSpreadMult`** / **`scaleWorldInfectionChance`** apply **day-band** director × storm reservoir to leaf/grass convert (not load-escalated spawn stage). |
+| **`mb_leafInfection.js`** | All infected leaf species (oak recipe: Samples cutout + oak geo + 0–3). Snow sample, biome-tint convert for birch/spruce/cherry/azalea/pale oak. Torpedo blast jumps leaves to Snow stage. Toggle `leaf_infection`. |
+| **`mb_grassInfection.js`** | Grass plants + `grass_block` / nylium → dusted dirt / infected foliage (not powder). Nether roots, fungus, sprouts, twisting/weeping vines convert. Player-centric; does not tick all dusted dirt. |
+| **`mb_woodInfection.js`** | Infect logs / wood / stripped from Samples. Only converted blocks tick. Same toggle. |
+| **`mb_infectedVegetation.js`** | Generated leaf/wood IDs (`tools/generateInfectedVegetationPack.js`). |
+| **`mb_infectedFoliage.js`** | Generated grass/fern/vine/mushroom/litter IDs (`tools/generateInfectedFoliagePack.js`). Worldgen scatter `mb:infected_floor_plants`. |
 | **`mb_spawnLoadMetrics.js`** | Samples bear/mob/item/storm load; drives spawn-interval and block-budget scaling; **`getSpawnLoadDebugSnapshot`** for HUD and dev menus. |
 | **`mb_spawnMobilityCamp.js`** | Player cluster / mobility camp ramp and storm-start scaling used by spawn and storms. |
-| **`mb_snowStorm.js`** | Dust storms, exposure, storm placement/kill tracking, **`getActiveStormCount`**, **`getStormReservoirSpawnChanceMult`** (Phase 2 localized spawn pressure near storm centers), storm dev/admin hooks. |
+| **`mb_snowStorm.js`** | Dust storms, exposure, storm placement/kill tracking, **`getActiveStormCount`**, **`getStormReservoirSpawnChanceMult`**. Storm powder lands on grass/leaves and infects under it via **`applyInfectionSnowLayer`**. |
+| **`mb_snowPlacement.js`** | Shared powder `setType` + **`notifySnowLayerPlaced`** (storms, bear trails, mining). Script place does not fire `onPlace`. |
 | **`mb_performanceProfile.js`** | Wall-clock tick stress and weighted “expensive mob” pressure for adaptive storm/mining multipliers and spawn probes. |
 
 ---

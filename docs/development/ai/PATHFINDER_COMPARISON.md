@@ -48,6 +48,8 @@ This document compares our current A* pathfinding implementation in `mb_miningAI
 
 **Impact**: Medium - With our `MAX_NODES = 180` limit, this is usually fine, but could still cause issues with many entities.
 
+**2026-09-16:** Vegetation scans now time-slice extras when spawn-load is high (same *idea* as `runJob`: more over time). Mining A* is still synchronous — do not wrap `findPathToTarget` in `runJob` until the AI can continue a path across ticks without looking stuck.
+
 ---
 
 ## Our Custom Enhancements

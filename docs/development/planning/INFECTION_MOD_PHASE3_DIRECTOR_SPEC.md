@@ -29,8 +29,9 @@
 | File | Role |
 |------|------|
 | `mb_balance.js` | `INFECTION_DIRECTOR_*` constants |
-| `mb_infectionDirector.js` | `getInfectionDirectorSpawnModifiers`, `getInfectionDirectorBaseStageFromDay`, watch |
+| `mb_infectionDirector.js` | `getInfectionDirectorSpawnModifiers`, `getInfectionDirectorBaseStageFromDay`, `getWorldInfectionSpreadMult`, `scaleWorldInfectionChance`, watch |
 | `mb_spawnController.js` | Applies `chanceMult` and `attemptBonus` |
+| `mb_leafInfection.js` / `mb_grassInfection.js` | Vegetation convert chance uses **day-band** director × storm reservoir; scans use `claimSpreadSlice` |
 | `main.js` | Starts director watch after spawn-load scaler |
 
 ## Verification

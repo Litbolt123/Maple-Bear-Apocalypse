@@ -132,7 +132,6 @@
 				"total_supply": 40,
 				"suffocate_time": -20
 			},
-			"minecraft:fire_immune": false,
 			"minecraft:follow_range": { "value": 80, "max": 80 },
 			"minecraft:knockback_resistance": { "value": 0.6, "max": 0.6 },
 			"minecraft:scale": { "value": 1.12 },

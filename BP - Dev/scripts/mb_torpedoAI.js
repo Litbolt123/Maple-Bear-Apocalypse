@@ -2,7 +2,7 @@
  * Torpedo bears clear blocks via script (`setType(air)`, path bursts) — not via entity `break_blocks`.
  */
 import { system, world, Player } from "@minecraft/server";
-import { UNBREAKABLE_BLOCKS } from "./mb_miningBlockList.js";
+import { isInstantDestroyBlocked } from "./mb_miningBlockList.js";
 import { SNOW_REPLACEABLE_BLOCKS, SNOW_TWO_BLOCK_PLANTS } from "./mb_blockLists.js";
 import { isDebugEnabled } from "./mb_codex.js";
 import { isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
@@ -18,6 +18,7 @@ import { shouldSleepDayZeroWorldWork } from "./mb_dayZeroPerfBisect.js";
 import { registerBearAiStartCallback } from "./mb_bearAiBootstrap.js";
 import { getAiIntervalStretch } from "./mb_performanceProfile.js";
 import { TORPEDO_BEAR_ID, TORPEDO_BEAR_DAY20_ID } from "./mb_spawnEntityIds.js";
+import { blastGroundBand, applyBlastDustedGround, applyInfectionSnowLayer } from "./mb_snowPlacement.js";
 
 /** Dynamic property: true when this torpedo bear must not explode on death or block exhaustion. */
 export const TORPEDO_DUD_PROPERTY = "mb_torpedo_dud";
@@ -95,15 +96,15 @@ function handleTwoBlockPlant(dimension, checkX, topSolidY, checkZ, topSolidBlock
     const prefix = isAbove ? "2-block above: " : "2-block: ";
     const replaceLog = isAbove ? `replaced above ${blockType} with snow` : `replaced ${blockType} with snow`;
     if (blockAbove && SNOW_TWO_BLOCK_PLANTS.has(blockAbove.typeId)) {
-        try { topSolidBlock.setType("mb:snow_layer"); } catch { topSolidBlock.setType("minecraft:snow_layer"); }
+        applyInfectionSnowLayer(topSolidBlock);
         try { blockAbove.setType("minecraft:air"); } catch { }
         if (debugEnabled) console.warn(`[TORPEDO SNOW] (${checkX},${topSolidY},${checkZ}) ${prefix}bottom→snow, top→air`);
     } else if (blockBelow && SNOW_TWO_BLOCK_PLANTS.has(blockBelow.typeId)) {
-        try { blockBelow.setType("mb:snow_layer"); } catch { blockBelow.setType("minecraft:snow_layer"); }
+        applyInfectionSnowLayer(blockBelow);
         try { topSolidBlock.setType("minecraft:air"); } catch { }
         if (debugEnabled) console.warn(`[TORPEDO SNOW] (${checkX},${topSolidY},${checkZ}) ${prefix}was top, bottom→snow, this→air`);
     } else {
-        try { topSolidBlock.setType("mb:snow_layer"); } catch { topSolidBlock.setType("minecraft:snow_layer"); }
+        applyInfectionSnowLayer(topSolidBlock);
         if (debugEnabled) console.warn(`[TORPEDO SNOW] (${checkX},${topSolidY},${checkZ}) ${replaceLog}`);
     }
 }
@@ -148,8 +149,7 @@ const SOUND_RADIUS = 16;
 const MIN_STRUCTURE_Y = 60; // Minimum Y level - torpedos never go below this
 const PASSIVE_WANDER_TICKS = 6000; // 5 minutes without seeing target = passive wandering
 
-// UNBREAKABLE_BLOCKS is imported from mb_miningBlockList.js
-// All blocks are breakable by default except those in UNBREAKABLE_BLOCKS
+// Instant path bursts skip unbreakable and diamond-slow blocks (obsidian, netherite, …).
 
 function getState(entity) {
     const id = entity.id;
@@ -241,6 +241,8 @@ function checkTorpedoExhaustion(entity, config) {
                     for (let dz = -explosionRadius; dz <= explosionRadius; dz++) {
                         const dist = Math.hypot(dx, dz);
                         if (dist > explosionRadius) continue;
+                        const groundBand = blastGroundBand(dist, explosionRadius);
+                        if (groundBand === "skip") continue;
                         
                         const checkX = centerX + dx;
                         const checkZ = centerZ + dz;
@@ -272,6 +274,10 @@ function checkTorpedoExhaustion(entity, config) {
                         // Place snow - replace grass blocks, otherwise place on top
                         // Skip this column if there's already a snow layer at placement level (don't stack)
                         if (topSolidY !== null && topSolidBlock) {
+                            if (groundBand === "dust") {
+                                applyBlastDustedGround(topSolidBlock);
+                                continue;
+                            }
                             try {
                                 const snowCheckY = topSolidY + 1;
                                 const existingSnowBlock = dimension.getBlock({ x: checkX, y: snowCheckY, z: checkZ });
@@ -290,7 +296,7 @@ function checkTorpedoExhaustion(entity, config) {
                                 }
                                 // Replace vanilla snow layer with custom snow layer
                                 if (blockType === "minecraft:snow_layer") {
-                                    try { topSolidBlock.setType("mb:snow_layer"); } catch { topSolidBlock.setType("minecraft:snow_layer"); }
+                                    applyInfectionSnowLayer(topSolidBlock);
                                     if (getDebugBlockPlacement()) console.warn(`[TORPEDO SNOW] (${checkX},${topSolidY},${checkZ}) replaced vanilla snow with mb:snow_layer`);
                                     continue;
                                 }
@@ -299,7 +305,7 @@ function checkTorpedoExhaustion(entity, config) {
                                     if (SNOW_TWO_BLOCK_PLANTS.has(blockType)) {
                                         handleTwoBlockPlant(dimension, checkX, topSolidY, checkZ, topSolidBlock, getDebugBlockPlacement());
                                     } else {
-                                        try { topSolidBlock.setType("mb:snow_layer"); } catch { topSolidBlock.setType("minecraft:snow_layer"); }
+                                        applyInfectionSnowLayer(topSolidBlock);
                                         if (getDebugBlockPlacement()) console.warn(`[TORPEDO SNOW] (${checkX},${topSolidY},${checkZ}) replaced ${blockType} with snow`);
                                     }
                                 } else {
@@ -317,15 +323,11 @@ function checkTorpedoExhaustion(entity, config) {
                                             if (SNOW_TWO_BLOCK_PLANTS.has(snowBlockType)) {
                                                 handleTwoBlockPlant(dimension, checkX, snowY, checkZ, snowBlock, getDebugBlockPlacement(), true);
                                             } else {
-                                                try { snowBlock.setType("mb:snow_layer"); } catch { snowBlock.setType("minecraft:snow_layer"); }
+                                                applyInfectionSnowLayer(snowBlock);
                                                 if (getDebugBlockPlacement()) console.warn(`[TORPEDO SNOW] (${checkX},${snowY},${checkZ}) replaced above ${snowBlockType} with snow`);
                                             }
                                         } else if (snowBlock.isAir !== undefined && snowBlock.isAir) {
-                                            try {
-                                                snowBlock.setType("mb:snow_layer");
-                                            } catch {
-                                                snowBlock.setType("minecraft:snow_layer");
-                                            }
+                                            applyInfectionSnowLayer(snowBlock);
                                             if (getDebugBlockPlacement()) console.warn(`[TORPEDO SNOW] (${checkX},${snowY},${checkZ}) placed snow on air`);
                                         }
                                     }
@@ -583,7 +585,7 @@ function findStructureBlocks(dimension, center, radius, minY) {
                 const typeId = block.typeId;
                 if (typeId === "minecraft:air" || typeId === "minecraft:cave_air" || typeId === "minecraft:void_air") continue;
                 // Check if block is unbreakable (diamond-pickaxe-only or unbreakable)
-                if (UNBREAKABLE_BLOCKS.has(typeId)) continue;
+                if (isInstantDestroyBlocked(typeId)) continue;
                 // For all other blocks, allow breaking (ravager-style)
                 
                 blocks.push({ x, y, z, typeId });
@@ -625,7 +627,7 @@ function breakStructureBlocks(dimension, blocks, limit, entity = null, config = 
         if (block.typeId !== blockInfo.typeId) continue; // Block changed
         
         // Check if block is unbreakable
-        if (UNBREAKABLE_BLOCKS.has(blockInfo.typeId)) continue;
+        if (isInstantDestroyBlocked(blockInfo.typeId)) continue;
         
         try {
             block.setType("minecraft:air");
@@ -696,7 +698,7 @@ function breakBlocksInPath(entity, direction, config) {
         const typeId = block.typeId;
         if (typeId === "minecraft:air" || typeId === "minecraft:cave_air" || typeId === "minecraft:void_air") continue;
         // Check if block is unbreakable (diamond-pickaxe-only or unbreakable)
-        if (UNBREAKABLE_BLOCKS.has(typeId)) continue;
+        if (isInstantDestroyBlocked(typeId)) continue;
         
         // Check break count before breaking
         const breakCount = getBreakCount(entity);
@@ -749,7 +751,7 @@ function breakBlocksAboveEntity(entity, maxHeight, config) {
         if (typeId === "minecraft:air" || typeId === "minecraft:cave_air" || typeId === "minecraft:void_air") {
             continue;
         }
-        if (UNBREAKABLE_BLOCKS.has(typeId)) continue;
+        if (isInstantDestroyBlocked(typeId)) continue;
         
         const breakCount = getBreakCount(entity);
         if (breakCount >= getEffectiveTorpedoMaxBlocks(config)) {
@@ -877,7 +879,7 @@ function canSeeTargetThroughBlocks(entity, targetInfo, maxBlocks = 3) {
         try {
             const block = dimension.getBlock({ x: checkX, y: checkY, z: checkZ });
             if (block && block.typeId !== "minecraft:air" && block.typeId !== "minecraft:cave_air" && block.typeId !== "minecraft:void_air") {
-                if (UNBREAKABLE_BLOCKS.has(block.typeId)) {
+                if (isInstantDestroyBlocked(block.typeId)) {
                     return false; // Unbreakable block in the way
                 }
                 blockCount++;

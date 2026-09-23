@@ -54,32 +54,10 @@
 							"minecraft:swampland",
 							"minecraft:swampland_mutated",
 							"minecraft:mangrove_swamp",
-							"minecraft:pale_garden"
+							"minecraft:pale_garden",
+							"minecraft:dappled_forest"
 						],
 						"amount": 0.15,
-						"noise_frequency_scale": 60
-					},
-					{
-						"dimension": "minecraft:overworld",
-						"targets": [
-							"minecraft:ocean",
-							"minecraft:deep_ocean",
-							"minecraft:cold_ocean",
-							"minecraft:deep_cold_ocean",
-							"minecraft:lukewarm_ocean",
-							"minecraft:deep_lukewarm_ocean",
-							"minecraft:warm_ocean",
-							"minecraft:deep_warm_ocean",
-							"minecraft:frozen_ocean",
-							"minecraft:deep_frozen_ocean",
-							"minecraft:legacy_frozen_ocean",
-							"minecraft:beach",
-							"minecraft:cold_beach",
-							"minecraft:stone_beach",
-							"minecraft:river",
-							"minecraft:frozen_river"
-						],
-						"amount": 0.1,
 						"noise_frequency_scale": 60
 					},
 					{

@@ -3,6 +3,8 @@
  * Prefer editing this file (and `SPAWN_CONFIGS` in mb_spawnConfigs.js) over scattering magic numbers.
  */
 
+import { getAddonDifficultyState, getWorldProperty, setWorldProperty } from "./mb_dynamicPropertyHandler.js";
+
 // --- Spawn: entity family keys (used with ENTITY_TYPE_CAPS and ENTITY_TO_TYPE_MAP) ---
 export const TINY_TYPE = "tiny";
 export const INFECTED_TYPE = "infected";
@@ -18,6 +20,21 @@ export const ENTITY_TYPE_CAPS = {
     [FLYING_TYPE]: 20,
     [TORPEDO_TYPE]: 10
 };
+
+/**
+ * Nearby infected-family cap (normal infected Maple Bears).
+ * Base is ENTITY_TYPE_CAPS.infected. Scales with players in spawn range and
+ * Journal → Settings addon difficulty (Easy 0.7 / Normal 1 / Hard 1.3).
+ * @param {number} playerCount players sharing the spawn radius
+ * @param {number} [spawnMultiplier=1] from getAddonDifficultyState().spawnMultiplier
+ */
+export function getInfectedTypeCap(playerCount, spawnMultiplier = 1) {
+    const n = Math.max(1, playerCount | 0);
+    const base = ENTITY_TYPE_CAPS[INFECTED_TYPE];
+    const mp = n <= 1 ? 1 : n === 2 ? 1.4 : n === 3 ? 1.75 : 2;
+    const diff = Number.isFinite(spawnMultiplier) && spawnMultiplier > 0 ? spawnMultiplier : 1;
+    return Math.max(6, Math.min(48, Math.round(base * mp * diff)));
+}
 
 /** Natural spawn controller only: min ticks between successful buff bear spawns. Conversions ignore this. */
 export const NATURAL_BUFF_SPAWN_COOLDOWN_TICKS = 20 * 120;
@@ -118,7 +135,7 @@ export const INFECTION_RATE_STEPS = [
 
 /**
  * @param {number} day
- * @returns {number} 0 before day 2, else stepped infection probability for conversions
+ * @returns {number} 0 before day 2, else stepped infection probability for *mob* conversions (not block spread)
  */
 export function getInfectionRate(day) {
     if (day < 2) return 0;
@@ -131,6 +148,218 @@ export function getInfectionRate(day) {
         }
     }
     return currentRate;
+}
+
+/**
+ * Play curve for *block* spread (leaves, wood, grass). 0 before day 2.
+ * Testing tables hit ~day-20 fire speed by calendar day 20; this is much slower
+ * and caps at day 100. Knots: 2→20, 20→25 (steeper), then slower 25→50→75→100.
+ * Linear between knots. Mob conversion still uses {@link getInfectionRate}.
+ */
+export const BLOCK_SPREAD_PROGRESS_KNOTS = [
+    { day: 2, s: 0.04 },
+    { day: 20, s: 0.18 },
+    { day: 25, s: 0.28 },
+    { day: 50, s: 0.45 },
+    { day: 75, s: 0.70 },
+    { day: 100, s: 1.00 }
+];
+
+/**
+ * @param {number} day
+ * @returns {number} 0–1 block-spread progress (0 before day 2, 1 at day 100+)
+ */
+export function getBlockSpreadProgress(day) {
+    if (day < 2) return 0;
+    const knots = BLOCK_SPREAD_PROGRESS_KNOTS;
+    const last = knots[knots.length - 1];
+    if (day >= last.day) return last.s;
+    for (let i = 0; i < knots.length - 1; i++) {
+        const a = knots[i];
+        const b = knots[i + 1];
+        if (day >= a.day && day < b.day) {
+            const t = (day - a.day) / (b.day - a.day);
+            return a.s + t * (b.s - a.s);
+        }
+    }
+    return last.s;
+}
+
+/**
+ * Multiplier on leaf/wood/grass convert chances. Knots stay the same.
+ * 1 = first play table (day 2 canopy convert ~2%). August 2026-09-01: 2 (~4%).
+ */
+export const BLOCK_SPREAD_CHANCE_MULT = 2;
+
+/** World property: extra convert-chance scale. Unset / 1 = play curve. 0 = pause. Dev Tools → Infection. */
+export const BLOCK_SPREAD_SPEED_PROPERTY = "mb_block_spread_speed_mult";
+export const BLOCK_SPREAD_SPEED_MIN = 0;
+export const BLOCK_SPREAD_SPEED_MAX = 16;
+
+/**
+ * Dev override on leaf/wood/grass convert chance. 1 = shipped play curve. 0 = pause.
+ * Does not change mob conversion or scan interval.
+ * @returns {number}
+ */
+export function getBlockSpreadSpeedMultiplier() {
+    const raw = getWorldProperty(BLOCK_SPREAD_SPEED_PROPERTY);
+    if (raw === undefined || raw === null || raw === "") return 1;
+    const num = Number(raw);
+    if (!Number.isFinite(num)) return 1;
+    return Math.max(BLOCK_SPREAD_SPEED_MIN, Math.min(BLOCK_SPREAD_SPEED_MAX, num));
+}
+
+/**
+ * @param {number} mult
+ * @returns {number} clamped value that was stored (1 clears the world property)
+ */
+export function setBlockSpreadSpeedMultiplier(mult) {
+    const num = Number(mult);
+    const clamped = !Number.isFinite(num)
+        ? 1
+        : Math.max(BLOCK_SPREAD_SPEED_MIN, Math.min(BLOCK_SPREAD_SPEED_MAX, num));
+    setWorldProperty(BLOCK_SPREAD_SPEED_PROPERTY, clamped === 1 ? undefined : clamped);
+    return clamped;
+}
+
+/**
+ * Journal → Settings addon difficulty scale for leaf/wood/grass convert chance.
+ * Same Easy 0.7 / Normal 1 / Hard 1.3 as spawn. Does not change scan interval or mob conversion.
+ * @returns {number}
+ */
+export function getBlockSpreadDifficultyMultiplier() {
+    try {
+        const m = Number(getAddonDifficultyState()?.blockSpreadMultiplier);
+        if (Number.isFinite(m) && m > 0) return m;
+    } catch {
+        /* world not ready */
+    }
+    return 1;
+}
+
+/**
+ * @param {number} s getBlockSpreadProgress
+ * @param {number} intercept
+ * @param {number} slope
+ * @returns {number} 0–1
+ */
+function blockSpreadChance(s, intercept, slope) {
+    if (s <= 0) return 0;
+    const speed = getBlockSpreadSpeedMultiplier();
+    if (speed <= 0) return 0;
+    const diff = getBlockSpreadDifficultyMultiplier();
+    return Math.min(1, (intercept + s * slope) * BLOCK_SPREAD_CHANCE_MULT * speed * diff);
+}
+
+/**
+ * Canopy leaf infection (`mb_leafInfection.js`). 0 before day 2.
+ * @param {number} day
+ * @returns {number} 0–1 chance per canopy scan hit that snow-on-leaf converts
+ */
+export function getLeafSnowConvertChance(day) {
+    return blockSpreadChance(getBlockSpreadProgress(day), 0.012, 0.20);
+}
+
+/**
+ * @param {number} day
+ * @returns {number} 0–1 chance per infected-leaf tick to infect one neighbor
+ */
+export function getLeafNeighborSpreadChance(day) {
+    return blockSpreadChance(getBlockSpreadProgress(day), 0.008, 0.12);
+}
+
+/**
+ * Log / stem / wart neighbor hops. Slightly faster than leaves, same day curve.
+ * @param {number} day
+ * @returns {number} 0–1
+ */
+export function getWoodNeighborSpreadChance(day) {
+    return blockSpreadChance(getBlockSpreadProgress(day), 0.012, 0.16);
+}
+
+/**
+ * Grass plants + grass_block (`mb_grassInfection.js`). 0 before day 2.
+ * Random player-scan hits stay slower than leaf neighbor spread.
+ * Dirt→grass_block neighbor spread uses {@link getGreeneryNeighborSpreadChance}.
+ * Live chances go through {@link blockSpreadChance} (dev speed × journal difficulty); this table is knot snapshots only.
+ */
+export const GREENERY_SPREAD_STEPS = BLOCK_SPREAD_PROGRESS_KNOTS.map((k) => ({
+    day: k.day,
+    chance: (0.006 + k.s * 0.08) * BLOCK_SPREAD_CHANCE_MULT
+}));
+
+/**
+ * @param {number} day
+ * @returns {number} 0–1 chance per eligible grass cell to convert this scan/tick
+ */
+export function getGreenerySpreadChance(day) {
+    return blockSpreadChance(getBlockSpreadProgress(day), 0.006, 0.08);
+}
+
+/**
+ * Dusted dirt / powder / infected leaf → adjacent grass_block.
+ * Matches {@link getLeafNeighborSpreadChance} so ground spread is visible
+ * next to a small creative patch (leaves tick; dirt does not).
+ * @param {number} day
+ * @returns {number} 0–1
+ */
+export function getGreeneryNeighborSpreadChance(day) {
+    return getLeafNeighborSpreadChance(day);
+}
+
+/**
+ * Vine / kill-burst convert of living soil. Podzol is the giant/old-growth taiga
+ * floor; mycelium is mushroom fields. Both crawl slower than dirt/grass.
+ * Those biomes are intentionally not infected-biome replace (not immunity).
+ * Coarse dirt is the actual dirt+gravel craft — not this multiplier.
+ */
+export const PODZOL_GROUND_SPREAD_MULT = 0.45;
+export const MYCELIUM_GROUND_SPREAD_MULT = 0.45;
+/** Extra slow for the whole biome (grass/dirt in giant taiga or mushroom fields). */
+export const RESISTANT_SOIL_BIOME_SPREAD_MULT = 0.55;
+/** Vanilla brown/red mushrooms resist convert more than grass. They do not purify. */
+export const MUSHROOM_PLANT_SPREAD_MULT = 0.4;
+
+const RESISTANT_SOIL_BIOME_IDS = new Set([
+    "minecraft:mushroom_island",
+    "minecraft:mushroom_island_shore",
+    "minecraft:mushroom_fields",
+    "minecraft:mushroom_field_shore",
+    "minecraft:mega_taiga",
+    "minecraft:mega_taiga_hills",
+    "minecraft:redwood_taiga_mutated",
+    "minecraft:redwood_taiga_hills_mutated",
+    "minecraft:old_growth_pine_taiga",
+    "minecraft:old_growth_spruce_taiga"
+]);
+
+const MUSHROOM_PLANT_IDS = new Set([
+    "minecraft:brown_mushroom",
+    "minecraft:red_mushroom"
+]);
+
+/** @param {string|undefined} typeId */
+export function getGroundConvertChanceMult(typeId) {
+    if (typeId === "minecraft:podzol") return PODZOL_GROUND_SPREAD_MULT;
+    if (typeId === "minecraft:mycelium") return MYCELIUM_GROUND_SPREAD_MULT;
+    return 1;
+}
+
+/** @param {string|undefined} biomeId */
+export function getResistantSoilBiomeSpreadMult(biomeId) {
+    if (!biomeId) return 1;
+    const id = String(biomeId);
+    if (RESISTANT_SOIL_BIOME_IDS.has(id)) return RESISTANT_SOIL_BIOME_SPREAD_MULT;
+    if (!id.includes(":") && RESISTANT_SOIL_BIOME_IDS.has(`minecraft:${id}`)) {
+        return RESISTANT_SOIL_BIOME_SPREAD_MULT;
+    }
+    return 1;
+}
+
+/** @param {string|undefined} typeId */
+export function getFoliageConvertChanceMult(typeId) {
+    if (MUSHROOM_PLANT_IDS.has(typeId)) return MUSHROOM_PLANT_SPREAD_MULT;
+    return 1;
 }
 
 // --- Infection evolution: localized storm reservoirs (Phase 2, mb_snowStorm getStormReservoirSpawnChanceMult + mb_spawnController) ---
@@ -150,3 +379,8 @@ export const INFECTION_DIRECTOR_LOAD_ESCALATE = 0.52;
 export const INFECTION_DIRECTOR_CHANCE_MULT = Object.freeze([1, 1.02, 1.045, 1.07]);
 /** Extra tile spawn attempts per config (surge/stormfront emphasize pressure vs pure rate). */
 export const INFECTION_DIRECTOR_ATTEMPT_BONUS = Object.freeze([0, 0, 1, 2]);
+
+/** Emulsifier: infected leaves / walkable foliage become air instead of vanilla. */
+export const EMULSIFIER_LEAF_VANISH_CHANCE = 0.35;
+/** Emulsifier: dusted dirt becomes grass_block when the two cells above are open (lawn / forest floor). */
+export const EMULSIFIER_DIRT_TO_GRASS_CHANCE = 0.45;
