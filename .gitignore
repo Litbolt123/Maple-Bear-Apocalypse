@@ -1,2 +1,26 @@
 node_modules/
 dist/
+
+# Pack exports and archives (Bridge / local drops)
+*.mcpack
+*.mcaddon
+*.zip
+
+# Logs and temp
+*.log
+*.tmp
+*.temp
+*.bak
+*~
+
+# OS
+Thumbs.db
+.DS_Store
+Desktop.ini
+
+# Secrets and local credentials
+.env
+.env.*
+*.pem
+*.key
+credentials.json
