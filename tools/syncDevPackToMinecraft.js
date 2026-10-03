@@ -2,15 +2,18 @@
  * Copy BP - Dev / RP - Dev from the repo into Minecraft "development_*_packs" folders
  * that share the same pack UUID (e.g. legacy "MapleBear TakeOver BP" + renamed folder).
  *
+ * After copy, dest files that were deleted in git are pruned (`_archived` is kept).
+ *
  * Bridge / git edits do NOT update the game until this runs or you re-export .mcpack.
  *
  *   npm run sync:dev-to-minecraft
  *   node tools/syncDevPackToMinecraft.js --dry-run
  */
-import { cpSync, existsSync, readdirSync, readFileSync, statSync } from "fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "fs";
 import { homedir } from "os";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
+import { syncPackTree } from "./copyPackTree.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const dryRun = process.argv.includes("--dry-run");
@@ -61,12 +64,10 @@ function findPackDirsByUuid(parentDir, targetUuid) {
 }
 
 function copyPackContents(srcRoot, destRoot) {
-    for (const name of readdirSync(srcRoot)) {
-        const src = join(srcRoot, name);
-        const dest = join(destRoot, name);
-        if (!dryRun) {
-            cpSync(src, dest, { recursive: true, force: true });
-        }
+    const pruned = syncPackTree(srcRoot, destRoot, { dryRun });
+    if (pruned.length) {
+        const prefix = dryRun ? "  [dry-run] would prune" : "  Pruned";
+        for (const p of pruned) console.log(`${prefix} ${p}`);
     }
 }
 

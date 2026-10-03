@@ -3,6 +3,10 @@
 **Symptom playbook:** [PERFORMANCE_DEBUG.md](PERFORMANCE_DEBUG.md) (tick stalls, A/B tests, dev toggles).  
 **This doc:** which scripts cost the most, what we already optimized, and phased next steps.
 
+**August 2026-09-19:** Every change has **two levels** — solo vs multiplayer. Solo can spend more. MP must share work. Do not tune only for one player; do not starve solo.
+
+**August 2026-09-16:** more performance work — block-spread ticks removed, then a research pass (Bedrock Wiki add-on performance, Mojang `system.runJob`, nox7 pathfinder, Jayly watchdog). Applied **without** freezing infection: load-aware vegetation extras, cheaper tint/powder scans, Script API particles instead of `/particle` on hot FX, `textures_list.json`. Mining A* `runJob` still queued (callers want a path the same tick).
+
 ---
 
 ## Inventory vs item finder
@@ -108,3 +112,23 @@ Design intent: **more over time, less in one tick** while staying in an area.
 4. Note changes in [`docs/context summary.md`](../context%20summary.md).
 
 **Future automation (no SDK in repo):** see [CURSOR_SDK.md](CURSOR_SDK.md).
+
+## Later (August 2026-09-02 / **09-16 slices**)
+
+August wants **even more** performance work. Phases A–E are shipped history, not a closed book.
+
+**2026-09-16 (block-spread):** Infected leaves/wood no longer `minecraft:tick`; hops are player-centric. **2026-09-19:** first MP vegetation pacing (extras always rotate when 2+ players; convert caps). Guest hitch vs host still needs August+friend playtest.
+
+**2026-09-16 (research apply — not rigid):**
+
+Sources: [Bedrock Wiki add-on performance](https://wiki.bedrock.dev/meta/addon-performance) (SirLich et al.), Wiki scripting “avoid `runCommand`”, Mojang `system.runJob` time-slicing, nox7 `runJob` pathfinder, Jayly script watchdog (2 ms slow / 100 ms spike). Principle: **more over time**, keep the front the player can see.
+
+| Applied | Why it is not a freeze |
+|---------|------------------------|
+| Vegetation extras rotate only when spawn-load ≥ 0.3 / 0.55 | Leaf + grass **always** run |
+| Biome-tint ray + ±6 Y instead of a 40-high column of `getBlock` | Same birch/spruce convert, fewer reads |
+| Skip extra powder-column walks when the volume found no powder | Powder still converts when it is there |
+| `spawnParticle` instead of `/particle` on stain/place FX; cap 4 snowflakes per kill stain | FX stays, command parser dropped |
+| `textures_list.json` (Wiki texture cache) | Load-time only |
+
+**Still open (do not guess-apply) — morning 2026-09-17:** mining A* `system.runJob` (needs a path the same AI tick or a continuation handle); leftover death/explosion `/particle` commands; flying-bear animation fake; biome `climate` particle storms (snow biomes need climate); `contents.json` (Wiki says optional / Marketplace encrypt). August+friend MP hitch playtest pending (2026-09-19 pacing landed). Playtest quiet VAN vs busy dusty forest before adding more throttle.

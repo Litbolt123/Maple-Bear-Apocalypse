@@ -21,7 +21,7 @@ export const MINING_SNOW_ON_BREAK_CHANCE = {
 export const PATHFINDING_ENTITY_TYPES = [
     "mb:mining_mb", "mb:mining_mb_day20",
     "mb:infected", "mb:infected_day08", "mb:infected_day13", "mb:infected_day20",
-    "mb:infected_pig", "mb:infected_cow"
+    "mb:infected_pig", "mb:infected_cow", "mb:infected_sheep"
 ];
 
 export const AIR_BLOCKS = new Set([

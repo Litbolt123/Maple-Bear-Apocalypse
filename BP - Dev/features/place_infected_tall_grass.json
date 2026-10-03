@@ -1,0 +1,49 @@
+{
+	"format_version": "1.26.50",
+	"minecraft:multi_block_feature": {
+		"description": {
+			"identifier": "mb:place_infected_tall_grass"
+		},
+		"places_block": "mb:infected_tall_grass",
+		"enforce_placement_rules": true,
+		"may_replace": [
+			"minecraft:air",
+			"minecraft:short_grass",
+			"minecraft:grass",
+			"minecraft:tall_grass",
+			"minecraft:fern",
+			"minecraft:large_fern",
+			"minecraft:deadbush",
+			"minecraft:firefly_bush",
+			"minecraft:brown_mushroom",
+			"minecraft:red_mushroom",
+			"minecraft:red_shrub",
+			"minecraft:leaf_litter",
+			"minecraft:wildflowers",
+			"minecraft:bush",
+			"minecraft:pink_petals",
+			"minecraft:pitcher_plant",
+			"minecraft:peony",
+			"minecraft:rose_bush",
+			"minecraft:lilac",
+			"minecraft:sunflower",
+			"minecraft:cactus_flower",
+			"minecraft:closed_eyeblossom",
+			"minecraft:open_eyeblossom",
+			"minecraft:torchflower",
+			"minecraft:wither_rose",
+			"minecraft:lily_of_the_valley",
+			"minecraft:cornflower",
+			"minecraft:oxeye_daisy",
+			"minecraft:pink_tulip",
+			"minecraft:white_tulip",
+			"minecraft:orange_tulip",
+			"minecraft:red_tulip",
+			"minecraft:azure_bluet",
+			"minecraft:allium",
+			"minecraft:blue_orchid",
+			"minecraft:poppy",
+			"minecraft:dandelion"
+		]
+	}
+}

@@ -1,0 +1,62 @@
+{
+	"format_version": "1.21.120",
+	"minecraft:biome": {
+		"description": {
+			"identifier": "mb:infected_biome_medium_ocean"
+		},
+		"components": {
+			"minecraft:climate": {
+				"temperature": 1,
+				"downfall": 0.9,
+				"snow_accumulation": [
+					0.01,
+					0.1
+				]
+			},
+			"minecraft:tags": {
+				"tags": [
+					"infected_biome",
+					"ocean"
+				]
+			},
+			"minecraft:replace_biomes": {
+				"replacements": [
+					{
+						"dimension": "minecraft:overworld",
+						"targets": [
+							"minecraft:ocean",
+							"minecraft:deep_ocean",
+							"minecraft:cold_ocean",
+							"minecraft:deep_cold_ocean",
+							"minecraft:lukewarm_ocean",
+							"minecraft:deep_lukewarm_ocean",
+							"minecraft:warm_ocean",
+							"minecraft:deep_warm_ocean",
+							"minecraft:frozen_ocean",
+							"minecraft:deep_frozen_ocean",
+							"minecraft:legacy_frozen_ocean",
+							"minecraft:beach",
+							"minecraft:cold_beach",
+							"minecraft:stone_beach",
+							"minecraft:river",
+							"minecraft:frozen_river"
+						],
+						"amount": 0.06,
+						"noise_frequency_scale": 3.5
+					}
+				]
+			},
+			"minecraft:surface_builder": {
+				"builder": {
+					"type": "minecraft:overworld",
+					"sea_floor_depth": 7,
+					"sea_floor_material": "mb:dusted_dirt",
+					"foundation_material": "minecraft:stone",
+					"mid_material": "minecraft:dirt",
+					"top_material": "mb:dusted_dirt",
+					"sea_material": "minecraft:water"
+				}
+			}
+		}
+	}
+}

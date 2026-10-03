@@ -48,7 +48,8 @@ export const SCRIPT_IDS = {
     playerDiscovery: "player_discovery",
     dustedDirtCleanup: "dusted_dirt_cleanup",
     workSpread: "work_spread",
-    abandonedVillageWorldgen: "abandoned_village_worldgen"
+    abandonedVillageWorldgen: "abandoned_village_worldgen",
+    leafInfection: "leaf_infection"
 };
 
 /** Menu order (all toggles). */
@@ -80,7 +81,8 @@ export const SCRIPT_TOGGLE_ORDER = [
     SCRIPT_IDS.snowTrail,
     SCRIPT_IDS.chunkEdgeWatch,
     SCRIPT_IDS.playerDiscovery,
-    SCRIPT_IDS.dustedDirtCleanup
+    SCRIPT_IDS.dustedDirtCleanup,
+    SCRIPT_IDS.leafInfection
 ];
 
 /** @type {Record<string, string>} */
@@ -112,6 +114,7 @@ export const SCRIPT_TOGGLE_LABELS = {
     [SCRIPT_IDS.chunkEdgeWatch]: "Chunk-edge defer watch",
     [SCRIPT_IDS.playerDiscovery]: "Biome + inventory discovery",
     [SCRIPT_IDS.dustedDirtCleanup]: "Dusted dirt age cleanup",
+    [SCRIPT_IDS.leafInfection]: "Leaf infection spread",
     [SCRIPT_IDS.workSpread]: "Work spread (day 0–1 throttle)"
 };
 
@@ -151,7 +154,8 @@ export const SCRIPT_TOGGLE_GROUPS = {
             SCRIPT_IDS.dimensionAdaptation,
             SCRIPT_IDS.villagerSuppress,
             SCRIPT_IDS.snowTrail,
-            SCRIPT_IDS.dustedDirtCleanup
+            SCRIPT_IDS.dustedDirtCleanup,
+            SCRIPT_IDS.leafInfection
         ]
     },
     perf: {
@@ -180,6 +184,7 @@ export const SCRIPT_BISECT_CATEGORY_MAP = {
     spawn_metrics: SCRIPT_IDS.spawnLoadMetrics,
     entity_query_hud: SCRIPT_IDS.actionBarHud,
     infection_director: SCRIPT_IDS.infectionDirector,
+    leaf_infection: SCRIPT_IDS.leafInfection,
     biome_ambience: SCRIPT_IDS.biomeAmbience,
     spawn_emulsifier: SCRIPT_IDS.emulsifier,
     snow_trail: SCRIPT_IDS.snowTrail,

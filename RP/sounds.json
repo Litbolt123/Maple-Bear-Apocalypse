@@ -91,6 +91,20 @@
 				"volume": 1,
 				"pitch": 0.5
 			},
+			"mb:infected_sheep": {
+				"volume": 1,
+				"events": {
+					"ambient": "mob.sheep.say",
+					"death": "mob.sheep.say",
+					"hurt": "mob.sheep.say",
+					"step": {
+						"pitch": 1,
+						"sound": "mob.sheep.step",
+						"volume": 0.25
+					}
+				},
+				"pitch": 0.55
+			},
 			"mb:mb_day04": {
 				"volume": 1,
 				"pitch": 1,

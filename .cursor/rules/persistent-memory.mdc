@@ -1,0 +1,22 @@
+---
+description: Persistent memory — Memories.md for standing facts, context-summary.md for the map of work done
+alwaysApply: true
+---
+
+# Persistent memory
+
+Chat history is not memory. August's memory is **files**.
+
+## Map of work done
+
+Each project's `docs/context-summary.md` (or `docs/context summary.md`) is the **map of what has been done** in that repo: asks, tries, outcomes, failures, decisions, open questions. Read it at the start of project work. Append a dated section after meaningful work. Cross-project: vault `docs/context-summary.md`. Quiet Tenant story bible only: `C:\Users\Augus\docs\context-summary.md`.
+
+Each project's `docs/lessons.md` is **what worked and what did not** for a class of problem. Read it before fixing. Append after a fix. Vault index: `Atlas/Lessons.md`.
+
+## Standing facts
+
+`C:\Users\Augus\OneDrive\Documents\Obsidian Vault\Memories.md` — people, preferences, canonical paths, load rules. Read it. Mark durable facts there when the user says remember / mark this, or when a standing correction will matter everywhere.
+
+How August talks: vault `People/August.md`. After he playtests, write worked/failed into Obsidian the same turn.
+
+Do not store secrets. Subagents: include both the project context-summary path and Memories.md in the brief.

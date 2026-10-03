@@ -33,6 +33,54 @@ const SEP = " §8┃§r ";
 const SEP_COMPACT = " §8·§r ";
 
 /**
+ * Bedrock action-bar glyphs clip off the right on typical GUI scales.
+ * Count visible characters only (§ codes do not use width).
+ */
+export const ACTION_BAR_MAX_VISIBLE = 48;
+export const ONSCREEN_TITLE_MAX_VISIBLE = 18;
+export const ONSCREEN_SUBTITLE_MAX_VISIBLE = 28;
+
+/** Prefer these when the merged line is too wide (day banner + infection timer). */
+const ACTION_BAR_KEEP_SLOTS = new Set([
+    ACTION_BAR_SLOT.INFECTION,
+    ACTION_BAR_SLOT.NARRATIVE
+]);
+
+/** Visible glyph count (Minecraft § codes stripped). */
+export function visibleHudLength(text) {
+    return String(text ?? "").replace(/§./g, "").length;
+}
+
+/**
+ * Clip a HUD string to max visible glyphs, keeping § codes intact.
+ * @param {string} text
+ * @param {number} maxVisible
+ */
+export function clipHudVisibleText(text, maxVisible) {
+    const raw = String(text ?? "");
+    const max = Math.max(1, maxVisible | 0);
+    if (visibleHudLength(raw) <= max) return raw;
+    const ellipsis = "..";
+    const budget = Math.max(1, max - ellipsis.length);
+    let out = "";
+    let vis = 0;
+    for (let i = 0; i < raw.length; i++) {
+        if (raw[i] === "§" && i + 1 < raw.length) {
+            out += raw[i] + raw[i + 1];
+            i++;
+            continue;
+        }
+        if (vis >= budget) {
+            out += ellipsis;
+            break;
+        }
+        out += raw[i];
+        vis++;
+    }
+    return out;
+}
+
+/**
  * Bedrock fades the action bar if setActionBar is not called regularly. Infection text changes
  * often; camp/spawn segments can be static for many ticks — still re-apply on this cadence.
  * Keep in line with `INFECTION_ACTIONBAR_REFRESH_TICKS` in main.js.
@@ -117,18 +165,54 @@ export function pushHudActionBarToast(player, text, durationTicks = 55) {
     toastPendingClear.set(id, runId);
 }
 
-function mergeLine(playerId) {
-    const m = byPlayer.get(playerId);
-    if (!m || m.size === 0) return { text: "", count: 0, parts: [] };
-    const entries = [...m.entries()].sort((a, b) => a[0] - b[0]);
-    const parts = entries.map(([, s]) => s);
+function joinHudParts(parts) {
     const count = parts.length;
+    if (count === 0) return { text: "", count: 0 };
     const sep = count >= 3 ? SEP_COMPACT : SEP;
     let text = parts.join(sep);
     if (count > 1) {
         text = (count >= 4 ? `§8(${count})§r ` : `§8[${count}]§r `) + text;
     }
-    return { text, count, parts };
+    return { text, count };
+}
+
+function mergeLine(playerId) {
+    const m = byPlayer.get(playerId);
+    if (!m || m.size === 0) return { text: "", count: 0, parts: [] };
+    const entries = [...m.entries()].sort((a, b) => a[0] - b[0]);
+    let kept = entries.slice();
+    const dropOrder = kept
+        .filter(([slot]) => !ACTION_BAR_KEEP_SLOTS.has(slot))
+        .sort((a, b) => b[0] - a[0]);
+    let dropI = 0;
+
+    const build = (rows) => {
+        const parts = rows.map(([, s]) => s);
+        return { ...joinHudParts(parts), parts };
+    };
+
+    let result = build(kept);
+    while (visibleHudLength(result.text) > ACTION_BAR_MAX_VISIBLE && dropI < dropOrder.length) {
+        const dropSlot = dropOrder[dropI++][0];
+        kept = kept.filter(([slot]) => slot !== dropSlot);
+        result = build(kept);
+    }
+    if (visibleHudLength(result.text) > ACTION_BAR_MAX_VISIBLE) {
+        const n = Math.max(1, result.parts.length);
+        const prefixReserve = n > 1 ? 4 : 0;
+        const sepReserve = n >= 2 ? 3 * (n - 1) : 0;
+        const per = Math.max(8, Math.floor((ACTION_BAR_MAX_VISIBLE - prefixReserve - sepReserve) / n));
+        const clippedParts = result.parts.map((p) => clipHudVisibleText(p, per));
+        result = { ...joinHudParts(clippedParts), parts: clippedParts };
+        if (visibleHudLength(result.text) > ACTION_BAR_MAX_VISIBLE) {
+            result = {
+                text: clipHudVisibleText(result.text, ACTION_BAR_MAX_VISIBLE),
+                count: result.count,
+                parts: result.parts
+            };
+        }
+    }
+    return result;
 }
 
 /**

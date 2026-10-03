@@ -1700,6 +1700,7 @@ export function collectActivatableSitesNearPlayer(
                 let infectedProx = proxCache.get(proxKey);
                 if (infectedProx === undefined) {
                     infectedProx = getInfectedProx(dimension, cand.cx, cand.cz);
+                    if (infectedProx == null) continue;
                     proxCache.set(proxKey, infectedProx);
                 }
                 if (!sitePassesSeedRoll(gx, gz, infectedProx, cand.biomeId)) continue;

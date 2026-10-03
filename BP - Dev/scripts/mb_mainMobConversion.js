@@ -15,6 +15,7 @@ import { isBuffBearSpawnBlocked, isBuffBearTypeId as isBuffBearTypeIdCap } from 
 import { refreshSpawnLoadMetrics, getSpawnLoadDebugSnapshot } from "./mb_spawnLoadMetrics.js";
 import { shouldSleepDayZeroWorldWork } from "./mb_dayZeroPerfBisect.js";
 import { queryEntitiesSpread } from "./mb_workSpread.js";
+import { applyInfectionSnowLayer } from "./mb_snowPlacement.js";
 import {
     MAPLE_BEAR_ID,
     MAPLE_BEAR_DAY4_ID,
@@ -36,10 +37,10 @@ import {
     TORPEDO_BEAR_ID,
     TORPEDO_BEAR_DAY20_ID,
     INFECTED_PIG_ID,
-    INFECTED_COW_ID
+    INFECTED_COW_ID,
+    INFECTED_SHEEP_ID,
+    isInfectedLivestock
 } from "./mb_spawnEntityIds.js";
-
-const SNOW_LAYER_BLOCK = "minecraft:snow_layer";
 
 /** Buff AI skips death burst + stuck fuse until this tag is cleared (first AI tick). */
 export const BUFF_CONVERSION_SPAWN_TAG = "mb_conversion_spawn";
@@ -54,7 +55,7 @@ const MAPLE_BEAR_KILLER_TYPE_IDS = new Set([
     FLYING_BEAR_ID, FLYING_BEAR_DAY15_ID, FLYING_BEAR_DAY20_ID,
     MINING_BEAR_ID, MINING_BEAR_DAY20_ID,
     TORPEDO_BEAR_ID, TORPEDO_BEAR_DAY20_ID,
-    INFECTED_PIG_ID, INFECTED_COW_ID
+    INFECTED_PIG_ID, INFECTED_COW_ID, INFECTED_SHEEP_ID
 ]);
 
 /** @param {string | undefined} typeId */
@@ -193,12 +194,12 @@ function placeConversionSnowAndVfx(dimension, location) {
         const aboveBlock = dimension.getBlock({ x: snowLoc.x, y: spawnY + 1, z: snowLoc.z });
         const belowType = snowBlock?.typeId;
         if (belowType === "minecraft:snow_layer") {
-            try { snowBlock.setType("mb:snow_layer"); } catch { snowBlock.setType(SNOW_LAYER_BLOCK); }
+            applyInfectionSnowLayer(snowBlock);
         } else if (belowType !== "mb:snow_layer" && snowBlock && aboveBlock &&
             snowBlock.isAir !== undefined && !snowBlock.isAir &&
             snowBlock.isLiquid !== undefined && !snowBlock.isLiquid &&
             aboveBlock.isAir !== undefined && aboveBlock.isAir) {
-            try { aboveBlock.setType("mb:snow_layer"); } catch { aboveBlock.setType(SNOW_LAYER_BLOCK); }
+            applyInfectionSnowLayer(aboveBlock);
         }
     } catch {
         /* ignore snow */
@@ -291,6 +292,14 @@ function convertCowToInfectedCow(deadCow, killer) {
     }
 }
 
+function convertSheepToInfectedSheep(deadSheep, killer) {
+    try {
+        convertEntity(deadSheep, killer, INFECTED_SHEEP_ID, "SHEEP CONVERSION");
+    } catch {
+        // ignore
+    }
+}
+
 function convertMobToMapleBear(deadMob, killer) {
     try {
         const mobType = deadMob.typeId;
@@ -299,6 +308,9 @@ function convertMobToMapleBear(deadMob, killer) {
             return;
         }
         if (mobType === "minecraft:cow") {
+            return;
+        }
+        if (mobType === "minecraft:sheep") {
             return;
         }
 
@@ -461,7 +473,7 @@ function wouldSpawnBuffBearFromStorm(mobType, currentDay) {
 
 function convertMobToMapleBearFromStormAtLocation(location, dimension, mobType) {
     try {
-        if (mobType === "minecraft:pig" || mobType === "minecraft:cow") return null;
+        if (mobType === "minecraft:pig" || mobType === "minecraft:cow" || mobType === "minecraft:sheep") return null;
 
         const currentDay = getCurrentDay();
         const mobSize = getMobSize(mobType);
@@ -514,7 +526,7 @@ export function handleStormMobConversion(entity) {
         MINING_BEAR_ID, MINING_BEAR_DAY20_ID,
         TORPEDO_BEAR_ID, TORPEDO_BEAR_DAY20_ID
     ];
-    if (allMapleBearTypes.includes(entityType) || entityType === INFECTED_PIG_ID || entityType === INFECTED_COW_ID) {
+    if (allMapleBearTypes.includes(entityType) || isInfectedLivestock(entityType)) {
         return;
     }
 
@@ -543,6 +555,9 @@ export function handleStormMobConversion(entity) {
             } else if (entType === "minecraft:cow") {
                 const r = convertEntityAtLocation({ location: loc, dimension: dim }, null, INFECTED_COW_ID, "STORM COW CONVERSION");
                 if (r) console.warn(`[SNOW STORM] Conversion: cow -> infected_cow at (${Math.floor(loc.x)}, ${Math.floor(loc.y)}, ${Math.floor(loc.z)})`);
+            } else if (entType === "minecraft:sheep") {
+                const r = convertEntityAtLocation({ location: loc, dimension: dim }, null, INFECTED_SHEEP_ID, "STORM SHEEP CONVERSION");
+                if (r) console.warn(`[SNOW STORM] Conversion: sheep -> infected_sheep at (${Math.floor(loc.x)}, ${Math.floor(loc.y)}, ${Math.floor(loc.z)})`);
             } else {
                 const r = convertMobToMapleBearFromStormAtLocation(loc, dim, entType);
                 if (r?.entity) {
@@ -582,7 +597,7 @@ export function handleMobConversion(entity, killer) {
             TORPEDO_BEAR_ID, TORPEDO_BEAR_DAY20_ID
         ];
         const isVictimABear = allMapleBearTypes.includes(entityType);
-        const isVictimInfected = entityType === INFECTED_PIG_ID || entityType === INFECTED_COW_ID;
+        const isVictimInfected = isInfectedLivestock(entityType);
 
         if (isVictimABear || isVictimInfected) {
             return;
@@ -611,6 +626,14 @@ export function handleMobConversion(entity, killer) {
             if (Math.random() < effectiveRate) {
                 system.run(() => {
                     convertCowToInfectedCow(entity, killer);
+                });
+            }
+            return;
+        }
+        if (entityType === "minecraft:sheep") {
+            if (Math.random() < effectiveRate) {
+                system.run(() => {
+                    convertSheepToInfectedSheep(entity, killer);
                 });
             }
             return;

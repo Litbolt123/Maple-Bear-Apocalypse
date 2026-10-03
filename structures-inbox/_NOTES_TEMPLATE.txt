@@ -1,0 +1,8 @@
+Name:
+Biome / ruleset:   (plains, cold, desert, savanna, infected, …)
+Kind:              (village house / well / path / camp / bunker / other)
+Approx size:       (e.g. 11 x 7 x 9)
+Unique marker:     (block id if we should fingerprint NPCs — leave blank if none)
+Notes:
+
+Do not put this marker in other buildings or it will staff the wrong place.

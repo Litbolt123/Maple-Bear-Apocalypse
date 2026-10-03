@@ -15,8 +15,10 @@ import {
     INFECTION_DIRECTOR_DAY_SURGE_MAX,
     INFECTION_DIRECTOR_LOAD_ESCALATE,
     INFECTION_DIRECTOR_CHANCE_MULT,
-    INFECTION_DIRECTOR_ATTEMPT_BONUS
+    INFECTION_DIRECTOR_ATTEMPT_BONUS,
+    netherSpreadMultiplier
 } from "./mb_balance.js";
+import { getStormReservoirSpawnChanceMult } from "./mb_snowStorm.js";
 
 const STAGE_IDS = /** @type {const} */ (["scout", "pressure", "surge", "stormfront"]);
 
@@ -58,6 +60,46 @@ export function getInfectionDirectorSpawnModifiers(day) {
         attemptBonus: INFECTION_DIRECTOR_ATTEMPT_BONUS[stage] ?? 0,
         loadEscalated: escalated === 1
     };
+}
+
+/**
+ * Leaf / grass convert pressure from the world infection stack.
+ * Day-band director only — load-escalated spawn stages must not convert extra
+ * blocks while the sim is already busy (`claimSpreadSlice` slows the scans instead).
+ * Storm reservoir uses the same anchors as natural spawn.
+ * @param {number} day
+ * @param {import("@minecraft/server").Dimension} [dimension]
+ * @param {number} [x]
+ * @param {number} [z]
+ * @returns {number} multiplier; 0 in the nether until a player has entered, then above 1
+ */
+export function getWorldInfectionSpreadMult(day, dimension, x, z) {
+    const stage = getInfectionDirectorBaseStageFromDay(day);
+    const dirMult = INFECTION_DIRECTOR_CHANCE_MULT[stage] ?? 1;
+    let stormMult = 1;
+    try {
+        stormMult = getStormReservoirSpawnChanceMult(dimension, x, z);
+    } catch {
+        stormMult = 1;
+    }
+    if (!Number.isFinite(stormMult) || stormMult < 1) stormMult = 1;
+    const netherMult = netherSpreadMultiplier(dimension?.id);
+    if (netherMult <= 0) return 0;
+    return dirMult * stormMult * netherMult;
+}
+
+/**
+ * @param {number} baseChance
+ * @param {number} day
+ * @param {import("@minecraft/server").Dimension} [dimension]
+ * @param {number} [x]
+ * @param {number} [z]
+ * @returns {number} 0–1
+ */
+export function scaleWorldInfectionChance(baseChance, day, dimension, x, z) {
+    const base = Number(baseChance);
+    if (!Number.isFinite(base) || base <= 0) return 0;
+    return Math.min(1, base * getWorldInfectionSpreadMult(day, dimension, x, z));
 }
 
 let watchStarted = false;

@@ -231,7 +231,6 @@
 				"total_supply": 30,
 				"suffocate_time": -20
 			},
-			"minecraft:fire_immune": false,
 			"minecraft:behavior.hurt_by_target": {
 				"priority": 1
 			},
@@ -547,6 +546,7 @@
 					"minecraft:brown_stained_glass_pane",
 					"minecraft:gray_stained_glass_pane",
 					"minecraft:leaf_litter",
+					"minecraft:wildflowers",
 					"minecraft:acacia_leaves",
 					"minecraft:azalea_leaves",
 					"minecraft:azalea_leaves_flowered",

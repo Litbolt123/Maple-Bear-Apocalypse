@@ -127,7 +127,6 @@
 				"has_collision": true,
 				"has_gravity": false
 			},
-			"minecraft:fire_immune": false,
 			"minecraft:breathable": {
 				"breathes_air": true,
 				"total_supply": 30,

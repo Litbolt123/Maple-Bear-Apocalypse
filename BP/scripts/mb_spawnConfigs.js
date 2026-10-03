@@ -24,7 +24,10 @@ import {
     TORPEDO_BEAR_DAY20_ID
 } from "./mb_spawnEntityIds.js";
 
-/** Natural spawn rules for each bear type (day ranges, chance curves, caps). */
+/** Natural spawn rules for each bear type (day ranges, chance curves, caps).
+ * Do not add infected pig/cow/sheep here. Storms reuse these tiles, including ocean
+ * seafloor. Livestock is JSON spawn rules only (`!= ocean`, surface, no water).
+ */
 export const SPAWN_CONFIGS = [
     {
         id: TINY_BEAR_ID,

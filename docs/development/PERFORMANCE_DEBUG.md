@@ -39,6 +39,7 @@ The spawn controller **main loop does not run** when `getCurrentDay() < 2` (no d
 
 - Vanilla chunk load + village entity AI
 - Custom **infected biome** borders
+**Infected vegetation ticks (fixed 2026-09-16):** do **not** `minecraft:tick` every dusty leaf/log. Hops are player-centric. If a large dusty forest hitches again, check the generator did not grow ticks back. **2026-09-16 research pass:** leaf + grass still run every vegetation slice; wood / powder / tint extras **rotate** only when spawn-load is high — do not treat a slower extra as “infection stopped.”
 - **`findClosestBiome`** fallback in [`main.js`](../../BP/scripts/main.js) (`getBiomeIdAt`)
 - **Spawn load metrics** (`getEntities` sweeps + overworld item count) — throttled on day 0–1 in script
 - **Biome ambience** (`getBiome` every 1–3s per player)
@@ -69,6 +70,7 @@ Journal → **Developer Tools** → **Debug** / script toggles:
 | Biome ambience off | Stops periodic `getBiome` + ambient restarts |
 | Spawn scan perf HUD off | Stops extra 10t HUD work (metrics still refresh on 40t watch) |
 | No emulsifier machines nearby | Avoids 10t `processEmulsifierZones` block budgets |
+| **Netherite emulsifier (2026-09-16)** | One machine used to stall the sim (delayed breaks, mobs freeze then catch up). Caps: 320 getBlock/slice, 6 converts queued, 40 pending. If that stall returns, check `hasPendingScan` was not put back. |
 
 **LAGGY** / performance tier — note if stalls align with high adaptive stress (`mb_performanceProfile.js`).
 

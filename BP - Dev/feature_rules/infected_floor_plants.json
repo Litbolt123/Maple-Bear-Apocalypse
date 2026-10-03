@@ -1,0 +1,48 @@
+{
+	"format_version": "1.21.10",
+	"minecraft:feature_rules": {
+		"description": {
+			"identifier": "mb:infected_floor_plants",
+			"places_feature": "mb:scatter_infected_floor_plants"
+		},
+		"conditions": {
+			"placement_pass": "after_surface_pass",
+			"minecraft:biome_filter": {
+				"all_of": [
+					{
+						"test": "has_biome_tag",
+						"operator": "==",
+						"value": "infected_biome"
+					},
+					{
+						"test": "has_biome_tag",
+						"operator": "!=",
+						"value": "ocean"
+					}
+				]
+			}
+		},
+		"distribution": {
+			"iterations": 1,
+			"x": {
+				"distribution": "uniform",
+				"extent": [
+					0,
+					16
+				]
+			},
+			"y": "q.heightmap(v.worldx, v.worldz)",
+			"z": {
+				"distribution": "uniform",
+				"extent": [
+					0,
+					16
+				]
+			},
+			"scatter_chance": {
+				"numerator": 3,
+				"denominator": 4
+			}
+		}
+	}
+}

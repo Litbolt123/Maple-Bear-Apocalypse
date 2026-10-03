@@ -11,6 +11,7 @@
 - [ABANDONED_VILLAGE_STRUCTURES.md](./ABANDONED_VILLAGE_STRUCTURES.md) — jigsaw JSON, processors, export path
 - [ABANDONED_SETTLEMENTS.md](./ABANDONED_SETTLEMENTS.md) — legacy script villages (reference for tiers/loot only)
 - [WORLD_SETUP.md](./WORLD_SETUP.md) — Bedrock **1.26+**, no extra experiments for jigsaw worldgen
+- [structures-inbox/](../../structures-inbox/README.md) — owner drop folder for new custom `.mcstructure` files (not live pack until wired)
 
 **Future (not Maple Bear’s village task):** [Random lore bunkers](#future-ideas-litbolt--compoohter--not-maple-bears-village-work) — scattered hideouts with journal/lore props.
 

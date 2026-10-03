@@ -1,7 +1,7 @@
 /**
  * Strips minecraft:village_type from village biomes (disables vanilla village roll).
- * Required for 100% abandoned villages: only mb_abandonedVillageWorldgen.js places them.
- * Re-run after Mojang biome updates, then commit BP + BP - Dev overrides.
+ * Parked 2026-09-26: vanilla villages are on. This writes the archive only.
+ * Do not copy the output back into BP or BP - Dev biomes until abandoned villages replace them.
  *
  *   node tools/generateNoVillageBiomeOverrides.js
  *   node tools/generateNoVillageBiomeOverrides.js --dry-run
@@ -13,8 +13,7 @@ import https from "https";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const OUT_DIRS = [
-    join(root, "BP", "biomes", "worldgen_no_village"),
-    join(root, "BP - Dev", "biomes", "worldgen_no_village")
+    join(root, "BP - Dev", "_archived", "worldgen_no_village")
 ];
 const MOJANG_BIOME_BASE =
     "https://raw.githubusercontent.com/Mojang/bedrock-samples/main/behavior_pack/biomes";

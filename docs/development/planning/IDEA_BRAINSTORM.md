@@ -13,6 +13,34 @@ Based on existing lore: white powder/dust infection (mysterious white powdery su
 
 ---
 
+## Later brainstorms (not scheduled)
+
+Parked thoughts. Do **not** implement until August asks. "Snow" here is infection powder (`mb:snow` / `mb:snow_layer`), not vanilla winter snow.
+
+### 2026-09-19 — Player goal / keep-playing loop (Aiden)
+
+Standing UX, not a feature ticket. Full note: `docs/design/PLAYER_GOAL_AND_LOOP.md`.
+
+- The addon needs a **player goal**. An obsidian cube (or any guarantee) is a fail state — they stopped playing.
+- Help is allowed; it must **not** guarantee survival. Struggle, not too hard, not too easy.
+- Keep people playing with a **loop** they keep up with: pressure at home → leave for a partial counter → come back → upkeep or a new threat.
+- Example class (not a spec): a buff-bear counter that needs a **heavy core** / trial chamber so you cannot stay home.
+
+Quarantine zones / safe beacons later in this file sit in tension with that. If we ever do them, they help a fight; they do not delete the apocalypse.
+
+### 2026-09-01 — Detox orb / condensed "snow" as emulsifier fuel
+
+August (brainstorm only):
+
+- Mix **current emulsifier fuel** (same amounts / same tiers as today) **with "snow"** to make a **detox substance** or **detox item**. Shape idea: a **detox orb**.
+- The emulsifier would burn **that** instead of raw iron/gold/diamond/netherite. Same burn counts, but you cannot skip the "snow" step.
+- **Condensed "snow":** combine "snow" with itself (powder → packed block → denser) as a crafting chain. Overlaps the planned dense-"snow" line in `docs/design/MBA_ITEMS_MASTER_PLAN.md` (nine "snow" → block, nine blocks → dense). Prefer one compression chain, not two.
+- Open: is the orb fuel+snow, or fuel+dense snow? Can condensed "snow" be used elsewhere (gear repair, as already planned) as well as emulsifier fuel?
+
+Related: master-plan open decision "Dense snow block: gameplay effect (fuel, emulsifier, zone marker, etc.)."
+
+---
+
 ## 🎮 Gameplay Mechanics (20 ideas)
 
 1. **Snow Tier 7+ Effects** - Beyond Tier 6 (Black Void), add even more extreme effects with unique visual/audio feedback

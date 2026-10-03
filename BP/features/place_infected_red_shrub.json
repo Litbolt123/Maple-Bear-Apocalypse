@@ -1,0 +1,59 @@
+{
+	"format_version": "1.21.10",
+	"minecraft:single_block_feature": {
+		"description": {
+			"identifier": "mb:place_infected_red_shrub"
+		},
+		"places_block": "mb:infected_red_shrub",
+		"enforce_placement_rules": false,
+		"enforce_survivability_rules": false,
+		"may_replace": [
+			"minecraft:air",
+			"minecraft:short_grass",
+			"minecraft:grass",
+			"minecraft:tall_grass",
+			"minecraft:fern",
+			"minecraft:large_fern",
+			"minecraft:deadbush",
+			"minecraft:firefly_bush",
+			"minecraft:brown_mushroom",
+			"minecraft:red_mushroom",
+			"minecraft:red_shrub",
+			"minecraft:leaf_litter",
+			"minecraft:wildflowers",
+			"minecraft:bush",
+			"minecraft:pink_petals",
+			"minecraft:pitcher_plant",
+			"minecraft:peony",
+			"minecraft:rose_bush",
+			"minecraft:lilac",
+			"minecraft:sunflower",
+			"minecraft:cactus_flower",
+			"minecraft:closed_eyeblossom",
+			"minecraft:open_eyeblossom",
+			"minecraft:torchflower",
+			"minecraft:wither_rose",
+			"minecraft:lily_of_the_valley",
+			"minecraft:cornflower",
+			"minecraft:oxeye_daisy",
+			"minecraft:pink_tulip",
+			"minecraft:white_tulip",
+			"minecraft:orange_tulip",
+			"minecraft:red_tulip",
+			"minecraft:azure_bluet",
+			"minecraft:allium",
+			"minecraft:blue_orchid",
+			"minecraft:poppy",
+			"minecraft:dandelion"
+		],
+		"may_attach_to": {
+			"bottom": [
+				"minecraft:grass_block",
+				"minecraft:dirt",
+				"minecraft:podzol",
+				"minecraft:mycelium",
+				"mb:dusted_dirt"
+			]
+		}
+	}
+}

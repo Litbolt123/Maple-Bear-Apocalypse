@@ -1,0 +1,38 @@
+{
+	"format_version": "1.10.0",
+	"minecraft:client_entity": {
+		"description": {
+			"identifier": "mb:infected_sheep",
+			"min_engine_version": "1.8.0",
+			"materials": {
+				"default": "sheep"
+			},
+			"textures": {
+				"default": "textures/entity/infected_sheep"
+			},
+			"geometry": {
+				"default": "geometry.infected_sheep"
+			},
+			"animations": {
+				"setup": "animation.sheep.setup.v2",
+				"walk": "animation.quadruped.walk",
+				"look_at_target": "animation.common.look_at_target"
+			},
+			"scripts": {
+				"animate": [
+					"setup",
+					{
+						"walk": "query.modified_move_speed"
+					},
+					"look_at_target"
+				]
+			},
+			"render_controllers": [
+				"controller.render.infected_sheep"
+			],
+			"spawn_egg": {
+				"texture": "mb_infected_sheep_egg"
+			}
+		}
+	}
+}

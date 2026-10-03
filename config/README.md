@@ -21,4 +21,6 @@ Optional: run `npm run sync:pack-metadata` first so `name`, `description`, and `
 - **Bridge `config.json`** — which folders Bridge compiles.
 - **`mb_buildConfig.js`** — in-game dev vs release gating (`INCLUDE_FULL_DEVELOPER_TOOLS`). Never overwrite release `BP/scripts/mb_buildConfig.js` with the dev copy when merging.
 
+**Two Bridge projects** live under `%LocalAppData%\com.bridge.dev\bridge\projects\`. After GitHub pack edits: `npm run sync:bridge`.
+
 See also [`docs/development/BRIDGE_EXPORT_AND_VERSIONING.md`](../docs/development/BRIDGE_EXPORT_AND_VERSIONING.md) and [`docs/development/PERFORMANCE_DEBUG.md`](../docs/development/PERFORMANCE_DEBUG.md).

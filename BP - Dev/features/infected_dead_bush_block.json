@@ -1,0 +1,23 @@
+{
+	"format_version": "1.21.10",
+	"minecraft:single_block_feature": {
+		"description": {
+			"identifier": "mb:infected_dead_bush_block"
+		},
+		"places_block": "minecraft:deadbush",
+		"enforce_placement_rules": false,
+		"enforce_survivability_rules": false,
+		"may_replace": [
+			"minecraft:air",
+			"minecraft:short_grass"
+		],
+		"may_attach_to": {
+			"bottom": [
+				"minecraft:grass_block",
+				"minecraft:dirt",
+				"minecraft:podzol",
+				"mb:dusted_dirt"
+			]
+		}
+	}
+}

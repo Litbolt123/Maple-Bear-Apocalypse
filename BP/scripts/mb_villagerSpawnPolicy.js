@@ -1,18 +1,16 @@
 /**
  * Villager policy — release vs dev defaults differ via mb_buildConfig.
  * - Release (public BP): vanilla villages ON; living villagers allowed unless world property forces suppress.
- * - Dev (BP - Dev): default suppress ON for abandoned-settlement testing; toggle in Entity query / village dev menu.
+ * - Dev (BP - Dev): suppress OFF for now so vanilla villages keep their villagers. Toggle in Entity query / village dev menu.
  * - Spawn rules: impossible biome tag (natural spawn only); structure villages use jigsaw, not spawn rules.
  * - When suppression ON: block villager eggs, remove on entitySpawn, periodic purge. Wandering traders always allowed.
  *
- * World property mb_suppress_villagers: release default OFF; dev default ON when unset.
+ * World property mb_suppress_villagers: default OFF in both packs when unset. Dev can still turn it on.
  */
 
 import { system, world } from "@minecraft/server";
 import { getWorldProperty, setWorldProperty } from "./mb_dynamicPropertyHandler.js";
 import { isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
-import { INCLUDE_FULL_DEVELOPER_TOOLS } from "./mb_buildConfig.js";
-
 export const SUPPRESS_VILLAGERS_PROP = "mb_suppress_villagers";
 
 /** Living villagers only — zombie villagers stay in abandoned / zombie villages. */
@@ -40,11 +38,11 @@ let eggBlocksTickId = -1;
 let policyHooksStarted = false;
 let purgeRotate = 0;
 
-/** @returns {boolean} Release: default false. Dev: default true when property unset. */
+/** @returns {boolean} Default false when the property is unset. */
 export function isVillagerSuppressionEnabled() {
     if (!isScriptEnabled(SCRIPT_IDS.villagerSuppress)) return false;
     const v = getWorldProperty(SUPPRESS_VILLAGERS_PROP);
-    if (v === undefined || v === null) return INCLUDE_FULL_DEVELOPER_TOOLS;
+    if (v === undefined || v === null) return false;
     return v === true || v === 1 || v === "1";
 }
 
@@ -52,7 +50,7 @@ export function ensureVillagerSuppressionDefault() {
     try {
         const v = getWorldProperty(SUPPRESS_VILLAGERS_PROP);
         if (v === undefined || v === null) {
-            setWorldProperty(SUPPRESS_VILLAGERS_PROP, INCLUDE_FULL_DEVELOPER_TOOLS ? 1 : 0);
+            setWorldProperty(SUPPRESS_VILLAGERS_PROP, 0);
         }
     } catch {
         /* ignore */

@@ -1,0 +1,27 @@
+{
+	"format_version": "1.21.10",
+	"minecraft:feature_rules": {
+		"description": {
+			"identifier": "mb:infected_vanilla_forest_trees",
+			"places_feature": "mb:scatter_infected_oak_tree"
+		},
+		"conditions": {
+			"placement_pass": "surface_pass",
+			"minecraft:biome_filter": {
+				"any_of": [
+					{
+						"test": "has_biome_tag",
+						"operator": "==",
+						"value": "infected_vanilla"
+					}
+				]
+			}
+		},
+		"distribution": {
+			"iterations": 3,
+			"x": { "distribution": "uniform", "extent": [0, 16] },
+			"y": "q.heightmap(v.worldx, v.worldz)",
+			"z": { "distribution": "uniform", "extent": [0, 16] }
+		}
+	}
+}

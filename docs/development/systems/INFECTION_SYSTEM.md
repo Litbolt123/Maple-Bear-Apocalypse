@@ -31,21 +31,23 @@ Bear hit progress before infection uses **`bearHitCount`**. Ground/storm pressur
 
 ---
 
-## 3. Addon difficulty (hits and timer speed)
+## 3. Addon difficulty (hits, timer, spawn, block spread)
 
 From `mb_dynamicPropertyHandler.js` → `getAddonDifficultyState()`:
 
-| Difficulty | `hitsBase` | Bear hits to first **major** (no minor) | Hits minor→major |
-|------------|------------|----------------------------------------|------------------|
-| Easy | 4 | 4 | 3 |
-| Normal | 3 | 3 | 2 |
-| Hard | 2 | 2 | 1 |
+| Difficulty | `hitsBase` | Bear hits to first **major** (no minor) | Hits minor→major | Spawn / **block spread** |
+|------------|------------|----------------------------------------|------------------|--------------------------|
+| Easy | 4 | 4 | 3 | 0.7× |
+| Normal | 3 | 3 | 2 | 1.0× |
+| Hard | 2 | 2 | 1 | 1.3× |
 
 **Permanent immunity** (after curing minor or major): needs **`hitsBase`** hits to get major again (not `hitsBase - 1`).
 
 **Minor infection**: needs **`max(1, hitsBase - 1)`** hits from Maple Bears to escalate to major.
 
 Timer tick rate uses **`infectionDecayMultiplier`** on the same difficulty object (major/minor loop subtracts scaled ticks each interval).
+
+Leaf / wood / grass convert chances (`getLeafSnowConvertChance` and siblings) multiply by **`blockSpreadMultiplier`** (same 0.7 / 1 / 1.3). Kill-stain `spreadDustedDirt` chance uses the same field. Scan interval and mob `getInfectionRate` stay unchanged. Dev **Block spread speed** still stacks on top.
 
 ---
 
@@ -178,19 +180,23 @@ If infection expired while **offline** (not recently active), state is cleared *
 
 ### 8.2 Bear kill conversion (`handleMobConversion`)
 
-If killer is Maple Bear family: pigs → infected pig, cows → infected cow; other mobs → Maple Bear type by **mob size** and **day** (tiny vs infected vs buff branches). Skips bear-on-bear. **Caps**: e.g. **40** bears in radius, buff bear count rules for large mob → buff conversion.
+If killer is Maple Bear family: pigs → infected pig, cows → infected cow, sheep → infected sheep; other mobs → Maple Bear type by **mob size** and **day** (tiny vs infected vs buff branches). Skips bear-on-bear. **Caps**: e.g. **40** bears in radius, buff bear count rules for large mob → buff conversion. Infected pig/cow/sheep **JSON spawn rules** are surface-only (no `spawns_underground`), cannot spawn on water, and skip the `ocean` biome tag. Ocean/river/beach replacements use **`mb:infected_biome_*_ocean`** (tagged `ocean`) so that skip matches. Land snow infected IDs no longer replace oceans. Scripts do **not** remove livestock that appear in water. Spawn controller never script-spawns livestock (storms must not dump cows on seafloor tiles). Maple Bear script spawns on ocean-floor dirt are unchanged.
 
 ### 8.3 Storm conversion
 
-If death is attributed to storm exposure (`wasKilledByStorm`), `handleStormMobConversion` runs similar rolls (pigs/cows special-cased).
+If death is attributed to storm exposure (`wasKilledByStorm`), `handleStormMobConversion` runs similar rolls (pigs/cows/sheep special-cased).
 
 ### 8.4 Dusted dirt spread
 
-Bear kills trigger **`spreadDustedDirt`** (radius/chance scales with victim and day), creating more **`mb:dusted_dirt`** (tracked with caps and aging cleanup).
+Bear kills trigger **`spreadDustedDirt`** (radius/chance scales with victim and day; **chance** also × Journal Addon Difficulty `blockSpreadMultiplier`), creating more **`mb:dusted_dirt`** (tracked with caps and aging cleanup).
 
 ### 8.5 Storms (`mb_snowStorm.js`)
 
-Storms move, place/replace **`mb:snow_layer`**, damage mobs, track player **`stormSeconds`** for infection, particles/audio. First storm-eligible **calendar day** depends on **`getStormStartDay()`**: **Hard** day **2**, **Normal** day **4**, **Easy** day **6**. **Minor-only through day 10**; **major** chance ramps from day **11** toward day **20**; **day 20+** new storms are **always major**. Cooldown between storms scales from a **shorter** base band toward **~1.5 min** by day 20. New storm centers require **open air** above the surface column (not cave ceilings). (`mb_snowStorm.js`).
+Storms move, place/replace **`mb:snow_layer`**, damage mobs, track player **`stormSeconds`** for infection, particles/audio. First storm-eligible **calendar day** depends on **`getStormStartDay()`**: **Hard** day **2**, **Normal** day **4**, **Easy** day **6**. **Minor-only through day 10**; **major** chance ramps from day **11** toward day **20**; **day 20+** new storms are **always major**. Cooldown between storms scales from a **shorter** base band toward **~1.5 min** by day 20. New storm centers require **open air** above the surface column (not cave ceilings). Script-placed powder **infects viable blocks under it** (oak/birch leaves, `grass_block`) — `onPlace` does not fire for `setType`. Day 0–1 still 0. Powder does **not** replace kelp / seagrass / water. Maple Bear ocean-floor spawns unchanged. (`mb_snowStorm.js` + `mb_snowPlacement.js`).
+
+### 8.6 Leaf and grass (world vegetation)
+
+Player-centric scans in `mb_leafInfection.js` / `mb_grassInfection.js` convert snow-capped oak/birch leaves and greenery over **journal days** (`getLeafSnowConvertChance`, `getGreenerySpreadChance` / `getGreeneryNeighborSpreadChance` — **0** before day **2**). Block spread uses `getBlockSpreadProgress` (ramps 2→20, 20→25, slower 25→50→75, **cap day 100**), not the mob `getInfectionRate` table (that still hits 100% by day 20). Chances are scaled by `BLOCK_SPREAD_CHANCE_MULT` (2 as of 2026-09-01: day-2 canopy convert ~4% on **Normal**) times the Journal **Addon Difficulty** `blockSpreadMultiplier` (Easy 0.7 / Normal 1 / Hard 1.3) times the dev **`getBlockSpreadSpeedMultiplier`** (world property `mb_block_spread_speed_mult`; Journal → Developer Tools → Infection & players → Block spread speed; 1 = play, 0 = pause, 8 ≈ old testing table). Single-player spread testing used a much faster table; this is the play curve. **Multiplayer load still untested.** Infected oak leaves use **four blocks** (`mb:infected_oak_leaves` … `_3`): stages 0–2 are biome-tinted; stage 3 is baked snow-layer cream with **no** `default_foliage`. Powder on an already-infected leaf advances dust. Neighbor ticks convert vanilla or raise a lower-dust neighbor, else the cell itself. Convert **runs outside VAN** (LIST forest, river overflow). This is **not** a private 40-tick loop: it uses **`claimSpreadSlice("leaf_infection")`** (same work-spread throttle as ground/discovery — slower on day 0–1, village days, high spawn load, chunk-edge), clustered one-player-per-interval in MP, and **`getWorldInfectionSpreadMult`**: infection-director **day band** × storm **reservoir** at the scan. Load-escalated spawn stages do **not** convert extra cells. Dusted dirt spreads into adjacent `grass_block` the same way infected leaves spread into neighboring leaves (no `minecraft:tick` on every dusted_dirt **or** every infected leaf/log — canopy hops are a capped player front scan as of 2026-09-16). Cap 2 grass converts per scan; grass must already touch infection unless the scan already started from dirt/powder/leaves. Toggle `leaf_infection`. Day-0 bisect category `leaf_infection`.
 
 ---
 

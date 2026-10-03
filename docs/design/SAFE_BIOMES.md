@@ -10,7 +10,7 @@ The infected biome replaces these biomes at various densities:
 
 ### Common Land Biomes (8% replacement)
 - Plains, Sunflower Plains
-- Forest, Forest Hills
+- Forest, Forest Hills — **forest** also has a **test** overlay `mb:infected_vanilla_forest` (~12%) that keeps trees/grass. See [INFECTED_VANILLA_BIOMES.md](INFECTED_VANILLA_BIOMES.md).
 - Birch Forest (all variants)
 - Taiga (all variants)
 - Savanna (all variants)
@@ -21,6 +21,7 @@ The infected biome replaces these biomes at various densities:
 - Swampland (all variants)
 - Mangrove Swamp
 - Pale Garden
+- Dappled Forest (`minecraft:dappled_forest`, 26.50) — same 8% land group as Cherry Grove / Pale Garden. Poplar / red shrub infection still works in any biome; this is the snow-carpet overlay. VAN overlay is still oak forest only.
 
 ### Ocean & Water Biomes (4% replacement)
 - All Ocean variants (Ocean, Deep Ocean, Cold Ocean, Lukewarm Ocean, Warm Ocean, Frozen Ocean)
@@ -53,11 +54,13 @@ These vanilla biomes are **deliberately omitted** from `replace_biomes`. The dev
 |----------|--------|
 | `minecraft:mushroom_island` | Mushroom Fields |
 | `minecraft:mushroom_island_shore` | Mushroom Fields Shore |
-| `minecraft:mega_taiga` | Mega Taiga |
+| `minecraft:mega_taiga` | Mega Taiga / Giant Tree Taiga (podzol floor) |
 | `minecraft:mega_taiga_hills` | Mega Taiga Hills |
 | `minecraft:ice_mountains` | Ice Mountains (legacy id in catalog) |
-| `minecraft:redwood_taiga_mutated` | Giant Tree Taiga (mutated) |
-| `minecraft:redwood_taiga_hills_mutated` | Giant Tree Taiga Hills (mutated) |
+| `minecraft:redwood_taiga_mutated` | Giant Tree Taiga mutated (`redwood_taiga_mutated`) |
+| `minecraft:redwood_taiga_hills_mutated` | Giant Tree Taiga Hills mutated |
+| `minecraft:old_growth_pine_taiga` | Alias some catalogs use for giant pine taiga — not in `replace_biomes` |
+| `minecraft:old_growth_spruce_taiga` | Alias some catalogs use for giant spruce taiga — not in `replace_biomes` |
 
 ### Nether / End
 
@@ -76,6 +79,7 @@ Any other catalog id not on the replace list and not in the table above shows as
    - Flying/Torpedo Bears can reach any location
    - Players can still be infected and spawn bears anywhere
    - Dusted dirt can still be placed manually or by bear actions
+   - Mushroom Fields and giant/old-growth taiga (mycelium / podzol floors) **crawl slower** — they are not immune and not a hideout
 
 2. **Spawn System**: 
    - The spawn controller (`mb_spawnController.js`) spawns bears based on finding `dusted_dirt` blocks, not directly checking biomes

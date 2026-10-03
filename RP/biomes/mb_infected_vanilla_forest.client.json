@@ -1,0 +1,13 @@
+{
+	"format_version": "1.21.40",
+	"minecraft:client_biome": {
+		"description": { "identifier": "mb:infected_vanilla_forest" },
+		"components": {
+			"minecraft:sky_color": { "sky_color": "#9AA58F" },
+			"minecraft:fog_appearance": { "fog_identifier": "mb:infected_biome" },
+			"minecraft:water_appearance": { "surface_color": "#7A8A7C" },
+			"minecraft:grass_appearance": { "color": "#A8B090" },
+			"minecraft:foliage_appearance": { "color": "#C4C0B4" }
+		}
+	}
+}

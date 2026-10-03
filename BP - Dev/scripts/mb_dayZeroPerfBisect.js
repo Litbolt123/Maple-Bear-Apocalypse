@@ -33,7 +33,8 @@ export const DAY0_BISECT_IDS = {
     snowTrail: "snow_trail",
     biomeAmbience: "biome_ambience",
     spawnEmulsifier: "spawn_emulsifier",
-    infectionDirector: "infection_director"
+    infectionDirector: "infection_director",
+    leafInfection: "leaf_infection"
 };
 
 /** Menu order — entity hooks first for one-at-a-time testing. */
@@ -55,7 +56,8 @@ export const DAY0_BISECT_MENU_ORDER = [
     DAY0_BISECT_IDS.snowTrail,
     DAY0_BISECT_IDS.biomeAmbience,
     DAY0_BISECT_IDS.spawnEmulsifier,
-    DAY0_BISECT_IDS.infectionDirector
+    DAY0_BISECT_IDS.infectionDirector,
+    DAY0_BISECT_IDS.leafInfection
 ];
 
 /** Categories that touch entities / entity queries (see {@link isDayZeroEntityBlind}). */
@@ -88,7 +90,8 @@ export const DAY0_BISECT_LABELS = {
     [DAY0_BISECT_IDS.snowTrail]: "Snow trail loop",
     [DAY0_BISECT_IDS.biomeAmbience]: "Biome ambience (getBiome)",
     [DAY0_BISECT_IDS.spawnEmulsifier]: "Spawn emulsifier loops",
-    [DAY0_BISECT_IDS.infectionDirector]: "Infection director HUD"
+    [DAY0_BISECT_IDS.infectionDirector]: "Infection director HUD",
+    [DAY0_BISECT_IDS.leafInfection]: "Leaf / grass world infection"
 };
 
 /** Short menu labels. */
@@ -110,7 +113,8 @@ export const DAY0_BISECT_SHORT = {
     [DAY0_BISECT_IDS.snowTrail]: "Snow trail",
     [DAY0_BISECT_IDS.biomeAmbience]: "Biome ambience",
     [DAY0_BISECT_IDS.spawnEmulsifier]: "Emulsifier",
-    [DAY0_BISECT_IDS.infectionDirector]: "Inf. director"
+    [DAY0_BISECT_IDS.infectionDirector]: "Inf. director",
+    [DAY0_BISECT_IDS.leafInfection]: "Leaf/grass"
 };
 
 /** @returns {boolean} Day 0 and no MB bears loaded. */

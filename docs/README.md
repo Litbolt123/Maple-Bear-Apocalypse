@@ -31,7 +31,9 @@ Start here to navigate the repo. **Session log:** [context summary.md](context%2
 | File | Purpose |
 |------|---------|
 | [DESIGN_VISION.md](design/DESIGN_VISION.md) | Design intent and principles |
+| [PLAYER_GOAL_AND_LOOP.md](design/PLAYER_GOAL_AND_LOOP.md) | Player UX: no turtle-box win, help without a guarantee, keep-playing loop (August + Aiden) |
 | [SAFE_BIOMES.md](design/SAFE_BIOMES.md) | Safer biomes vs Maple Bear pressure |
+| [INFECTED_VANILLA_BIOMES.md](design/INFECTED_VANILLA_BIOMES.md) | Test: infected forest that keeps trees vs snow/dusted infected |
 | [MBA_ITEMS_MASTER_PLAN.md](design/MBA_ITEMS_MASTER_PLAN.md) | Planned MBA gear, loot, purification, journal (not implemented) |
 
 ---
@@ -124,6 +126,8 @@ Start here to navigate the repo. **Session log:** [context summary.md](context%2
 | [ABANDONED_SETTLEMENTS.md](development/ABANDONED_SETTLEMENTS.md) | Script villages, tiers, loot, rulesets |
 | [ABANDONED_VILLAGE_STRUCTURES.md](development/ABANDONED_VILLAGE_STRUCTURES.md) | Jigsaw worldgen + Structure Block export |
 | [VILLAGE_STRUCTURE_COLLAB_GUIDE.md](development/VILLAGE_STRUCTURE_COLLAB_GUIDE.md) | **Maple Bear** — full **jigsaw** abandoned villages (script structure spawning on hold) |
+| [FFG_WORLDGEN_HANDOFF_MBA_IMPROVEMENTS.md](development/FFG_WORLDGEN_HANDOFF_MBA_IMPROVEMENTS.md) | FFG worldgen — jigsaws, features, generators, fingerprints; copy/avoid for MBA |
+| [structures-inbox/](../structures-inbox/README.md) | Owner drop folder for custom `.mcstructure` files (reference only, not live pack) |
 
 ### `development/tracking/` — Changelogs & sessions
 

@@ -22,7 +22,8 @@ const INFECTED_TYPES = [
     "mb:infected_day13",
     "mb:infected_day20",
     "mb:infected_pig",
-    "mb:infected_cow"
+    "mb:infected_cow",
+    "mb:infected_sheep"
 ];
 
 const TUNNEL_HEIGHT = 2; // 2-block-tall entities

@@ -16,6 +16,8 @@ How `docs/` is organized. **The canonical index with links to every file is [REA
 
 ## Folder tree (summary)
 
+Repo root (not under `docs/`): **[`structures-inbox/`](../structures-inbox/README.md)** — owner-authored `.mcstructure` drops for reference. Not live pack content.
+
 ```
 docs/
 ├── README.md                 # Master index (start here)

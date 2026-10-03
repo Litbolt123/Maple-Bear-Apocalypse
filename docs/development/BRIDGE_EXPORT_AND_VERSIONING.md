@@ -58,12 +58,19 @@ Before a **public** release (folding dev work into `BP/`): run **`npm run sync:b
 
 You do **not** need to hand-edit all four manifests each release if you run the sync script after bumping `mb_buildConfig.js`.
 
-Also align **`PLAYER_CHANGELOG_VERSION`** in `mb_playerChangelog.js` and **`docs/PLAYER_CHANGELOG.md`** when shipping a new beta.
+Also align **`PLAYER_CHANGELOG_VERSION`** in `mb_playerChangelog.js` and **`docs/PLAYER_CHANGELOG.md`** when shipping a new beta **or** when player-facing work lands mid-beta (Unreleased / next `.1`). See **`docs/releasing.md`** → During a beta.
 
 ## Dev vs release export
 
 - **Players:** export from `BP/` + `RP/` only (after sync).
-- **Internal:** use `BP - Dev/` + `RP - Dev/`; manifest name ends with `(Dev)`.
+**Live Bridge projects (Windows)**
+
+| Project | Packs on disk |
+|---------|----------------|
+| `%LocalAppData%\com.bridge.dev\bridge\projects\Maple Bear Apocalypse` | `BP` + `RP` ← GitHub `BP` + `RP` |
+| `%LocalAppData%\com.bridge.dev\bridge\projects\Maple Bear Apocalypse - Dev` | `BP` + `RP` ← GitHub `BP - Dev` + `RP - Dev` |
+
+GitHub edits do not appear in Bridge until **`npm run sync:bridge`**. Then compile/refresh in Bridge. Minecraft development packs: **`npm run sync:dev-to-minecraft`**. Do not overwrite Bridge `.bridge/` or that project’s `config.json`.
 - **Bridge templates:** [`config/dev/bridge.json`](../../config/dev/bridge.json) and [`config/release/bridge.json`](../../config/release/bridge.json) — copy to root with `npm run bridge:config:dev` or `bridge:config:release` (see [`config/README.md`](../../config/README.md)). `sync:pack-metadata` does **not** change pack paths.
 - **Journal:** dev pack (`INCLUDE_FULL_DEVELOPER_TOOLS`) shows Developer Tools / Debug for any player; release uses Host tools with `mb_cheats` / Litbolt123 only.
 

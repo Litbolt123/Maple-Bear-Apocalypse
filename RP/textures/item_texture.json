@@ -38,6 +38,9 @@
 		"mb_infected_cow_egg": {
 			"textures": "textures/items/infected_cow_egg"
 		},
+		"mb_infected_sheep_egg": {
+			"textures": "textures/items/infected_sheep_egg"
+		},
 		"mb_mb_day13_egg": {
 			"textures": "textures/items/mb_day13_egg"
 		},
@@ -93,6 +96,132 @@
 			"textures": [
 				"textures/items/buff_mb_day8_egg"
 			]
+		},
+		"infected_allium_item": {
+			"textures": "textures/blocks/infected_allium_item"
+		},
+		"infected_azure_bluet_item": {
+			"textures": "textures/blocks/infected_azure_bluet_item"
+		},
+		"infected_blue_orchid_item": {
+			"textures": "textures/blocks/infected_blue_orchid_item"
+		},
+		"infected_brown_mushroom_item": {
+			"textures": "textures/blocks/infected_brown_mushroom_item"
+		},
+		"infected_bush_item": {
+			"textures": "textures/blocks/infected_bush_item"
+		},
+		"infected_cactus_flower_item": {
+			"textures": "textures/blocks/infected_cactus_flower_item"
+		},
+		"infected_closed_eyeblossom_item": {
+			"textures": "textures/blocks/infected_closed_eyeblossom_item"
+		},
+		"infected_cornflower_item": {
+			"textures": "textures/blocks/infected_cornflower_item"
+		},
+		"infected_crimson_fungus": {
+			"textures": "textures/blocks/infected_crimson_fungus"
+		},
+		"infected_crimson_roots": {
+			"textures": "textures/blocks/infected_crimson_roots"
+		},
+		"infected_dandelion_item": {
+			"textures": "textures/blocks/infected_dandelion_item"
+		},
+		"infected_fern_item": {
+			"textures": "textures/blocks/infected_fern_item"
+		},
+		"infected_firefly_bush_item": {
+			"textures": "textures/blocks/infected_firefly_bush_item"
+		},
+		"infected_large_fern_item": {
+			"textures": "textures/blocks/infected_large_fern_item"
+		},
+		"infected_leaf_litter_item": {
+			"textures": "textures/blocks/infected_leaf_litter_item"
+		},
+		"infected_lilac_item": {
+			"textures": "textures/blocks/infected_lilac_item"
+		},
+		"infected_lily_of_the_valley_item": {
+			"textures": "textures/blocks/infected_lily_of_the_valley_item"
+		},
+		"infected_nether_sprouts": {
+			"textures": "textures/blocks/infected_nether_sprouts"
+		},
+		"infected_open_eyeblossom_item": {
+			"textures": "textures/blocks/infected_open_eyeblossom_item"
+		},
+		"infected_orange_tulip_item": {
+			"textures": "textures/blocks/infected_orange_tulip_item"
+		},
+		"infected_oxeye_daisy_item": {
+			"textures": "textures/blocks/infected_oxeye_daisy_item"
+		},
+		"infected_peony_item": {
+			"textures": "textures/blocks/infected_peony_item"
+		},
+		"infected_pink_petals_item": {
+			"textures": "textures/blocks/infected_pink_petals_item"
+		},
+		"infected_pink_tulip_item": {
+			"textures": "textures/blocks/infected_pink_tulip_item"
+		},
+		"infected_pitcher_plant_item": {
+			"textures": "textures/blocks/infected_pitcher_plant_item"
+		},
+		"infected_poppy_item": {
+			"textures": "textures/blocks/infected_poppy_item"
+		},
+		"infected_red_mushroom_item": {
+			"textures": "textures/blocks/infected_red_mushroom_item"
+		},
+		"infected_red_shrub_item": {
+			"textures": "textures/blocks/infected_red_shrub_item"
+		},
+		"infected_red_tulip_item": {
+			"textures": "textures/blocks/infected_red_tulip_item"
+		},
+		"infected_rose_bush_item": {
+			"textures": "textures/blocks/infected_rose_bush_item"
+		},
+		"infected_short_grass_item": {
+			"textures": "textures/blocks/infected_short_grass_item"
+		},
+		"infected_sunflower_item": {
+			"textures": "textures/blocks/infected_sunflower_item"
+		},
+		"infected_tall_grass_item": {
+			"textures": "textures/blocks/infected_tall_grass_item"
+		},
+		"infected_torchflower_item": {
+			"textures": "textures/blocks/infected_torchflower_item"
+		},
+		"infected_twisting_vines": {
+			"textures": "textures/blocks/infected_twisting_vines"
+		},
+		"infected_vine_item": {
+			"textures": "textures/blocks/infected_vine_item"
+		},
+		"infected_warped_fungus": {
+			"textures": "textures/blocks/infected_warped_fungus"
+		},
+		"infected_warped_roots": {
+			"textures": "textures/blocks/infected_warped_roots"
+		},
+		"infected_weeping_vines": {
+			"textures": "textures/blocks/infected_weeping_vines"
+		},
+		"infected_white_tulip_item": {
+			"textures": "textures/blocks/infected_white_tulip_item"
+		},
+		"infected_wildflowers_item": {
+			"textures": "textures/blocks/infected_wildflowers_item"
+		},
+		"infected_wither_rose_item": {
+			"textures": "textures/blocks/infected_wither_rose_item"
 		}
 	}
 }

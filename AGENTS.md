@@ -10,11 +10,15 @@ alwaysApply: true
 **M.B.A (Maple Bear Apocalypse)** is a Minecraft Bedrock Edition addon (behavior pack + resource pack). Public name on packs: **M.B.A**; full title **Maple Bear Apocalypse**. (*Maple Bear Takeover* is an archived former title.) It is **not** a traditional web application — there is no backend server, database, or frontend framework.
 
 - `BP/` — **Public release only** (CurseForge / players). `mb_buildConfig.js`: **`INCLUDE_FULL_DEVELOPER_TOOLS === false`** → gated **Host tools** for `mb_cheats` / Litbolt123 (minor storms, capped spawns, list bears, journal pins). No Developer Tools tree. Ship with `RP/`.
-- `BP - Dev/` — **Never publish.** Same scripts as `BP/` for parity, but `mb_buildConfig.js` keeps **`INCLUDE_FULL_DEVELOPER_TOOLS === true`** → full Developer Tools, Debug, spawn controller, storm hub, etc. After copying dev scripts into `BP/`, **restore** `BP - Dev/scripts/mb_buildConfig.js` (do not paste release config over dev). Optional: dev menu can preview public Host tools via world flag `mb_world_dev_preview_admin_main`.
+- `BP - Dev/` — **Never publish.** Same scripts as `BP/` for parity, but `mb_buildConfig.js` keeps **`INCLUDE_FULL_DEVELOPER_TOOLS === true`** → full Developer Tools, Debug, spawn controller, storm hub, **biome checker** (HUD + teleport). After copying dev scripts into `BP/`, **restore** `BP - Dev/scripts/mb_buildConfig.js` (do not paste release config over dev). Optional: dev menu can preview public Host tools via world flag `mb_world_dev_preview_admin_main`. **Biome checker stays Dev** — never Host tools / `pinInReleaseAdmin`.
 - `RP/` — Resource Pack (models, textures, sounds, particles, animations)
 - `RP - Dev/` — Dev twin; keep manifest versions aligned with `BP - Dev/`
 - `tools/` — Node.js developer tooling scripts
 - `docs/` — Design docs, planning, and reference material. **Index:** `docs/README.md`. **Per-script overview:** `docs/development/SCRIPTS_REFERENCE.md`.
+
+### Obsidian vault
+
+Index (read first): `C:\Users\Augus\OneDrive\Documents\Obsidian Vault\Projects\Maple Bear Apocalypse.md`
 
 ### Context log (single file)
 
@@ -23,8 +27,12 @@ alwaysApply: true
 
 The JavaScript in `BP/scripts/` uses ES modules with `@minecraft/server` and `@minecraft/server-ui` APIs (provided at runtime by Minecraft, not npm packages).
 
-**Balance / tuning:** `mb_balance.js` centralizes spawn **entity-type caps**, **natural buff cooldown** tick length, **mob→bear conversion pressure** multipliers, **buff conversion near-cap**, **getInfectionRate** (day-step table), storm-reservoir spawn bumps (Phase 2), and **infection director** tier constants (Phase 3). **`mb_spawnConfigs.js`** owns **`SPAWN_CONFIGS`** (per-entity spawn curves). **`mb_spawnEntityIds.js`** centralizes spawn/conversion entity IDs.  
+**Balance / tuning:** `mb_balance.js` centralizes spawn **entity-type caps**, **natural buff cooldown** tick length, **mob→bear conversion pressure** multipliers, **buff conversion near-cap**, **getInfectionRate** (mob conversion day-step table, 100% by day 20), **getBlockSpreadProgress** (block spread ramps 2→20→25 then slower to 50/75, cap day 100), **getBlockSpreadSpeedMultiplier** (dev world property `mb_block_spread_speed_mult`; Journal → Developer Tools → Infection & players), **getBlockSpreadDifficultyMultiplier** (Journal → Settings Addon Difficulty: Easy 0.7 / Normal 1 / Hard 1.3), **getLeafSnowConvertChance** / **getLeafNeighborSpreadChance** (canopy infection, including 26.50 poplar), **getGreenerySpreadChance** / **getGreeneryNeighborSpreadChance** (grass plants + grass_block; dirt→grass neighbor like leaf→leaf), storm-reservoir spawn bumps (Phase 2), and **infection director** tier constants (Phase 3). Leaf/grass convert chance also uses **`getWorldInfectionSpreadMult`** (director day-band × storm reservoir); scans go through **`claimSpreadSlice`**. **`mb_spawnConfigs.js`** owns **`SPAWN_CONFIGS`** (per-entity spawn curves). **`mb_spawnEntityIds.js`** centralizes spawn/conversion entity IDs.  
 **Helpers (flat `scripts/`):** `mb_propertyMigration.js` (world schema version + one-shot key migrations), `mb_playerChangelog.js` / `mb_journalWhatsNew.js` (in-game **What's new**), `mb_bearTelemetry.js` (dev-only bear counts by type → content log when Spawn → **Bear telemetry** is on), `mb_miningConstants.js` (dimension IDs + mining bear types + pathfinding union + air set).
+
+### Single-player vs multiplayer (always)
+
+Every MBA change has **two levels**. Solo can spend more (one player, one set of scans/AI). Multiplayer multiplies the same work, so share, round-robin, and cluster (`mb_workSpread.js`). Do not tune only for one player. Do not starve solo down to a four-player budget. Infection near each player should still feel alive.
 
 ## Cursor Cloud specific instructions
 
@@ -42,6 +50,8 @@ All commands are defined in `package.json`:
 | `npm run test:scripts:release` | Syntax check `BP/scripts/` only |
 | `npm run validate` | JSON + syntax validation |
 | `npm run check` | Full validation + lint |
+| `npm run sync:dev-to-minecraft` | Copy `BP - Dev` + `RP - Dev` into Minecraft development pack folders |
+| `npm run sync:bridge` | Copy GitHub `BP`/`RP` and `BP - Dev`/`RP - Dev` into the two Bridge projects |
 
 ### Runtime constraints
 
@@ -62,6 +72,13 @@ All commands are defined in `package.json`:
 **[`config.json`](config.json)** at repo root is **Bridge’s** project file (`type: minecraftBedrock`, `packs` → `./BP`, `./RP`). It is not loaded by Minecraft scripts. Point Bridge at **`BP - Dev/`** and **`RP - Dev/`** for internal work (adjust `packs` paths in Bridge if you use a dev-only Bridge project).
 
 Point Bridge (or any Bedrock pack project) at **`BP - Dev/`** and **`RP - Dev/`**: copy or sync those folders into your Bridge behavior pack and resource pack roots (replace the pack contents you use for Maple Bear). After a full sync from public `BP/`, restore **`BP - Dev/scripts/mb_buildConfig.js`** so `INCLUDE_FULL_DEVELOPER_TOOLS` stays `true`. Entry script loads **`./mb_buildConfig.js` first** from `main.js`; on **public** `BP/`, that module no-ops `console.log` / `info` / `warn` / `debug` so release builds stay quiet (`console.error` unchanged).
+
+**Live Bridge projects (must copy after GitHub edits):**
+
+- `%LocalAppData%\com.bridge.dev\bridge\projects\Maple Bear Apocalypse` — release `BP` + `RP`
+- `%LocalAppData%\com.bridge.dev\bridge\projects\Maple Bear Apocalypse - Dev` — uses local `BP` + `RP` folders; fill them from repo **`BP - Dev`** + **`RP - Dev`**
+
+`npm run sync:bridge` (`tools/syncRepoToBridge.js`) does that copy. GitHub `Maple-Bear-Take-Over` is git; Bridge is what you compile. Then `npm run sync:dev-to-minecraft` if you play from Minecraft development packs.
 
 **Bridge `.mcpack` export:** Bump semver in `BP/scripts/mb_buildConfig.js`, then run **`npm run sync:pack-metadata`** so manifests + `config.json` show **The Maple Bear Apocalypse** and `v0.9.0-beta.x` in descriptions. See [`docs/development/BRIDGE_EXPORT_AND_VERSIONING.md`](docs/development/BRIDGE_EXPORT_AND_VERSIONING.md).
 
