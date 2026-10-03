@@ -16,7 +16,7 @@
 import { system, world, BlockPermutation } from "@minecraft/server";
 import { isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
 import { getCurrentDay } from "./mb_dayTracker.js";
-import { getGreeneryNeighborSpreadChance, getGreenerySpreadChance, getGroundConvertChanceMult, getResistantSoilBiomeSpreadMult, getFoliageConvertChanceMult } from "./mb_balance.js";
+import { getGreeneryNeighborSpreadChance, getGreenerySpreadChance, getGroundConvertChanceMult, getResistantSoilBiomeSpreadMult, getFoliageConvertChanceMult, markNetherBreach, isNetherInfectionOpen } from "./mb_balance.js";
 import { scaleWorldInfectionChance } from "./mb_infectionDirector.js";
 import {
     ALL_INFECTED_LEAF_IDS,
@@ -33,7 +33,7 @@ import {
     isInfectedFoliageId,
     isInfectedFoliageWalkable
 } from "./mb_infectedFoliage.js";
-import { getOnlinePlayerCount } from "./mb_workSpread.js";
+import { drainKnownSourcesRoundRobin, getOnlinePlayerCount } from "./mb_workSpread.js";
 
 export const DUSTED_DIRT_ID = "mb:dusted_dirt";
 export const DUSTED_PODZOL_ID = "mb:dusted_podzol";
@@ -52,7 +52,12 @@ const TALL_GREENERY = new Set([
     "minecraft:double_tall_grass",
     "minecraft:tallgrass",
     "minecraft:large_fern",
-    "minecraft:double_plant"
+    "minecraft:double_plant",
+    "minecraft:sunflower",
+    "minecraft:lilac",
+    "minecraft:rose_bush",
+    "minecraft:peony",
+    "minecraft:pitcher_plant"
 ]);
 const DOUBLE_INFECTED = new Set(DOUBLE_INFECTED_FOLIAGE_IDS);
 
@@ -178,7 +183,7 @@ function spreadResistMultForGround(block) {
 }
 
 function spreadResistMultForFoliage(block) {
-    return getFoliageConvertChanceMult(block?.typeId)
+    return getFoliageConvertChanceMult(block?.typeId, currentWorldDay())
         * getResistantSoilBiomeSpreadMult(biomeIdAtBlock(block));
 }
 
@@ -196,6 +201,33 @@ function greeneryNeighborChanceAt(block) {
 
 function isSnowLayerId(typeId) {
     return typeId === MB_SNOW_LAYER_ID || typeId === "minecraft:snow_layer";
+}
+
+let vineSpreadFn = null;
+
+/** Leaf scan registers this so a vine can dust neighboring leaves without a script cycle. */
+export function registerVineSpread(fn) {
+    vineSpreadFn = fn;
+}
+
+function spreadFromInfectedVine(block) {
+    if (!block?.isValid || block.typeId !== "mb:infected_vine") return;
+    try {
+        vineSpreadFn?.(block);
+    } catch {
+        /* leaf spread optional */
+    }
+    const dirs = [
+        [1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]
+    ];
+    const [dx, dy, dz] = dirs[(Math.random() * dirs.length) | 0];
+    const loc = block.location;
+    const n = getBlockAt(block.dimension, loc.x + dx, loc.y + dy, loc.z + dz);
+    if (!n) return;
+    if (tryConvertFoliageCell(n)) return;
+    if (isConvertibleGroundId(n.typeId)) {
+        tryConvertEligibleGround(n, greeneryNeighborChanceAt(block));
+    }
 }
 
 function isInfectionSourceId(typeId) {
@@ -226,7 +258,7 @@ function isAllowedCoverAbove(typeId) {
     if (isGreeneryPlantId(typeId)) return true;
     if (isInfectedFoliageWalkable(typeId)) return true;
     if (typeId === "minecraft:deadbush" || typeId === "minecraft:dead_bush") return true;
-    if (typeId === "minecraft:moss_carpet" || typeId === "minecraft:leaf_litter") return true;
+    if (typeId === "minecraft:moss_carpet" || typeId === "minecraft:leaf_litter" || typeId === "minecraft:wildflowers") return true;
     if (isTrunkOrCanopyCover(typeId)) return true;
     return false;
 }
@@ -361,51 +393,55 @@ export function drainKnownGroundSources(onSource) {
     const mp = getOnlinePlayerCount() >= 2;
     const keys = Array.from(knownGroundSources.keys());
     if (keys.length === 0) return;
-    const start = ((knownDrainCursor % keys.length) + keys.length) % keys.length;
-    let steps = 0;
-    let extraHops = 0;
-    let walked = 0;
-    const visitCap = Math.min(keys.length, mp ? 4 : KNOWN_DRAIN_VISIT_CAP);
+    const soloVisitCap = Math.min(keys.length, KNOWN_DRAIN_VISIT_CAP);
+    const mpPerPocketVisitCap = 4;
     const stepCap = mp ? 2 : KNOWN_VINE_STEPS_PER_DRAIN;
     const extraHopCap = mp ? 2 : 6;
-    for (; walked < visitCap; walked++) {
-        const key = keys[(start + walked) % keys.length];
-        const rec = knownGroundSources.get(key);
-        if (!rec) continue;
-        if (now - rec.added > KNOWN_SOURCE_MAX_AGE) {
-            knownGroundSources.delete(key);
-            continue;
-        }
-        if (now - rec.lastTry < KNOWN_SOURCE_RETRY_TICKS) continue;
-        rec.lastTry = now;
-        let dim;
-        try {
-            dim = world.getDimension(rec.dimId);
-        } catch {
-            knownGroundSources.delete(key);
-            continue;
-        }
-        const block = getBlockAt(dim, rec.x, rec.y, rec.z);
-        if (!block || !isKnownGroundId(block.typeId)) {
-            knownGroundSources.delete(key);
-            continue;
-        }
-        if (tryInfectGrassAround(block)) steps++;
-        if (onSource && extraHops < extraHopCap) {
-            try {
-                onSource(block);
-                extraHops++;
-            } catch {
-                /* extras optional */
+    let steps = 0;
+    let extraHops = 0;
+    const { nextCursor } = drainKnownSourcesRoundRobin({
+        keys,
+        cursor: knownDrainCursor,
+        soloVisitCap,
+        mpPerPocketVisitCap,
+        getRecord: (key) => knownGroundSources.get(key),
+        isOnCooldown: (rec, tick) => {
+            if (tick - rec.added > KNOWN_SOURCE_MAX_AGE) return true;
+            return tick - rec.lastTry < KNOWN_SOURCE_RETRY_TICKS;
+        },
+        shouldStop: () => steps >= stepCap,
+        processReady: (key, rec) => {
+            if (now - rec.added > KNOWN_SOURCE_MAX_AGE) {
+                knownGroundSources.delete(key);
+                return true;
             }
+            rec.lastTry = now;
+            let dim;
+            try {
+                dim = world.getDimension(rec.dimId);
+            } catch {
+                knownGroundSources.delete(key);
+                return true;
+            }
+            const block = getBlockAt(dim, rec.x, rec.y, rec.z);
+            if (!block || !isKnownGroundId(block.typeId)) {
+                knownGroundSources.delete(key);
+                return true;
+            }
+            if (tryInfectGrassAround(block)) steps++;
+            if (onSource && extraHops < extraHopCap) {
+                try {
+                    onSource(block);
+                    extraHops++;
+                } catch {
+                    /* extras optional */
+                }
+            }
+            if (!sourceHasSpreadFront(block)) knownGroundSources.delete(key);
+            return steps < stepCap;
         }
-        if (!sourceHasSpreadFront(block)) knownGroundSources.delete(key);
-        if (steps >= stepCap) {
-            walked++;
-            break;
-        }
-    }
-    knownDrainCursor = start + walked;
+    });
+    knownDrainCursor = nextCursor;
 }
 
 /**
@@ -553,6 +589,19 @@ function convertGreeneryPlant(plant) {
             return false;
         }
         if (!isFoliageSoilId(blockBelow(plant)?.typeId)) return false;
+        if (dest === "mb:infected_wildflowers") {
+            plant.setPermutation(BlockPermutation.resolve(dest, {
+                "mb:stem": true,
+                "mb:flowers": wildflowerCount(plant)
+            }));
+            return true;
+        }
+        if (dest === "mb:infected_leaf_litter") {
+            plant.setPermutation(BlockPermutation.resolve(dest, {
+                "mb:growth": litterGrowth(plant)
+            }));
+            return true;
+        }
         plant.setType(dest);
         return true;
     } catch {
@@ -597,48 +646,37 @@ function vineBitsFromBlock(block) {
     return vineBitsFromNeighbors(block);
 }
 
-function repairInfectedVineIfNeeded(block) {
-    if (!block?.isValid || block.typeId !== "mb:infected_vine") return false;
-    const inferred = vineBitsFromNeighbors(block);
-    if (inferred <= 0) return false;
-    if (vineBitsFromInfected(block) === inferred) return false;
-    try {
-        block.setPermutation(BlockPermutation.resolve("mb:infected_vine", vineStatesFromBits(inferred)));
-        return true;
-    } catch {
-        return false;
-    }
+function singleVineBit(bits) {
+    if (bits & VINE_SOUTH) return VINE_SOUTH;
+    if (bits & VINE_NORTH) return VINE_NORTH;
+    if (bits & VINE_WEST) return VINE_WEST;
+    if (bits & VINE_EAST) return VINE_EAST;
+    return VINE_SOUTH;
 }
 
-function vineStatesFromBits(bits) {
-    const b = bits | 0;
-    return {
-        "mb:south": (b & VINE_SOUTH) ? 1 : 0,
-        "mb:west": (b & VINE_WEST) ? 1 : 0,
-        "mb:north": (b & VINE_NORTH) ? 1 : 0,
-        "mb:east": (b & VINE_EAST) ? 1 : 0
-    };
+function blockFaceForSupportBit(bits) {
+    if (bits & VINE_SOUTH) return "north";
+    if (bits & VINE_NORTH) return "south";
+    if (bits & VINE_EAST) return "west";
+    if (bits & VINE_WEST) return "east";
+    return "north";
 }
 
-function vineBitsFromInfected(block) {
-    let bits = 0;
-    try {
-        if (block.permutation.getState("mb:south") === 1) bits |= VINE_SOUTH;
-        if (block.permutation.getState("mb:west") === 1) bits |= VINE_WEST;
-        if (block.permutation.getState("mb:north") === 1) bits |= VINE_NORTH;
-        if (block.permutation.getState("mb:east") === 1) bits |= VINE_EAST;
-    } catch {
-        /* missing */
-    }
-    return bits;
+function supportBitForBlockFace(face) {
+    if (face === "north") return VINE_SOUTH;
+    if (face === "south") return VINE_NORTH;
+    if (face === "east") return VINE_WEST;
+    if (face === "west") return VINE_EAST;
+    return VINE_SOUTH;
 }
 
 function placeInfectedVine(vanillaVine) {
     if (!vanillaVine?.isValid) return false;
-    let bits = vineBitsFromBlock(vanillaVine);
-    if (bits <= 0) bits = VINE_SOUTH | VINE_WEST | VINE_NORTH | VINE_EAST;
+    const face = blockFaceForSupportBit(singleVineBit(vineBitsFromBlock(vanillaVine)));
     try {
-        vanillaVine.setPermutation(BlockPermutation.resolve("mb:infected_vine", vineStatesFromBits(bits)));
+        vanillaVine.setPermutation(BlockPermutation.resolve("mb:infected_vine", {
+            "minecraft:block_face": face
+        }));
         return true;
     } catch {
         try {
@@ -683,10 +721,26 @@ export function restoreInfectedFoliageToVanilla(block, vanillaId) {
     if (!block?.isValid || !vanillaId) return false;
     if (!DOUBLE_INFECTED.has(block.typeId)) {
         try {
+            if (block.typeId === "mb:infected_leaf_litter" && vanillaId === "minecraft:leaf_litter") {
+                let growth = 3;
+                try {
+                    const stored = Number(block.permutation.getState("mb:growth"));
+                    if (stored >= 0 && stored <= 7) growth = stored;
+                } catch {
+                    /* four-piece pile */
+                }
+                block.setPermutation(BlockPermutation.resolve(vanillaId, { growth }));
+                return true;
+            }
             if (block.typeId === "mb:infected_vine" && vanillaId === "minecraft:vine") {
-                const bits = vineBitsFromInfected(block);
+                let face = "north";
+                try {
+                    face = String(block.permutation.getState("minecraft:block_face") || "north");
+                } catch {
+                    /* default */
+                }
                 block.setPermutation(BlockPermutation.resolve(vanillaId, {
-                    vine_direction_bits: bits > 0 ? bits : VINE_SOUTH
+                    vine_direction_bits: supportBitForBlockFace(face)
                 }));
                 return true;
             }
@@ -740,11 +794,49 @@ function foliageTouchesInfection(block) {
  * Vines / mushrooms / litter sitting next to infection (not only on converting grass).
  * @param {import("@minecraft/server").Block} block
  */
+function litterGrowth(plant) {
+    try {
+        const growth = Number(plant.permutation.getState("growth"));
+        if (growth >= 0 && growth <= 7) return growth;
+    } catch {
+        /* four-piece pile */
+    }
+    return 3;
+}
+
+function wildflowerCount(plant) {
+    try {
+        const amount = Number(plant.permutation.getState("flower_amount"));
+        if (amount >= 1 && amount <= 4) return amount;
+    } catch {
+        /* older worlds use growth */
+    }
+    try {
+        const growth = Number(plant.permutation.getState("growth"));
+        if (growth >= 0 && growth <= 3) return growth + 1;
+    } catch {
+        /* default full patch */
+    }
+    return 4;
+}
+
+function dropWildflowerStem(block) {
+    if (!block?.isValid || block.typeId !== "mb:infected_wildflowers") return false;
+    try {
+        if (block.permutation.getState("mb:stem") !== true) return false;
+        block.setPermutation(BlockPermutation.resolve("mb:infected_wildflowers", { "mb:stem": false }));
+        return true;
+    } catch {
+        return false;
+    }
+}
+
 function tryConvertFoliageCell(block) {
     if (!block?.isValid) return false;
     if (greeneryNeighborChanceAt(block) <= 0) return false;
     const resist = spreadResistMultForFoliage(block);
     if (resist < 1 && Math.random() > resist) return false;
+    if (block.typeId === "mb:infected_wildflowers") return dropWildflowerStem(block);
     if (!isConvertibleVanillaFoliage(block.typeId) && !GREENERY_PLANTS.has(block.typeId)) return false;
     if (isInfectionSpreadBlockedAt(block)) return false;
     if (!foliageTouchesInfection(block)) return false;
@@ -850,6 +942,54 @@ export function tryInfectGrassUnderSnow(snowBlock, opts = {}) {
  * @param {import("@minecraft/server").Block} source
  * @returns {boolean}
  */
+const WOOD_BASE_GROUND_OFFSETS = [
+    [0, -1, 0],
+    [1, -1, 0], [-1, -1, 0], [0, -1, 1], [0, -1, -1],
+    [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]
+];
+
+/**
+ * One dirt or grass_block under an infected log, or in the ring around that base.
+ * @param {import("@minecraft/server").Block} woodBlock
+ * @returns {boolean}
+ */
+export function tryInfectGroundBesideWood(woodBlock) {
+    if (!grassInfectionEnabled()) return false;
+    if (!woodBlock?.isValid) return false;
+    if (isInfectionSpreadBlockedAt(woodBlock)) return false;
+    const chance = greeneryNeighborChanceAt(woodBlock);
+    if (chance <= 0) return false;
+    const loc = woodBlock.location;
+    const dim = woodBlock.dimension;
+    const offsets = WOOD_BASE_GROUND_OFFSETS.slice();
+    for (let i = offsets.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        const swap = offsets[i];
+        offsets[i] = offsets[j];
+        offsets[j] = swap;
+    }
+    for (const [dx, dy, dz] of offsets) {
+        const n = getBlockAt(dim, loc.x + dx, loc.y + dy, loc.z + dz);
+        if (n && tryConvertEligibleGround(n, chance, { knownAdjacent: true })) return true;
+    }
+    return false;
+}
+
+/**
+ * @param {import("@minecraft/server").Block} woodBlock
+ * @returns {boolean}
+ */
+export function woodStillTouchesGreenGround(woodBlock) {
+    if (!woodBlock?.isValid) return false;
+    const loc = woodBlock.location;
+    const dim = woodBlock.dimension;
+    for (const [dx, dy, dz] of WOOD_BASE_GROUND_OFFSETS) {
+        const n = getBlockAt(dim, loc.x + dx, loc.y + dy, loc.z + dz);
+        if (n && isConvertibleGroundId(n.typeId)) return true;
+    }
+    return false;
+}
+
 export function tryInfectGrassAround(source) {
     if (!grassInfectionEnabled()) return false;
     if (!source?.isValid) return false;
@@ -930,7 +1070,7 @@ function collectFootprintDustedDirt(player, into) {
         for (let dz = -FOOTPRINT_RX; dz <= FOOTPRINT_RX; dz++) {
             for (let dy = FOOTPRINT_Y_MIN; dy <= FOOTPRINT_Y_MAX; dy++) {
                 const block = getBlockAt(dim, ox + dx, oy + dy, oz + dz);
-                if (block?.typeId === "mb:infected_vine") repairInfectedVineIfNeeded(block);
+                if (block?.typeId === "mb:infected_vine") spreadFromInfectedVine(block);
                 if (block && GROUND_ONLY_INFECTED_GRASS.has(block.typeId)) repairOrphanInfectedGrass(block);
                 addInfectionSource(into, block);
             }
@@ -960,7 +1100,10 @@ export function scanAroundPlayerForGrassInfection(player, onDustedDirt) {
     if (!player?.isValid) return;
     if (!grassInfectionEnabled()) return;
     const dim = player.dimension;
-    if (dim.id !== "minecraft:overworld") return;
+    if (dim.id === "minecraft:nether") {
+        markNetherBreach(dim.id);
+        if (!isNetherInfectionOpen()) return;
+    } else if (dim.id !== "minecraft:overworld") return;
     const day = currentWorldDay();
     const neighborChance = getGreeneryNeighborSpreadChance(day);
     const scanChance = getGreenerySpreadChance(day);
@@ -1059,3 +1202,42 @@ export function scanAroundPlayerForGrassInfection(player, onDustedDirt) {
 system.beforeEvents.startup.subscribe((event) => {
     event.blockComponentRegistry.registerCustomComponent("mb:infected_foliage", {});
 });
+
+const PLANT_FACE_OFFSET = {
+    North: [0, 0, -1],
+    South: [0, 0, 1],
+    East: [1, 0, 0],
+    West: [-1, 0, 0],
+    Up: [0, 1, 0],
+    Down: [0, -1, 0]
+};
+
+function isWaterTypeId(typeId) {
+    return typeId === "minecraft:water" || typeId === "minecraft:flowing_water";
+}
+
+if (world.beforeEvents?.playerInteractWithBlock) {
+    world.beforeEvents.playerInteractWithBlock.subscribe((event) => {
+        try {
+            const itemId = event.itemStack?.typeId;
+            if (!itemId || !ALL_INFECTED_FOLIAGE_WALKABLE_IDS.includes(itemId)) return;
+            const block = event.block;
+            if (!block) return;
+            if (isWaterTypeId(block.typeId)) {
+                event.cancel = true;
+                return;
+            }
+            const face = String(event.blockFace ?? "");
+            const off = PLANT_FACE_OFFSET[face];
+            if (!off) return;
+            const dest = block.dimension.getBlock({
+                x: block.location.x + off[0],
+                y: block.location.y + off[1],
+                z: block.location.z + off[2]
+            });
+            if (dest && isWaterTypeId(dest.typeId)) event.cancel = true;
+        } catch {
+            /* read-only before-event cannot see the destination */
+        }
+    });
+}

@@ -534,6 +534,42 @@ export const WOOD_SPECIES = [
                 "infected": "mb:infected_warped_wart_block"
             }
         ]
+    },
+    {
+        "id": "brown_mushroom",
+        "title": "Brown Mushroom",
+        "kinds": [
+            {
+                "id": "block",
+                "title": "Block",
+                "vanilla": "minecraft:brown_mushroom_block",
+                "infected": "mb:infected_brown_mushroom_block"
+            }
+        ]
+    },
+    {
+        "id": "red_mushroom",
+        "title": "Red Mushroom",
+        "kinds": [
+            {
+                "id": "block",
+                "title": "Block",
+                "vanilla": "minecraft:red_mushroom_block",
+                "infected": "mb:infected_red_mushroom_block"
+            }
+        ]
+    },
+    {
+        "id": "mushroom",
+        "title": "Mushroom",
+        "kinds": [
+            {
+                "id": "stem",
+                "title": "Stem",
+                "vanilla": "minecraft:mushroom_stem",
+                "infected": "mb:infected_mushroom_stem"
+            }
+        ]
     }
 ];
 

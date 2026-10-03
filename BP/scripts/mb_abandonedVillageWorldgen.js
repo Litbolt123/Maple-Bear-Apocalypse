@@ -718,6 +718,16 @@ function footingHintYForSite(dimension, ruleset, lamp, fallbackY) {
  */
 function clearInfectedProximityCache() {
     infectedProxCache.clear();
+    proxPartial.clear();
+}
+
+const PROX_BIOME_READS_PER_SCAN = 12;
+let proxBiomeReadsLeft = PROX_BIOME_READS_PER_SCAN;
+/** @type {Map<string, { tier: number, dx: number, dz: number }>} */
+const proxPartial = new Map();
+
+function beginProximityScanBudget() {
+    proxBiomeReadsLeft = PROX_BIOME_READS_PER_SCAN;
 }
 
 /**
@@ -729,31 +739,50 @@ export function ruinProcessorRadiusForTier(tier) {
     return RUIN_RADIUS_HAMLET;
 }
 
+/**
+ * 0 = none, 1 = small infected nearby, 2 = medium, 3 = large.
+ * Returns null when this chunk's sample is not finished yet.
+ * @param {import("@minecraft/server").Dimension} dimension
+ * @param {number} cx
+ * @param {number} cz
+ * @returns {number|null}
+ */
 function getInfectedProximityTier(dimension, cx, cz) {
     const key = `${cx},${cz}`;
     if (infectedProxCache.has(key)) return infectedProxCache.get(key);
-    let tier = 0;
     const step = INFECTED_PROXIMITY_SAMPLE_STEP;
-    for (let dx = -INFECTED_PROXIMITY_RADIUS_CHUNKS; dx <= INFECTED_PROXIMITY_RADIUS_CHUNKS; dx += step) {
-        for (let dz = -INFECTED_PROXIMITY_RADIUS_CHUNKS; dz <= INFECTED_PROXIMITY_RADIUS_CHUNKS; dz += step) {
-            const tcx = cx + dx;
-            const tcz = cz + dz;
+    const radius = INFECTED_PROXIMITY_RADIUS_CHUNKS;
+    let state = proxPartial.get(key);
+    if (!state) state = { tier: 0, dx: -radius, dz: -radius };
+    while (state.dx <= radius) {
+        while (state.dz <= radius) {
+            if (proxBiomeReadsLeft <= 0) {
+                proxPartial.set(key, state);
+                return null;
+            }
+            proxBiomeReadsLeft--;
+            const tcx = cx + state.dx;
+            const tcz = cz + state.dz;
+            state.dz += step;
             if (!isOverworldChunkLoaded(dimension, tcx, tcz)) continue;
-            let biomeId;
             try {
                 const biome = dimension.getBiome({ x: tcx * 16 + 8, y: 64, z: tcz * 16 + 8 });
-                biomeId = typeof biome === "string" ? biome : biome?.id;
+                const biomeId = typeof biome === "string" ? biome : biome?.id;
+                if (!biomeId?.startsWith("mb:infected_biome")) continue;
+                if (biomeId.includes("large")) state.tier = Math.max(state.tier, 3);
+                else if (biomeId.includes("medium")) state.tier = Math.max(state.tier, 2);
+                else state.tier = Math.max(state.tier, 1);
             } catch {
-                continue;
+                /* unloaded or rejected */
             }
-            if (!biomeId?.startsWith("mb:infected_biome")) continue;
-            if (biomeId.includes("large")) tier = Math.max(tier, 3);
-            else if (biomeId.includes("medium")) tier = Math.max(tier, 2);
-            else tier = Math.max(tier, 1);
         }
+        state.dz = -radius;
+        state.dx += step;
     }
-    infectedProxCache.set(key, tier);
-    return tier;
+    proxPartial.delete(key);
+    if (infectedProxCache.size > 64) infectedProxCache.clear();
+    infectedProxCache.set(key, state.tier);
+    return state.tier;
 }
 
 /**
@@ -2176,7 +2205,7 @@ function scanPlayersForVillageSites(budget) {
             );
         }
     }
-    clearInfectedProximityCache();
+    beginProximityScanBudget();
     avDebugStats.scans++;
 
     let players;
@@ -2437,7 +2466,7 @@ export function getAbandonedVillageDebugReport(player) {
     push(`§7Sites built §f${siteStats.built}§7 · failed §f${siteStats.failed}§7 · pending §f${siteStats.pending}`);
     push("§8§oVanilla village jigsaws are legacy (disabled).");
     push("");
-    push("§7Vanilla villages are §cOFF§7 §8(worldgen_no_village biomes).");
+    push("§7Vanilla villages are §aON§7 §8(new chunks).");
 
     const sm = world.structureManager;
     push(
@@ -2806,6 +2835,8 @@ export function getAbandonedVillageSelfTestLines() {
 
 let avScanPhaseTicks = 0;
 let avLampCleanupPhaseTicks = 0;
+let villagesArmedTick = -1;
+const VILLAGE_ENABLE_WARMUP_TICKS = 100;
 
 export function initializeAbandonedVillageWorldgen() {
     if (watchStarted) return;
@@ -2837,7 +2868,7 @@ export function initializeAbandonedVillageWorldgen() {
     }, 60);
 
     try {
-        world.beforeEvents.playerLeave.subscribe((ev) => {
+        world.afterEvents.playerLeave.subscribe((ev) => {
             const name = ev.player?.name ?? ev.player?.id ?? "?";
             try {
                 persistActiveSettlementBuildsForUnload();
@@ -2873,7 +2904,13 @@ export function initializeAbandonedVillageWorldgen() {
 
     system.runInterval(() => {
         try {
-            if (!isScriptEnabled(SCRIPT_IDS.abandonedVillageWorldgen)) return;
+            if (!isScriptEnabled(SCRIPT_IDS.abandonedVillageWorldgen)) {
+                villagesArmedTick = -1;
+                return;
+            }
+            const now = system.currentTick;
+            if (villagesArmedTick < 0) villagesArmedTick = now;
+            if (now - villagesArmedTick < VILLAGE_ENABLE_WARMUP_TICKS) return;
             const players = getCachedPlayers() || [];
             if (!shouldRunAbandonedVillageMainTick(players, getBiomeIdAt)) return;
             const workIdle = isAbandonedVillageWorkIdle();

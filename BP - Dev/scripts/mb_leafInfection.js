@@ -26,13 +26,14 @@ import { isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
 import { shouldPauseDayZeroAddonLoops, shouldSleepDayZeroWorldWork } from "./mb_dayZeroPerfBisect.js";
 import {
     claimSpreadSlice,
+    drainKnownSourcesRoundRobin,
     getMetricsSpreadLoad01,
     shouldDeferVillageBurst,
     spreadPlayersForVegetationWork,
     getOnlinePlayerCount
 } from "./mb_workSpread.js";
 import { getCurrentDay } from "./mb_dayTracker.js";
-import { getLeafNeighborSpreadChance, getLeafSnowConvertChance } from "./mb_balance.js";
+import { getLeafNeighborSpreadChance, getLeafSnowConvertChance, getMushroomWoodConvertMult, markNetherBreach, isNetherInfectionOpen } from "./mb_balance.js";
 import { scaleWorldInfectionChance } from "./mb_infectionDirector.js";
 import { isInfectedComponentBiomeAt } from "./mb_biomeReplaceRegistry.js";
 import {
@@ -41,7 +42,8 @@ import {
     tryInfectGrassAround,
     convertGrassCell,
     drainKnownGroundSources,
-    isDustedGroundId
+    isDustedGroundId,
+    registerVineSpread
 } from "./mb_grassInfection.js";
 import {
     scanAroundPlayerForWoodInfection,
@@ -50,8 +52,9 @@ import {
     convertWoodToInfected,
     registerInfectLeavesAround,
     registerInfectImmediateLeafFaces,
-    expandTreeColumnY,
     inferTreeClimbDir,
+    invalidateTreeColumnCache,
+    resolveTreeColumnY,
     drainKnownWoodSources
 } from "./mb_woodInfection.js";
 import { isInfectionSpreadBlockedAt } from "./mb_spawnController.js";
@@ -132,6 +135,7 @@ const KNOWN_LEAF_VISIT_MP = 6;
 const KNOWN_LEAF_STEPS_SOLO = 12;
 const KNOWN_LEAF_STEPS_MP = 6;
 const TREE_DUST_COLUMN_CAP = 18;
+const TREE_DUST_COLUMN_CAP_MP = 6;
 
 let snowScanStarted = false;
 let vegetationExtraPhase = 0;
@@ -298,9 +302,9 @@ function convertLeafToInfected(leafBlock, opts = {}) {
             if (!meta) return false;
             const before = getLeafDust(leafBlock);
             const ok = setInfectedLeaf(leafBlock, meta.spec.id, isCustomLeafPersistent(leafBlock), forced);
+            if (ok) rememberKnownLeafSource(leafBlock);
             if (ok && forced >= LEAF_DUST_MAX && before < LEAF_DUST_MAX) {
                 infectImmediateVanillaFaces(leafBlock, 1);
-                rememberKnownLeafSource(leafBlock);
             }
             return ok;
         }
@@ -311,9 +315,9 @@ function convertLeafToInfected(leafBlock, opts = {}) {
     if (!spec) return false;
     const dust = forced != null ? forced : 0;
     const ok = setInfectedLeaf(leafBlock, spec.id, isPlayerPlacedVanillaLeaf(leafBlock), dust);
+    if (ok) rememberKnownLeafSource(leafBlock);
     if (ok && dust >= LEAF_DUST_MAX) {
         infectImmediateVanillaFaces(leafBlock, 1);
-        rememberKnownLeafSource(leafBlock);
     }
     return ok;
 }
@@ -762,57 +766,61 @@ function rememberKnownLeafSource(block) {
 function drainKnownLeafSources() {
     if (!leafInfectionEnabled() || knownLeafSources.size === 0) return;
     const now = system.currentTick;
-    const mp = getOnlinePlayerCount() >= 2;
     const keys = Array.from(knownLeafSources.keys());
     if (keys.length === 0) return;
-    const start = ((knownLeafDrainCursor % keys.length) + keys.length) % keys.length;
-    const visitCap = Math.min(keys.length, mp ? KNOWN_LEAF_VISIT_MP : KNOWN_LEAF_VISIT_SOLO);
-    const stepCap = mp ? KNOWN_LEAF_STEPS_MP : KNOWN_LEAF_STEPS_SOLO;
+    const soloVisitCap = Math.min(keys.length, KNOWN_LEAF_VISIT_SOLO);
+    const mpPerPocketVisitCap = KNOWN_LEAF_VISIT_MP;
+    const stepCap = getOnlinePlayerCount() >= 2 ? KNOWN_LEAF_STEPS_MP : KNOWN_LEAF_STEPS_SOLO;
     const decayState = { left: 0 };
     const pacedColumns = new Set();
     let steps = 0;
-    let walked = 0;
-    for (; walked < visitCap && steps < stepCap; walked++) {
-        const key = keys[(start + walked) % keys.length];
-        const rec = knownLeafSources.get(key);
-        if (!rec) continue;
-        if (now - rec.lastTry < KNOWN_LEAF_RETRY_TICKS) continue;
-        rec.lastTry = now;
-        let dim;
-        try {
-            dim = world.getDimension(rec.dimId);
-        } catch {
-            knownLeafSources.delete(key);
-            continue;
-        }
-        const block = getColumnBlock(dim, rec.x, rec.y, rec.z);
-        if (!block || !isInfectedLeafId(block.typeId)) {
-            knownLeafSources.delete(key);
-            continue;
-        }
-        rec.dust = getLeafDust(block);
-        if (rec.dust >= LEAF_DUST_MAX) {
-            if (!leafHasUninfectedFace(block)) {
+    const { nextCursor } = drainKnownSourcesRoundRobin({
+        keys,
+        cursor: knownLeafDrainCursor,
+        soloVisitCap,
+        mpPerPocketVisitCap,
+        getRecord: (key) => knownLeafSources.get(key),
+        isOnCooldown: (rec, tick) => tick - rec.lastTry < KNOWN_LEAF_RETRY_TICKS,
+        shouldStop: () => steps >= stepCap,
+        processReady: (key, rec) => {
+            rec.lastTry = now;
+            let dim;
+            try {
+                dim = world.getDimension(rec.dimId);
+            } catch {
                 knownLeafSources.delete(key);
-                continue;
+                return true;
             }
-            if (infectImmediateVanillaFaces(block, 1)) {
-                steps++;
+            const block = getColumnBlock(dim, rec.x, rec.y, rec.z);
+            if (!block || !isInfectedLeafId(block.typeId)) {
+                knownLeafSources.delete(key);
+                return true;
+            }
+            rec.dust = getLeafDust(block);
+            if (rec.dust >= LEAF_DUST_MAX) {
+                if (!leafHasUninfectedFace(block)) {
+                    knownLeafSources.delete(key);
+                    return true;
+                }
+                if (infectImmediateVanillaFaces(block, 1)) {
+                    steps++;
+                    rememberKnownLeafSource(block);
+                    return steps < stepCap;
+                }
                 rememberKnownLeafSource(block);
-                continue;
+                if (!knownLeafSources.has(key)) return true;
             }
-            rememberKnownLeafSource(block);
-            if (!knownLeafSources.has(key)) continue;
+            const colKey = `${rec.dimId}|${rec.x}|${rec.z}`;
+            if (pacedColumns.has(colKey)) {
+                if (processInfectedLeafFront(block, { skipSpread: true })) steps++;
+                return steps < stepCap;
+            }
+            pacedColumns.add(colKey);
+            steps += processCanopyColumn(dim, rec.x, rec.z, rec.y, TREE_COLUMN_PACE, decayState, rec);
+            return steps < stepCap;
         }
-        const colKey = `${rec.dimId}|${rec.x}|${rec.z}`;
-        if (pacedColumns.has(colKey)) {
-            if (processInfectedLeafFront(block, { skipSpread: true })) steps++;
-            continue;
-        }
-        pacedColumns.add(colKey);
-        steps += processCanopyColumn(dim, rec.x, rec.z, rec.y, TREE_COLUMN_PACE, decayState);
-    }
-    knownLeafDrainCursor = start + walked;
+    });
+    knownLeafDrainCursor = nextCursor;
 }
 
 /**
@@ -828,21 +836,25 @@ function drainKnownLeafSources() {
  * @param {{ left: number }} decayState
  * @returns {number}
  */
-function processCanopyColumn(dim, x, z, hitY, budget, decayState) {
+function processCanopyColumn(dim, x, z, hitY, budget, decayState, columnRec = null) {
     if (budget <= 0) return 0;
     let converted = 0;
-    const { yLo, yHi } = expandTreeColumnY(dim, x, z, hitY, isTreeColumnId);
+    const { yLo, yHi } = resolveTreeColumnY(dim, x, z, hitY, isTreeColumnId, columnRec);
     const hitBlock = getColumnBlock(dim, x, hitY, z);
     if (hitBlock && isInfectedLeafId(hitBlock.typeId)) {
         processInfectedLeafFront(hitBlock, { skipSpread: true });
     }
+    const dustCap = getOnlinePlayerCount() >= 2 ? TREE_DUST_COLUMN_CAP_MP : TREE_DUST_COLUMN_CAP;
     let dusted = 0;
-    for (let y = yLo; y <= yHi && dusted < TREE_DUST_COLUMN_CAP; y++) {
+    for (let y = yLo; y <= yHi && dusted < dustCap; y++) {
         const block = getColumnBlock(dim, x, y, z);
         if (!block || !isInfectedLeafId(block.typeId)) continue;
         if (hitBlock && y === hitY) continue;
         if (getLeafDust(block) >= LEAF_DUST_MAX) continue;
-        if (advanceLeafDust(block)) dusted++;
+        if (advanceLeafDust(block)) {
+            dusted++;
+            invalidateTreeColumnCache(columnRec);
+        }
     }
     const dir = inferTreeClimbDir(dim, x, z, yLo, yHi);
     const pace = Math.min(TREE_COLUMN_PACE, budget);
@@ -855,11 +867,19 @@ function processCanopyColumn(dim, x, z, hitY, budget, decayState) {
         if (!block) continue;
         const id = block.typeId;
         if (isConvertibleVanillaLeaf(id) && leafTouchesInfection(block)) {
-            if (convertLeafToInfected(block, { convertOnly: true })) converted++;
+            if (convertLeafToInfected(block, { convertOnly: true })) {
+                converted++;
+                invalidateTreeColumnCache(columnRec);
+            }
             continue;
         }
         if (isConvertibleVanillaWood(id) && leafTouchesInfection(block)) {
-            if (convertWoodToInfected(block, { convertOnly: true })) converted++;
+            const slowMushroom = getMushroomWoodConvertMult(id, currentWorldDay()) < 1;
+            if (convertWoodToInfected(block, { convertOnly: true })) {
+                converted++;
+                invalidateTreeColumnCache(columnRec);
+            }
+            if (slowMushroom) break;
         }
     }
     return converted;
@@ -873,6 +893,10 @@ function scanAroundPlayerForLeafFront(player) {
     if (!player?.isValid) return;
     const dim = player.dimension;
     if (dim.id !== "minecraft:overworld" && dim.id !== "minecraft:nether") return;
+    if (dim.id === "minecraft:nether") {
+        markNetherBreach(dim.id);
+        if (!isNetherInfectionOpen()) return;
+    }
     const day = currentWorldDay();
     if (getLeafNeighborSpreadChance(day) <= 0 && getLeafSnowConvertChance(day) <= 0) return;
     const loc = player.location;
@@ -996,6 +1020,7 @@ function scanAroundPlayerForSnowOnLeaves(player) {
     if (!player?.isValid) return;
     const dim = player.dimension;
     if (dim.id !== "minecraft:overworld" && dim.id !== "minecraft:nether") return;
+    if (dim.id === "minecraft:nether" && !isNetherInfectionOpen()) return;
     const day = currentWorldDay();
     if (getLeafSnowConvertChance(day) <= 0) return;
     const loc = player.location;
@@ -1104,6 +1129,13 @@ export function initializeLeafInfectionWatch() {
     snowScanStarted = true;
     registerInfectLeavesAround(tryInfectLeavesAround);
     registerInfectImmediateLeafFaces(infectImmediateVanillaFaces);
+    registerVineSpread((block) => {
+        try {
+            tryInfectLeavesAround(block);
+        } catch {
+            /* vine leaf hop optional */
+        }
+    });
     system.runInterval(() => {
         try {
             if (!leafInfectionEnabled()) return;

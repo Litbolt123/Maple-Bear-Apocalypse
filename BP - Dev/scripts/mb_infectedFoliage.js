@@ -76,7 +76,7 @@ export const FOLIAGE_SPECIES = [
         "kind": "cross",
         "sound": "grass",
         "walkable": true,
-        "worldgenWeight": 2
+        "worldgenWeight": 0
     },
     {
         "id": "red_mushroom",
@@ -87,7 +87,7 @@ export const FOLIAGE_SPECIES = [
         "kind": "cross",
         "sound": "grass",
         "walkable": true,
-        "worldgenWeight": 1
+        "worldgenWeight": 0
     },
     {
         "id": "red_shrub",
@@ -112,6 +112,17 @@ export const FOLIAGE_SPECIES = [
         "worldgenWeight": 3
     },
     {
+        "id": "wildflowers",
+        "title": "Wildflowers",
+        "vanilla": [
+            "minecraft:wildflowers"
+        ],
+        "kind": "litter",
+        "sound": "grass",
+        "walkable": true,
+        "worldgenWeight": 0
+    },
+    {
         "id": "vine",
         "title": "Vines",
         "vanilla": [
@@ -120,39 +131,6 @@ export const FOLIAGE_SPECIES = [
         "kind": "vine",
         "sound": "grass",
         "walkable": true,
-        "worldgenWeight": 0
-    },
-    {
-        "id": "brown_mushroom_block",
-        "title": "Brown Mushroom Block",
-        "vanilla": [
-            "minecraft:brown_mushroom_block"
-        ],
-        "kind": "cube",
-        "sound": "wood",
-        "walkable": false,
-        "worldgenWeight": 0
-    },
-    {
-        "id": "red_mushroom_block",
-        "title": "Red Mushroom Block",
-        "vanilla": [
-            "minecraft:red_mushroom_block"
-        ],
-        "kind": "cube",
-        "sound": "wood",
-        "walkable": false,
-        "worldgenWeight": 0
-    },
-    {
-        "id": "mushroom_stem",
-        "title": "Mushroom Stem",
-        "vanilla": [
-            "minecraft:mushroom_stem"
-        ],
-        "kind": "cube",
-        "sound": "wood",
-        "walkable": false,
         "worldgenWeight": 0
     },
     {
@@ -238,7 +216,276 @@ export const FOLIAGE_SPECIES = [
         "walkable": true,
         "nether": true,
         "worldgenWeight": 0
-    }
+    },
+    {
+        "id": "dandelion",
+        "title": "Dandelion",
+        "vanilla": [
+            "minecraft:dandelion"
+        ],
+        "kind": "cross",
+        "sound": "grass",
+        "walkable": true,
+        "worldgenWeight": 0
+    },
+    {
+        "id": "poppy",
+        "title": "Poppy",
+        "vanilla": [
+            "minecraft:poppy"
+        ],
+        "kind": "cross",
+        "sound": "grass",
+        "walkable": true,
+        "worldgenWeight": 0
+    },
+    {
+        "id": "blue_orchid",
+        "title": "Blue Orchid",
+        "vanilla": [
+            "minecraft:blue_orchid"
+        ],
+        "kind": "cross",
+        "sound": "grass",
+        "walkable": true,
+        "worldgenWeight": 0
+    },
+    {
+        "id": "allium",
+        "title": "Allium",
+        "vanilla": [
+            "minecraft:allium"
+        ],
+        "kind": "cross",
+        "sound": "grass",
+        "walkable": true,
+        "worldgenWeight": 0
+    },
+    {
+        "id": "azure_bluet",
+        "title": "Azure Bluet",
+        "vanilla": [
+            "minecraft:azure_bluet"
+        ],
+        "kind": "cross",
+        "sound": "grass",
+        "walkable": true,
+        "worldgenWeight": 0
+    },
+    {
+        "id": "red_tulip",
+        "title": "Red Tulip",
+        "vanilla": [
+            "minecraft:red_tulip"
+        ],
+        "kind": "cross",
+        "sound": "grass",
+        "walkable": true,
+        "worldgenWeight": 0
+    },
+    {
+        "id": "orange_tulip",
+        "title": "Orange Tulip",
+        "vanilla": [
+            "minecraft:orange_tulip"
+        ],
+        "kind": "cross",
+        "sound": "grass",
+        "walkable": true,
+        "worldgenWeight": 0
+    },
+    {
+        "id": "white_tulip",
+        "title": "White Tulip",
+        "vanilla": [
+            "minecraft:white_tulip"
+        ],
+        "kind": "cross",
+        "sound": "grass",
+        "walkable": true,
+        "worldgenWeight": 0
+    },
+    {
+        "id": "pink_tulip",
+        "title": "Pink Tulip",
+        "vanilla": [
+            "minecraft:pink_tulip"
+        ],
+        "kind": "cross",
+        "sound": "grass",
+        "walkable": true,
+        "worldgenWeight": 0
+    },
+    {
+        "id": "oxeye_daisy",
+        "title": "Oxeye Daisy",
+        "vanilla": [
+            "minecraft:oxeye_daisy"
+        ],
+        "kind": "cross",
+        "sound": "grass",
+        "walkable": true,
+        "worldgenWeight": 0
+    },
+    {
+        "id": "cornflower",
+        "title": "Cornflower",
+        "vanilla": [
+            "minecraft:cornflower"
+        ],
+        "kind": "cross",
+        "sound": "grass",
+        "walkable": true,
+        "worldgenWeight": 0
+    },
+    {
+        "id": "lily_of_the_valley",
+        "title": "Lily of the Valley",
+        "vanilla": [
+            "minecraft:lily_of_the_valley"
+        ],
+        "kind": "cross",
+        "sound": "grass",
+        "walkable": true,
+        "worldgenWeight": 0
+    },
+    {
+        "id": "wither_rose",
+        "title": "Wither Rose",
+        "vanilla": [
+            "minecraft:wither_rose"
+        ],
+        "kind": "cross",
+        "sound": "grass",
+        "walkable": true,
+        "worldgenWeight": 0
+    },
+    {
+        "id": "torchflower",
+        "title": "Torchflower",
+        "vanilla": [
+            "minecraft:torchflower"
+        ],
+        "kind": "cross",
+        "sound": "grass",
+        "walkable": true,
+        "worldgenWeight": 0
+    },
+    {
+        "id": "open_eyeblossom",
+        "title": "Open Eyeblossom",
+        "vanilla": [
+            "minecraft:open_eyeblossom"
+        ],
+        "kind": "cross",
+        "sound": "grass",
+        "walkable": true,
+        "worldgenWeight": 0
+    },
+    {
+        "id": "closed_eyeblossom",
+        "title": "Closed Eyeblossom",
+        "vanilla": [
+            "minecraft:closed_eyeblossom"
+        ],
+        "kind": "cross",
+        "sound": "grass",
+        "walkable": true,
+        "worldgenWeight": 0
+    },
+    {
+        "id": "cactus_flower",
+        "title": "Cactus Flower",
+        "vanilla": [
+            "minecraft:cactus_flower"
+        ],
+        "kind": "cross",
+        "sound": "grass",
+        "walkable": true,
+        "worldgenWeight": 0
+    },
+    {
+        "id": "sunflower",
+        "title": "Sunflower",
+        "vanilla": [
+            "minecraft:sunflower"
+        ],
+        "kind": "cross",
+        "sound": "grass",
+        "walkable": true,
+        "worldgenWeight": 0,
+        "tall": true
+    },
+    {
+        "id": "lilac",
+        "title": "Lilac",
+        "vanilla": [
+            "minecraft:lilac"
+        ],
+        "kind": "cross",
+        "sound": "grass",
+        "walkable": true,
+        "worldgenWeight": 0,
+        "tall": true
+    },
+    {
+        "id": "rose_bush",
+        "title": "Rose Bush",
+        "vanilla": [
+            "minecraft:rose_bush"
+        ],
+        "kind": "cross",
+        "sound": "grass",
+        "walkable": true,
+        "worldgenWeight": 0,
+        "tall": true
+    },
+    {
+        "id": "peony",
+        "title": "Peony",
+        "vanilla": [
+            "minecraft:peony"
+        ],
+        "kind": "cross",
+        "sound": "grass",
+        "walkable": true,
+        "worldgenWeight": 0,
+        "tall": true
+    },
+    {
+        "id": "pitcher_plant",
+        "title": "Pitcher Plant",
+        "vanilla": [
+            "minecraft:pitcher_plant"
+        ],
+        "kind": "cross",
+        "sound": "grass",
+        "walkable": true,
+        "worldgenWeight": 0,
+        "tall": true
+    },
+    {
+        "id": "pink_petals",
+        "title": "Pink Petals",
+        "vanilla": [
+            "minecraft:pink_petals"
+        ],
+        "kind": "litter",
+        "sound": "grass",
+        "walkable": true,
+        "worldgenWeight": 0
+    },
+    {
+        "id": "bush",
+        "title": "Bush",
+        "vanilla": [
+            "minecraft:bush"
+        ],
+        "kind": "cross",
+        "sound": "grass",
+        "walkable": true,
+        "worldgenWeight": 0
+    },
 ];
 
 export const ALL_INFECTED_FOLIAGE_IDS = [];

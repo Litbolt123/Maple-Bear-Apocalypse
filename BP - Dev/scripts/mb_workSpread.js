@@ -1012,14 +1012,23 @@ export function spreadPlayersForWork(players, category, forceRoundRobin = false)
     return picked ? [picked] : [];
 }
 
-const VEGETATION_CLUSTER_BLOCKS = 32;
+/** Co-op / drain pocket size — same cell shares one budget. */
+export const VEGETATION_CLUSTER_BLOCKS = 32;
+
+/** Active player pockets per 8t drain poll when 2+ players. */
+const DRAIN_POCKETS_PER_POLL = 2;
+
+/** Ready sources outside every player cell still get a few visits per poll. */
+export const DRAIN_DISTANT_VISITS_MP = 2;
+
+let drainPocketRotate = 0;
 
 /**
  * Co-op players in the same 32-block cell share one vegetation scan.
  * @param {import("@minecraft/server").Player[]} players
  * @returns {import("@minecraft/server").Player[]}
  */
-function clusterPlayersByCell(players, cellSize = VEGETATION_CLUSTER_BLOCKS) {
+export function clusterPlayersByCell(players, cellSize = VEGETATION_CLUSTER_BLOCKS) {
     const seen = new Set();
     const out = [];
     for (const p of players) {
@@ -1053,6 +1062,177 @@ export function spreadPlayersForVegetationWork(players, category = "leaf_infecti
     const picked = clustered[i % clustered.length];
     playerRotate.set(category, (i + 1) % clustered.length);
     return picked ? [picked] : [];
+}
+
+/** @typedef {{ dimId: string, cx: number, cy: number, cz: number }} DrainPocketCell */
+
+function collectDrainPocketCellsFromPlayers() {
+    /** @type {DrainPocketCell[]} */
+    const out = [];
+    const seen = new Set();
+    try {
+        for (const p of world.getAllPlayers()) {
+            if (!p?.isValid) continue;
+            const loc = p.location;
+            if (!loc) continue;
+            const dimId = p.dimension?.id ?? "";
+            const cx = Math.floor(loc.x / VEGETATION_CLUSTER_BLOCKS);
+            const cy = Math.floor(loc.y / VEGETATION_CLUSTER_BLOCKS);
+            const cz = Math.floor(loc.z / VEGETATION_CLUSTER_BLOCKS);
+            const key = `${dimId}:${cx}:${cy}:${cz}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            out.push({ dimId, cx, cy, cz });
+        }
+    } catch {
+        /* ignore */
+    }
+    return out;
+}
+
+/** Every 32-block player pocket (2+ players). Empty when solo. */
+export function getAllPlayerDrainPocketCells() {
+    if (!isMultiplayerSession()) return [];
+    return collectDrainPocketCellsFromPlayers();
+}
+
+/**
+ * Up to maxPockets cells for this drain poll. Extra forests wait for the next poll.
+ * @param {number} [maxPockets]
+ * @returns {DrainPocketCell[]}
+ */
+export function getActiveDrainPocketsForPoll(maxPockets = DRAIN_POCKETS_PER_POLL) {
+    const all = getAllPlayerDrainPocketCells();
+    if (all.length === 0) return [];
+    if (all.length <= maxPockets) return all;
+    const start = drainPocketRotate % all.length;
+    const picked = [];
+    for (let i = 0; i < maxPockets; i++) {
+        picked.push(all[(start + i) % all.length]);
+    }
+    drainPocketRotate = (start + maxPockets) % all.length;
+    return picked;
+}
+
+/** @param {{ dimId: string, x: number, y: number, z: number }} rec */
+export function drainCellForSource(rec) {
+    return {
+        dimId: rec.dimId,
+        cx: Math.floor(rec.x / VEGETATION_CLUSTER_BLOCKS),
+        cy: Math.floor(rec.y / VEGETATION_CLUSTER_BLOCKS),
+        cz: Math.floor(rec.z / VEGETATION_CLUSTER_BLOCKS)
+    };
+}
+
+function drainPocketCellKey(cell) {
+    return `${cell.dimId}:${cell.cx}:${cell.cy}:${cell.cz}`;
+}
+
+/** @param {{ dimId: string, x: number, y: number, z: number }} rec */
+export function sourceInDrainPocketCell(rec, pocket) {
+    const c = drainCellForSource(rec);
+    return c.dimId === pocket.dimId && c.cx === pocket.cx && c.cy === pocket.cy && c.cz === pocket.cz;
+}
+
+/** @param {{ dimId: string, x: number, y: number, z: number }} rec */
+export function sourceNearAnyPlayerDrainPocket(rec, allPockets) {
+    for (const pocket of allPockets) {
+        if (sourceInDrainPocketCell(rec, pocket)) return true;
+    }
+    return false;
+}
+
+/**
+ * Round-robin known-source drains. Cooldown sources do not consume a visit.
+ * Solo: soloVisitCap ready sources. MP: mpPerPocketVisitCap per active pocket
+ * plus distantVisitCap for sources outside every player cell.
+ * @param {object} opts
+ * @param {string[]} opts.keys
+ * @param {number} opts.cursor
+ * @param {number} opts.soloVisitCap
+ * @param {number} opts.mpPerPocketVisitCap
+ * @param {(key: string) => { lastTry?: number } | undefined} opts.getRecord
+ * @param {(rec: { lastTry?: number }, now: number) => boolean} opts.isOnCooldown
+ * @param {(key: string, rec: object) => boolean} opts.processReady return false to stop early
+ * @param {number} [opts.distantVisitCap]
+ * @param {() => boolean} [opts.shouldStop]
+ * @returns {{ nextCursor: number }}
+ */
+export function drainKnownSourcesRoundRobin(opts) {
+    const {
+        keys,
+        cursor,
+        soloVisitCap,
+        mpPerPocketVisitCap,
+        getRecord,
+        isOnCooldown,
+        processReady,
+        distantVisitCap = DRAIN_DISTANT_VISITS_MP,
+        shouldStop
+    } = opts;
+    if (!keys.length) return { nextCursor: cursor };
+
+    const now = system.currentTick;
+    const start = ((cursor % keys.length) + keys.length) % keys.length;
+    let scanned = 0;
+
+    if (!isMultiplayerSession()) {
+        let readyServed = 0;
+        while (readyServed < soloVisitCap && scanned < keys.length) {
+            if (shouldStop?.()) break;
+            const key = keys[(start + scanned) % keys.length];
+            scanned++;
+            const rec = getRecord(key);
+            if (!rec || isOnCooldown(rec, now)) continue;
+            readyServed++;
+            if (!processReady(key, rec)) break;
+        }
+        return { nextCursor: (start + scanned) % keys.length };
+    }
+
+    const activePockets = getActiveDrainPocketsForPoll();
+    const allPockets = getAllPlayerDrainPocketCells();
+    const activeKeys = new Set(activePockets.map(drainPocketCellKey));
+    /** @type {Map<string, number>} */
+    const pocketServed = new Map();
+    for (const pocket of activePockets) {
+        pocketServed.set(drainPocketCellKey(pocket), 0);
+    }
+    let distantServed = 0;
+
+    const pocketFull = (pk) => (pocketServed.get(pk) ?? 0) >= mpPerPocketVisitCap;
+    const allActiveFull = () => {
+        for (const pk of activeKeys) {
+            if (!pocketFull(pk)) return false;
+        }
+        return activeKeys.size > 0;
+    };
+
+    while (scanned < keys.length) {
+        if (shouldStop?.()) break;
+        if (allActiveFull() && distantServed >= distantVisitCap) break;
+
+        const key = keys[(start + scanned) % keys.length];
+        scanned++;
+        const rec = getRecord(key);
+        if (!rec || isOnCooldown(rec, now)) continue;
+
+        const cellKey = drainPocketCellKey(drainCellForSource(rec));
+        let accept = false;
+        if (sourceNearAnyPlayerDrainPocket(rec, allPockets)) {
+            if (activeKeys.has(cellKey) && !pocketFull(cellKey)) {
+                pocketServed.set(cellKey, (pocketServed.get(cellKey) ?? 0) + 1);
+                accept = true;
+            }
+        } else if (distantServed < distantVisitCap) {
+            distantServed++;
+            accept = true;
+        }
+        if (!accept) continue;
+        if (!processReady(key, rec)) break;
+    }
+
+    return { nextCursor: (start + scanned) % keys.length };
 }
 
 /** Mob cache TTL when a full refresh completed. */

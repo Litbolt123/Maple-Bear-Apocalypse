@@ -15,7 +15,8 @@ import {
     INFECTION_DIRECTOR_DAY_SURGE_MAX,
     INFECTION_DIRECTOR_LOAD_ESCALATE,
     INFECTION_DIRECTOR_CHANCE_MULT,
-    INFECTION_DIRECTOR_ATTEMPT_BONUS
+    INFECTION_DIRECTOR_ATTEMPT_BONUS,
+    netherSpreadMultiplier
 } from "./mb_balance.js";
 import { getStormReservoirSpawnChanceMult } from "./mb_snowStorm.js";
 
@@ -70,7 +71,7 @@ export function getInfectionDirectorSpawnModifiers(day) {
  * @param {import("@minecraft/server").Dimension} [dimension]
  * @param {number} [x]
  * @param {number} [z]
- * @returns {number} multiplier >= 1
+ * @returns {number} multiplier; 0 in the nether until a player has entered, then above 1
  */
 export function getWorldInfectionSpreadMult(day, dimension, x, z) {
     const stage = getInfectionDirectorBaseStageFromDay(day);
@@ -82,7 +83,9 @@ export function getWorldInfectionSpreadMult(day, dimension, x, z) {
         stormMult = 1;
     }
     if (!Number.isFinite(stormMult) || stormMult < 1) stormMult = 1;
-    return dirMult * stormMult;
+    const netherMult = netherSpreadMultiplier(dimension?.id);
+    if (netherMult <= 0) return 0;
+    return dirMult * stormMult * netherMult;
 }
 
 /**

@@ -12,11 +12,11 @@
 import { BlockPermutation, system, world } from "@minecraft/server";
 import { isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
 import { getCurrentDay } from "./mb_dayTracker.js";
-import { getWoodNeighborSpreadChance } from "./mb_balance.js";
+import { getMushroomWoodConvertMult, getWoodNeighborSpreadChance, markNetherBreach, isNetherInfectionOpen } from "./mb_balance.js";
 import { scaleWorldInfectionChance } from "./mb_infectionDirector.js";
 import { isInfectionSpreadBlockedAt } from "./mb_spawnController.js";
-import { getOnlinePlayerCount } from "./mb_workSpread.js";
-import { isDustedGroundId } from "./mb_grassInfection.js";
+import { drainKnownSourcesRoundRobin, getOnlinePlayerCount } from "./mb_workSpread.js";
+import { isDustedGroundId, tryInfectGroundBesideWood, woodStillTouchesGreenGround } from "./mb_grassInfection.js";
 import {
     LEAF_DUST_MAX,
     infectedWoodIdForVanilla,
@@ -44,6 +44,8 @@ const KNOWN_WOOD_VISIT_SOLO = 8;
 const KNOWN_WOOD_VISIT_MP = 4;
 const KNOWN_WOOD_STEPS_SOLO = 10;
 const KNOWN_WOOD_STEPS_MP = 5;
+/** Reuse trunk height between drains — remeasure after a convert. */
+export const COLUMN_CACHE_TTL_TICKS = 40;
 
 /** @type {null | ((block: import("@minecraft/server").Block) => boolean)} */
 let infectLeavesAroundFn = null;
@@ -135,27 +137,46 @@ function getWoodDust(block) {
     return 0;
 }
 
+function mushroomBits(block) {
+    try {
+        const vanilla = Number(block.permutation.getState("huge_mushroom_bits"));
+        if (vanilla >= 0 && vanilla <= 15) return vanilla | 0;
+    } catch {
+        /* not a cap or stem */
+    }
+    try {
+        const stored = Number(block.permutation.getState("mb:bits"));
+        if (stored >= 0 && stored <= 15) return stored | 0;
+    } catch {
+        /* log or wart */
+    }
+    return null;
+}
+
 function setInfectedWood(block, typeId, dust, axis) {
     const d = Math.max(0, Math.min(LEAF_DUST_MAX, dust | 0));
     const ax = axis === "x" || axis === "z" ? axis : "y";
-    try {
-        block.setPermutation(BlockPermutation.resolve(typeId, {
-            "mb:dust": d,
-            "mb:axis": ax
-        }));
-        return true;
-    } catch {
+    const bits = mushroomBits(block);
+    const attempts = [];
+    if (bits != null) {
+        attempts.push({ "mb:dust": d, "mb:axis": ax, "mb:bits": bits });
+        attempts.push({ "mb:dust": d, "mb:bits": bits });
+    }
+    attempts.push({ "mb:dust": d, "mb:axis": ax });
+    attempts.push({ "mb:dust": d });
+    for (const states of attempts) {
         try {
-            block.setPermutation(BlockPermutation.resolve(typeId, { "mb:dust": d }));
+            block.setPermutation(BlockPermutation.resolve(typeId, states));
             return true;
         } catch {
-            try {
-                block.setType(typeId);
-                return true;
-            } catch {
-                return false;
-            }
+            /* this block does not have every state */
         }
+    }
+    try {
+        block.setType(typeId);
+        return true;
+    } catch {
+        return false;
     }
 }
 
@@ -225,9 +246,27 @@ function notifyWoodReachedMaxDust(block) {
  * @param {import("@minecraft/server").Block} block
  * @param {{ convertOnly?: boolean, forceSnow?: boolean, forceDust?: number }} [opts]
  */
+function mushroomWoodConvertAllowed(block, opts) {
+    if (opts.forceSnow || Number.isFinite(opts.forceDust)) return true;
+    const day = currentWorldDay();
+    const mult = getMushroomWoodConvertMult(block.typeId, day);
+    if (mult >= 1) return true;
+    if (mult <= 0) return false;
+    const loc = block.location;
+    const chance = scaleWorldInfectionChance(
+        getWoodNeighborSpreadChance(day) * mult,
+        day,
+        block.dimension,
+        loc?.x,
+        loc?.z
+    );
+    return chance > 0 && Math.random() <= chance;
+}
+
 export function convertWoodToInfected(block, opts = {}) {
     if (!block?.isValid) return false;
     if (isInfectionSpreadBlockedAt(block)) return false;
+    if (!opts.categoryRolled && !mushroomWoodConvertAllowed(block, opts)) return false;
     const forced = opts.forceSnow
         ? LEAF_DUST_MAX
         : Number.isFinite(opts.forceDust)
@@ -349,6 +388,41 @@ export function expandTreeColumnY(dim, x, z, hitY, isColumnId) {
 }
 
 /**
+ * @param {import("@minecraft/server").Dimension} dim
+ * @param {number} x
+ * @param {number} z
+ * @param {number} hitY
+ * @param {(typeId: string) => boolean} isColumnId
+ * @param {{ colYLo?: number, colYHi?: number, colMeasuredTick?: number } | null} [rec]
+ */
+export function resolveTreeColumnY(dim, x, z, hitY, isColumnId, rec = null) {
+    const now = system.currentTick;
+    if (
+        rec
+        && rec.colYLo != null
+        && rec.colYHi != null
+        && now - (rec.colMeasuredTick ?? 0) < COLUMN_CACHE_TTL_TICKS
+    ) {
+        return { yLo: rec.colYLo, yHi: rec.colYHi };
+    }
+    const span = expandTreeColumnY(dim, x, z, hitY, isColumnId);
+    if (rec) {
+        rec.colYLo = span.yLo;
+        rec.colYHi = span.yHi;
+        rec.colMeasuredTick = now;
+    }
+    return span;
+}
+
+/** @param {{ colYLo?: number, colYHi?: number, colMeasuredTick?: number } | null} rec */
+export function invalidateTreeColumnCache(rec) {
+    if (!rec) return;
+    rec.colYLo = undefined;
+    rec.colYHi = undefined;
+    rec.colMeasuredTick = undefined;
+}
+
+/**
  * Ground / stump infection climbs up. Canopy / powder on the lid climbs down.
  * @param {import("@minecraft/server").Dimension} dim
  * @param {number} x
@@ -376,9 +450,9 @@ export function inferTreeClimbDir(dim, x, z, yLo, yHi) {
     return "down";
 }
 
-function processWoodColumn(dim, x, z, hitY, budget) {
+function processWoodColumn(dim, x, z, hitY, budget, columnRec = null) {
     if (budget <= 0) return 0;
-    const { yLo, yHi } = expandTreeColumnY(dim, x, z, hitY, isWoodColumnId);
+    const { yLo, yHi } = resolveTreeColumnY(dim, x, z, hitY, isWoodColumnId, columnRec);
     const dir = inferTreeClimbDir(dim, x, z, yLo, yHi);
     const pace = Math.min(TREE_COLUMN_PACE, budget);
     let converted = 0;
@@ -391,11 +465,17 @@ function processWoodColumn(dim, x, z, hitY, budget) {
         if (!block) continue;
         const id = block.typeId;
         if (isConvertibleVanillaWood(id) && woodTouchesInfection(block)) {
-            if (convertWoodToInfected(block, { convertOnly: true })) converted++;
+            const slowMushroom = getMushroomWoodConvertMult(id, currentWorldDay()) < 1;
+            if (convertWoodToInfected(block, { convertOnly: true })) {
+                converted++;
+                invalidateTreeColumnCache(columnRec);
+            }
+            if (slowMushroom) break;
             continue;
         }
         if (isConvertibleVanillaLeaf(id) && woodTouchesInfection(block) && infectLeavesAroundFn?.(block)) {
             converted++;
+            invalidateTreeColumnCache(columnRec);
         }
     }
     return converted;
@@ -408,55 +488,65 @@ function processWoodColumn(dim, x, z, hitY, budget) {
 export function drainKnownWoodSources() {
     if (!woodInfectionEnabled() || knownWoodSources.size === 0) return 0;
     const now = system.currentTick;
-    const mp = getOnlinePlayerCount() >= 2;
     const keys = Array.from(knownWoodSources.keys());
     if (keys.length === 0) return 0;
-    const start = ((knownWoodDrainCursor % keys.length) + keys.length) % keys.length;
-    const visitCap = Math.min(keys.length, mp ? KNOWN_WOOD_VISIT_MP : KNOWN_WOOD_VISIT_SOLO);
-    const stepCap = mp ? KNOWN_WOOD_STEPS_MP : KNOWN_WOOD_STEPS_SOLO;
+    const soloVisitCap = Math.min(keys.length, KNOWN_WOOD_VISIT_SOLO);
+    const mpPerPocketVisitCap = KNOWN_WOOD_VISIT_MP;
+    const stepCap = getOnlinePlayerCount() >= 2 ? KNOWN_WOOD_STEPS_MP : KNOWN_WOOD_STEPS_SOLO;
     const pacedColumns = new Set();
     let steps = 0;
-    let walked = 0;
-    for (; walked < visitCap && steps < stepCap; walked++) {
-        const key = keys[(start + walked) % keys.length];
-        const rec = knownWoodSources.get(key);
-        if (!rec) continue;
-        let dim;
-        try {
-            dim = world.getDimension(rec.dimId);
-        } catch {
-            knownWoodSources.delete(key);
-            continue;
+    const { nextCursor } = drainKnownSourcesRoundRobin({
+        keys,
+        cursor: knownWoodDrainCursor,
+        soloVisitCap,
+        mpPerPocketVisitCap,
+        getRecord: (key) => knownWoodSources.get(key),
+        isOnCooldown: (rec, tick) => tick - rec.lastTry < KNOWN_WOOD_RETRY_TICKS,
+        shouldStop: () => steps >= stepCap,
+        processReady: (key, rec) => {
+            rec.lastTry = now;
+            let dim;
+            try {
+                dim = world.getDimension(rec.dimId);
+            } catch {
+                knownWoodSources.delete(key);
+                return true;
+            }
+            const block = getBlockAt(dim, rec.x, rec.y, rec.z);
+            if (!block || (!isInfectedWoodId(block.typeId) && !isDustedGroundId(block.typeId))) {
+                knownWoodSources.delete(key);
+                return true;
+            }
+            if (isInfectedWoodId(block.typeId) && tryInfectGroundBesideWood(block)) steps++;
+            if (
+                isInfectedWoodId(block.typeId)
+                && getWoodDust(block) >= LEAF_DUST_MAX
+                && !woodHasUninfectedFace(block)
+                && !woodStillTouchesGreenGround(block)
+            ) {
+                knownWoodSources.delete(key);
+                return true;
+            }
+            if (now - rec.added > KNOWN_WOOD_MAX_AGE && !woodHasUninfectedFace(block)) {
+                knownWoodSources.delete(key);
+                return true;
+            }
+            if (isInfectedWoodId(block.typeId) && getWoodDust(block) < LEAF_DUST_MAX) {
+                convertWoodToInfected(block);
+            }
+            if (isInfectedWoodId(block.typeId) && getWoodDust(block) >= LEAF_DUST_MAX && woodHasUninfectedFace(block)) {
+                if (infectImmediateWoodFaces(block, 1, { horizontalOnly: true })) steps++;
+                infectImmediateLeafFacesFn?.(block, 1);
+            }
+            const colKey = `${rec.dimId}|${rec.x}|${rec.z}`;
+            if (pacedColumns.has(colKey)) return steps < stepCap;
+            pacedColumns.add(colKey);
+            const budget = Math.min(TREE_COLUMN_PACE, stepCap - steps);
+            steps += processWoodColumn(dim, rec.x, rec.z, rec.y, budget, rec);
+            return steps < stepCap;
         }
-        const block = getBlockAt(dim, rec.x, rec.y, rec.z);
-        if (!block || (!isInfectedWoodId(block.typeId) && !isDustedGroundId(block.typeId))) {
-            knownWoodSources.delete(key);
-            continue;
-        }
-        if (isInfectedWoodId(block.typeId) && getWoodDust(block) >= LEAF_DUST_MAX && !woodHasUninfectedFace(block)) {
-            knownWoodSources.delete(key);
-            continue;
-        }
-        if (now - rec.added > KNOWN_WOOD_MAX_AGE && !woodHasUninfectedFace(block)) {
-            knownWoodSources.delete(key);
-            continue;
-        }
-        if (now - rec.lastTry < KNOWN_WOOD_RETRY_TICKS) continue;
-        rec.lastTry = now;
-        if (isInfectedWoodId(block.typeId) && getWoodDust(block) < LEAF_DUST_MAX) {
-            convertWoodToInfected(block);
-        }
-        if (isInfectedWoodId(block.typeId) && getWoodDust(block) >= LEAF_DUST_MAX && woodHasUninfectedFace(block)) {
-            if (infectImmediateWoodFaces(block, 1, { horizontalOnly: true })) steps++;
-            infectImmediateLeafFacesFn?.(block, 1);
-        }
-        const colKey = `${rec.dimId}|${rec.x}|${rec.z}`;
-        if (pacedColumns.has(colKey)) continue;
-        pacedColumns.add(colKey);
-        const budget = Math.min(TREE_COLUMN_PACE, stepCap - steps);
-        steps += processWoodColumn(dim, rec.x, rec.z, rec.y, budget);
-    }
-    knownWoodDrainCursor = start + walked;
+    });
+    knownWoodDrainCursor = nextCursor;
     return steps;
 }
 
@@ -494,14 +584,16 @@ export function tryInfectWoodAround(source) {
     for (const [dx, dy, dz] of shuffleFaceOffsets()) {
         const n = getBlockAt(dim, loc.x + dx, loc.y + dy, loc.z + dz);
         if (!n) continue;
-        if (isConvertibleVanillaWood(n.typeId)) {
-            if (Math.random() > chance) continue;
-            if (convertWoodToInfected(n, { convertOnly: true })) return true;
-            continue;
-        }
-        if (isInfectedWoodId(n.typeId)) {
-            if (Math.random() > chance) continue;
-            if (convertWoodToInfected(n)) return true;
+        if (isConvertibleVanillaWood(n.typeId) || isInfectedWoodId(n.typeId)) {
+            const mult = getMushroomWoodConvertMult(n.typeId, day);
+            if (mult <= 0) continue;
+            if (Math.random() > chance * mult) continue;
+            const rolled = mult < 1 ? { categoryRolled: true } : {};
+            if (isConvertibleVanillaWood(n.typeId)) {
+                if (convertWoodToInfected(n, { convertOnly: true, ...rolled })) return true;
+            } else if (convertWoodToInfected(n, rolled)) {
+                return true;
+            }
         }
     }
     return false;
@@ -527,13 +619,16 @@ export function tryInfectWoodUnderSnow(snowBlock, opts = {}) {
         loc?.z
     );
     if (chance <= 0) return false;
-    if (!opts.force && Math.random() > chance) return false;
     const below = getBlockAt(snowBlock.dimension, loc.x, loc.y - 1, loc.z);
     if (!below) return false;
     if (!isConvertibleVanillaWood(below.typeId) && !isInfectedWoodId(below.typeId)) return false;
+    const mult = getMushroomWoodConvertMult(below.typeId, day);
+    if (mult <= 0) return false;
+    if (!opts.force && Math.random() > chance * mult) return false;
     return convertWoodToInfected(below, {
         convertOnly: opts.convertOnly,
-        forceSnow: opts.forceSnow
+        forceSnow: opts.forceSnow,
+        categoryRolled: mult < 1
     });
 }
 
@@ -546,6 +641,10 @@ export function scanAroundPlayerForWoodInfection(player) {
     if (!woodInfectionEnabled()) return;
     const dim = player.dimension;
     if (dim.id !== "minecraft:overworld" && dim.id !== "minecraft:nether") return;
+    if (dim.id === "minecraft:nether") {
+        markNetherBreach(dim.id);
+        if (!isNetherInfectionOpen()) return;
+    }
     const day = currentWorldDay();
     if (getWoodNeighborSpreadChance(day) <= 0) return;
     const loc = player.location;

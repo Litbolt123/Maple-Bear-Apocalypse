@@ -11,7 +11,7 @@ import { SUPPRESS_VILLAGERS_PROP } from "./mb_villagerSpawnPolicy.js";
 const SCHEMA_WORLD_KEY = "mb_addon_schema_version";
 
 /** Increment when you add a new migration block. */
-export const CURRENT_PROPERTY_SCHEMA = 3;
+export const CURRENT_PROPERTY_SCHEMA = 4;
 
 /**
  * Run after world/properties are loadable. Safe to call once per session (idempotent).
@@ -33,6 +33,11 @@ export function runWorldPropertyMigrations() {
 
         if (v < 3 && !INCLUDE_FULL_DEVELOPER_TOOLS) {
             // Beta.5 public: allow vanilla villages on worlds that previously defaulted suppress ON.
+            setWorldProperty(SUPPRESS_VILLAGERS_PROP, 0);
+        }
+
+        if (v < 4) {
+            // Dev worlds stored suppress ON. Vanilla villages are on for now in both packs.
             setWorldProperty(SUPPRESS_VILLAGERS_PROP, 0);
         }
 

@@ -11,7 +11,7 @@ import {
     PACK_DISPLAY_NAME_DEV
 } from "./mb_buildConfig.js";
 
-export const PLAYER_CHANGELOG_VERSION = "0.9.0-beta.5.10";
+export const PLAYER_CHANGELOG_VERSION = "0.9.0-beta.5.19";
 
 /** Human label for journal What's new title (not raw semver). */
 export function getPlayerChangelogDisplayLabel() {
@@ -37,11 +37,17 @@ export function getPlayerChangelogBody() {
         "",
         `§6${label}`,
         "§7Highlights:",
+        "§8• §7Creative nature groups: plants, flowers, leaves, wood, ground. Plant icons match the placed plant. Plants cannot be placed in water",
+        "§8• §7Tall flowers and tall grass load again. Dusty vines are one face; they are not ladders",
+        "§8• §7Ground plants break in water and cannot be waterlogged. Mushroom plants infect after day 25, as slow as mycelium",
+        "§8• §7Red and brown mushrooms, and mushroom blocks, do not infect. Mycelium infects much slower",
+        "§8• §7Dusty vines are one climbable face, like a ladder. Foliage item icons are white copies of the normal icons",
+        "§8• §7Dusty wildflowers keep short stems until they finish, then sink flat with no stems",
         "§8• §7Dusty grass plants spawn on the ground (not in the air in the trees)",
         "§8• §7Dusty firefly bushes do not grow in infected forests (vanilla ones by water still convert)",
         "§8• §7Podzol infects to dusty dirt for now. Coarse dirt stays clean.",
         "§8• §7Dusty vines look like vanilla vines with a white powder tint (not a cream box)",
-        "§8• §7Dusty plants: grass, ferns, mushrooms, vines, leaf litter — convert; forests grow those dusty plants (not firefly bushes)",
+        "§8• §7Dusty plants: grass, ferns, vines, leaf litter — convert; forests grow those dusty plants (not firefly bushes or mushrooms)",
         "§8• §7Dusty leaf litter stays brown leaf-shaped with powder on it",
         "§8• §7Dusty tree leaves keep climbing to the cream powder stage",
         "§8• §7Partly dusty leaves and logs can infect healthy neighbors; fully dusty ones check the six faces (no green holes left in the canopy)",

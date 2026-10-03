@@ -314,11 +314,14 @@ export function getGreeneryNeighborSpreadChance(day) {
  * Coarse dirt is the actual dirt+gravel craft — not this multiplier.
  */
 export const PODZOL_GROUND_SPREAD_MULT = 0.45;
-export const MYCELIUM_GROUND_SPREAD_MULT = 0.45;
+/** Mycelium, mushroom plants, mushroom blocks, and stems share this. */
+export const MUSHROOM_CATEGORY_SPREAD_MULT = 0.2;
+/** Mushroom plants, blocks, and stems stay vanilla until this day, then use the mushroom rate. */
+export const MUSHROOM_CATEGORY_MIN_DAY = 25;
+export const MYCELIUM_GROUND_SPREAD_MULT = MUSHROOM_CATEGORY_SPREAD_MULT;
 /** Extra slow for the whole biome (grass/dirt in giant taiga or mushroom fields). */
 export const RESISTANT_SOIL_BIOME_SPREAD_MULT = 0.55;
-/** Vanilla brown/red mushrooms resist convert more than grass. They do not purify. */
-export const MUSHROOM_PLANT_SPREAD_MULT = 0.4;
+export const MUSHROOM_PLANT_SPREAD_MULT = MUSHROOM_CATEGORY_SPREAD_MULT;
 
 const RESISTANT_SOIL_BIOME_IDS = new Set([
     "minecraft:mushroom_island",
@@ -338,6 +341,26 @@ const MUSHROOM_PLANT_IDS = new Set([
     "minecraft:red_mushroom"
 ]);
 
+const MUSHROOM_WOOD_IDS = new Set([
+    "minecraft:brown_mushroom_block",
+    "minecraft:red_mushroom_block",
+    "minecraft:mushroom_stem",
+    "mb:infected_brown_mushroom_block",
+    "mb:infected_red_mushroom_block",
+    "mb:infected_mushroom_stem"
+]);
+
+/**
+ * 0 before day 25, then {@link MUSHROOM_CATEGORY_SPREAD_MULT}. Other wood is 1.
+ * @param {string|undefined} typeId
+ * @param {number} [day]
+ */
+export function getMushroomWoodConvertMult(typeId, day) {
+    if (!MUSHROOM_WOOD_IDS.has(typeId)) return 1;
+    if (!Number.isFinite(day) || day < MUSHROOM_CATEGORY_MIN_DAY) return 0;
+    return MUSHROOM_CATEGORY_SPREAD_MULT;
+}
+
 /** @param {string|undefined} typeId */
 export function getGroundConvertChanceMult(typeId) {
     if (typeId === "minecraft:podzol") return PODZOL_GROUND_SPREAD_MULT;
@@ -356,10 +379,35 @@ export function getResistantSoilBiomeSpreadMult(biomeId) {
     return 1;
 }
 
-/** @param {string|undefined} typeId */
-export function getFoliageConvertChanceMult(typeId) {
-    if (MUSHROOM_PLANT_IDS.has(typeId)) return MUSHROOM_PLANT_SPREAD_MULT;
-    return 1;
+/** Once a player has been in the nether, infection can cross. It spreads faster there than in the overworld. */
+export const NETHER_SPREAD_MULT = 1.65;
+const NETHER_BREACH_KEY = "mb_nether_breach";
+
+export function markNetherBreach(dimensionId) {
+    if (dimensionId !== "minecraft:nether") return false;
+    if (getWorldProperty(NETHER_BREACH_KEY) === 1) return true;
+    setWorldProperty(NETHER_BREACH_KEY, 1);
+    return true;
+}
+
+export function isNetherInfectionOpen() {
+    return getWorldProperty(NETHER_BREACH_KEY) === 1;
+}
+
+/** 0 in the nether until the breach, then {@link NETHER_SPREAD_MULT}. Overworld is 1. */
+export function netherSpreadMultiplier(dimensionId) {
+    if (dimensionId !== "minecraft:nether") return 1;
+    return isNetherInfectionOpen() ? NETHER_SPREAD_MULT : 0;
+}
+
+/**
+ * @param {string|undefined} typeId
+ * @param {number} [day]
+ */
+export function getFoliageConvertChanceMult(typeId, day) {
+    if (!MUSHROOM_PLANT_IDS.has(typeId)) return 1;
+    if (!Number.isFinite(day) || day < MUSHROOM_CATEGORY_MIN_DAY) return 0;
+    return MUSHROOM_CATEGORY_SPREAD_MULT;
 }
 
 // --- Infection evolution: localized storm reservoirs (Phase 2, mb_snowStorm getStormReservoirSpawnChanceMult + mb_spawnController) ---

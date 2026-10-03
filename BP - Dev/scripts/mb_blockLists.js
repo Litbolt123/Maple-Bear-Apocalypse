@@ -25,8 +25,8 @@ export const SNOW_REPLACEABLE_BLOCKS = new Set([
     "minecraft:big_dripleaf", "minecraft:big_dripleaf_stem", "minecraft:spore_blossom", "minecraft:glow_lichen", "minecraft:moss_carpet",
     "minecraft:vine", "minecraft:weeping_vines", "minecraft:twisting_vines", "minecraft:cave_vines",
     "minecraft:torchflower",     "minecraft:pitcher_plant", "minecraft:pitcher_crop",
-    "minecraft:leaf_litter", "minecraft:red_shrub", "minecraft:shelf_mushroom", "minecraft:brown_mushroom",
-    "minecraft:red_mushroom", "minecraft:firefly_bush",
+    "minecraft:leaf_litter", "minecraft:wildflowers", "minecraft:red_shrub", "minecraft:shelf_mushroom", "minecraft:brown_mushroom",
+    "minecraft:red_mushroom", "minecraft:firefly_bush", "minecraft:bush", "minecraft:pink_petals", "minecraft:open_eyeblossom", "minecraft:closed_eyeblossom", "minecraft:cactus_flower", "minecraft:wither_rose",
     ...ALL_INFECTED_FOLIAGE_WALKABLE_IDS
 ]);
 
@@ -88,8 +88,8 @@ export const STORM_PARTICLE_PASS_THROUGH = new Set([
     "minecraft:glow_lichen", "minecraft:moss_carpet", "minecraft:spore_blossom",
     "minecraft:torchflower", "minecraft:pitcher_plant", "minecraft:pitcher_crop",
     "minecraft:small_dripleaf", "minecraft:big_dripleaf", "minecraft:big_dripleaf_stem",
-    "minecraft:leaf_litter", "minecraft:red_shrub", "minecraft:shelf_mushroom", "minecraft:brown_mushroom",
-    "minecraft:red_mushroom", "minecraft:firefly_bush",
+    "minecraft:leaf_litter", "minecraft:wildflowers", "minecraft:red_shrub", "minecraft:shelf_mushroom", "minecraft:brown_mushroom",
+    "minecraft:red_mushroom", "minecraft:firefly_bush", "minecraft:bush", "minecraft:pink_petals", "minecraft:open_eyeblossom", "minecraft:closed_eyeblossom", "minecraft:cactus_flower", "minecraft:wither_rose",
     "minecraft:nether_sprouts", "minecraft:warped_roots", "minecraft:crimson_roots",
     "minecraft:warped_fungus", "minecraft:crimson_fungus",
     ...ALL_INFECTED_FOLIAGE_WALKABLE_IDS,
@@ -126,8 +126,8 @@ export const STORM_DESTRUCT_BLOCKS = new Set([
     "minecraft:peony", "minecraft:dead_bush", "minecraft:vine", "minecraft:torchflower", "minecraft:pitcher_plant",
     "minecraft:pitcher_crop", "minecraft:small_dripleaf", "minecraft:big_dripleaf", "minecraft:big_dripleaf_stem",
     "minecraft:glow_lichen", "minecraft:moss_carpet", "minecraft:spore_blossom",
-    "minecraft:leaf_litter", "minecraft:red_shrub", "minecraft:shelf_mushroom", "minecraft:brown_mushroom",
-    "minecraft:red_mushroom", "minecraft:firefly_bush",
+    "minecraft:leaf_litter", "minecraft:wildflowers", "minecraft:red_shrub", "minecraft:shelf_mushroom", "minecraft:brown_mushroom",
+    "minecraft:red_mushroom", "minecraft:firefly_bush", "minecraft:bush", "minecraft:pink_petals", "minecraft:open_eyeblossom", "minecraft:closed_eyeblossom", "minecraft:cactus_flower", "minecraft:wither_rose",
     "minecraft:nether_sprouts", "minecraft:warped_roots", "minecraft:crimson_roots",
     "minecraft:warped_fungus", "minecraft:crimson_fungus",
     ...ALL_INFECTED_FOLIAGE_IDS,

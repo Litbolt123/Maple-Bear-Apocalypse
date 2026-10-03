@@ -3332,9 +3332,10 @@ function getMaxSpawnsPerTick(day, totalPlayerCount = 1, scanYieldBalanceMult = 1
         baseLimit = Math.min(MAX_SPAWNS_PER_TICK_PER_PLAYER_MAX, 8 + Math.floor((day - 20) / 5));
     }
     
-    // Reduce per-player limit when multiple players are present
-    // This prevents total entity count from exploding (steeper for 4–8 players)
-    if (totalPlayerCount > 1) {
+    // Day 2–3 only tiny bears exist. A pair standing together was cut to 1 slot
+    // (floor(2 * 0.62)) while solo kept 2, so the opening wave felt missing.
+    const earlyTinyWave = day >= 2 && day < 4;
+    if (totalPlayerCount > 1 && !earlyTinyWave) {
         let multiplier;
         if (totalPlayerCount === 2) multiplier = 0.62;
         else if (totalPlayerCount === 3) multiplier = 0.44;
@@ -3344,6 +3345,14 @@ function getMaxSpawnsPerTick(day, totalPlayerCount = 1, scanYieldBalanceMult = 1
         else if (totalPlayerCount === 7) multiplier = 0.21;
         else multiplier = 0.18;
         baseLimit = Math.max(1, Math.floor(baseLimit * multiplier));
+    } else if (earlyTinyWave && totalPlayerCount >= 3) {
+        baseLimit = Math.max(2, Math.floor(baseLimit * 0.85));
+    }
+
+    if (earlyTinyWave) {
+        const diff = getAddonDifficultyState()?.spawnMultiplier;
+        const m = Number.isFinite(diff) && diff > 0 ? diff : 1;
+        baseLimit = Math.max(1, Math.round(baseLimit * m));
     }
 
     // Fewer block scans per wave → allow more spawns per tick (capped) so pressure stays fair
@@ -3992,6 +4001,30 @@ function restoreVanillaLeaf(block, vanillaId) {
 }
 
 function restoreVanillaWood(block, vanillaId) {
+    let bits = null;
+    try {
+        const stored = Number(block.permutation.getState("mb:bits"));
+        if (stored >= 0 && stored <= 15) bits = stored | 0;
+    } catch {
+        /* log or wart */
+    }
+    if (bits != null && (
+        vanillaId === "minecraft:brown_mushroom_block"
+        || vanillaId === "minecraft:red_mushroom_block"
+        || vanillaId === "minecraft:mushroom_stem"
+    )) {
+        try {
+            block.setPermutation(BlockPermutation.resolve(vanillaId, { huge_mushroom_bits: bits }));
+            return true;
+        } catch {
+            try {
+                block.setType(vanillaId);
+                return true;
+            } catch {
+                return false;
+            }
+        }
+    }
     let axis = "y";
     try {
         const a = block.permutation.getState("mb:axis");
@@ -7576,7 +7609,11 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
 
     const key = `${player.id}:${config.id}`;
     const lastTick = lastSpawnTickByType.get(key) || 0;
-    if (system.currentTick - lastTick < config.delayTicks) {
+    let typeDelay = config.delayTicks;
+    if (config.id === TINY_BEAR_ID && currentDay < 4) {
+        typeDelay = Math.min(typeDelay, 100);
+    }
+    if (system.currentTick - lastTick < typeDelay) {
         return false;
     }
 

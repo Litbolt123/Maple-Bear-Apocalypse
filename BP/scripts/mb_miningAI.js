@@ -71,6 +71,7 @@ const WALKABLE_THROUGH_BLOCKS = new Set([
     "minecraft:poplar_sapling",
     "minecraft:red_shrub",
     "minecraft:leaf_litter",
+    "minecraft:wildflowers",
     "minecraft:shelf_mushroom",
     "minecraft:brown_mushroom",
     "minecraft:nether_sprouts",
