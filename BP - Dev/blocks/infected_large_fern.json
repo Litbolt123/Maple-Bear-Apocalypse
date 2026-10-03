@@ -77,12 +77,34 @@
 					}
 				]
 			},
+			"minecraft:liquid_detection": {
+				"detection_rules": [
+					{
+						"liquid_type": "water",
+						"can_contain_liquid": false,
+						"on_liquid_touches": "broken"
+					}
+				]
+			},
 			"minecraft:flammable": {
 				"catch_chance_modifier": 30,
 				"destroy_chance_modifier": 60
 			},
 			"minecraft:movable": {
 				"movement_type": "popped"
+			},
+			"minecraft:item_visual": {
+				"geometry": {
+					"identifier": "minecraft:geometry.cross"
+				},
+				"material_instances": {
+					"*": {
+						"texture": "infected_large_fern_item",
+						"render_method": "alpha_test_single_sided",
+						"ambient_occlusion": 0,
+						"face_dimming": false
+					}
+				}
 			}
 		},
 		"permutations": [

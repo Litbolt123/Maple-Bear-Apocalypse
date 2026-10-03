@@ -3,10 +3,11 @@
 	"minecraft:block": {
 		"description": {
 			"identifier": "mb:infected_mushroom_stem",
-			"menu_category": {
-				"category": "nature"
-			},
-			"is_experimental": false
+			"is_experimental": false,
+			"states": {
+				"mb:dust": [0, 1, 2, 3],
+				"mb:bits": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+			}
 		},
 		"components": {
 			"minecraft:geometry": "minecraft:geometry.full_block",
@@ -34,7 +35,7 @@
 			"minecraft:collision_box": true,
 			"minecraft:selection_box": true,
 			"minecraft:loot": "loot_tables/blocks/infected_mushroom_stem.json",
-			"mb:infected_foliage": {},
+			"mb:infected_wood": {},
 			"tag:minecraft:is_shears_item_destructible": {}
 		}
 	}

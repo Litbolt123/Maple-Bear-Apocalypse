@@ -6,10 +6,20 @@
 			"menu_category": {
 				"category": "nature"
 			},
-			"is_experimental": false
+			"is_experimental": false,
+			"states": {
+				"mb:growth": [3, 0, 1, 2, 4, 5, 6, 7]
+			}
 		},
 		"components": {
-			"minecraft:geometry": "geometry.infected_leaf_litter",
+			"minecraft:geometry": {
+				"identifier": "geometry.infected_leaf_litter",
+				"bone_visibility": {
+					"litter_2": "q.block_state('mb:growth') >= 1",
+					"litter_3": "q.block_state('mb:growth') >= 2",
+					"litter_4": "q.block_state('mb:growth') >= 3"
+				}
+			},
 			"minecraft:material_instances": {
 				"*": {
 					"texture": "infected_leaf_litter",
@@ -67,9 +77,31 @@
 					}
 				]
 			},
+			"minecraft:liquid_detection": {
+				"detection_rules": [
+					{
+						"liquid_type": "water",
+						"can_contain_liquid": false,
+						"on_liquid_touches": "broken"
+					}
+				]
+			},
 			"minecraft:flammable": {
 				"catch_chance_modifier": 30,
 				"destroy_chance_modifier": 60
+			},
+			"minecraft:item_visual": {
+				"geometry": {
+					"identifier": "minecraft:geometry.cross"
+				},
+				"material_instances": {
+					"*": {
+						"texture": "infected_leaf_litter_item",
+						"render_method": "alpha_test_single_sided",
+						"ambient_occlusion": false,
+						"face_dimming": false
+					}
+				}
 			}
 		}
 	}

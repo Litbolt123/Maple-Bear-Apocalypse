@@ -24,7 +24,8 @@
 			},
 			"minecraft:block_placer": {
 				"block": "mb:snow_layer"
-			}
+			},
+			"minecraft:liquid_clipped": false
 		}
 	}
 }

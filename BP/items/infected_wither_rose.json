@@ -1,0 +1,36 @@
+{
+	"format_version": "1.21.60",
+	"minecraft:item": {
+		"description": {
+			"identifier": "mb:infected_wither_rose"
+		},
+		"components": {
+			"minecraft:icon": {
+				"textures": {
+					"default": "infected_wither_rose_item"
+				}
+			},
+			"minecraft:block_placer": {
+				"block": "mb:infected_wither_rose",
+				"replace_block_item": true,
+				"use_on": [
+					"minecraft:grass_block",
+					"minecraft:dirt",
+					"minecraft:coarse_dirt",
+					"minecraft:podzol",
+					"minecraft:mycelium",
+					"minecraft:moss_block",
+					"minecraft:mud",
+					"mb:dusted_dirt",
+					"mb:dusted_podzol",
+					"minecraft:crimson_nylium",
+					"minecraft:warped_nylium"
+				]
+			},
+			"minecraft:liquid_clipped": true,
+			"minecraft:display_name": {
+				"value": "Infected Wither Rose"
+			}
+		}
+	}
+}

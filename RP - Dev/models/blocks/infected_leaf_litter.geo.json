@@ -12,19 +12,73 @@
 			},
 			"bones": [
 				{
-					"name": "bb_main",
+					"name": "litter_1",
 					"pivot": [0, 0, 0],
 					"cubes": [
 						{
 							"origin": [-8, 0, -8],
-							"size": [16, 0.5, 16],
+							"size": [8, 0.5, 8],
 							"uv": {
-								"up": {"uv": [0, 0], "uv_size": [16, 16]},
-								"down": {"uv": [0, 16], "uv_size": [16, -16]},
-								"north": {"uv": [0, 15], "uv_size": [16, 1]},
-								"south": {"uv": [0, 15], "uv_size": [16, 1]},
-								"east": {"uv": [0, 15], "uv_size": [16, 1]},
-								"west": {"uv": [0, 15], "uv_size": [16, 1]}
+								"up": { "uv": [0, 0], "uv_size": [8, 8] },
+								"down": { "uv": [0, 8], "uv_size": [8, -8] },
+								"north": { "uv": [0, 0], "uv_size": [0, 0] },
+								"south": { "uv": [0, 0], "uv_size": [0, 0] },
+								"east": { "uv": [0, 0], "uv_size": [0, 0] },
+								"west": { "uv": [0, 0], "uv_size": [0, 0] }
+							}
+						}
+					]
+				},
+				{
+					"name": "litter_2",
+					"pivot": [0, 0, 0],
+					"cubes": [
+						{
+							"origin": [0, 0, -8],
+							"size": [8, 0.5, 8],
+							"uv": {
+								"up": { "uv": [8, 0], "uv_size": [8, 8] },
+								"down": { "uv": [8, 8], "uv_size": [8, -8] },
+								"north": { "uv": [0, 0], "uv_size": [0, 0] },
+								"south": { "uv": [0, 0], "uv_size": [0, 0] },
+								"east": { "uv": [0, 0], "uv_size": [0, 0] },
+								"west": { "uv": [0, 0], "uv_size": [0, 0] }
+							}
+						}
+					]
+				},
+				{
+					"name": "litter_3",
+					"pivot": [0, 0, 0],
+					"cubes": [
+						{
+							"origin": [-8, 0, 0],
+							"size": [8, 0.5, 8],
+							"uv": {
+								"up": { "uv": [0, 8], "uv_size": [8, 8] },
+								"down": { "uv": [0, 16], "uv_size": [8, -8] },
+								"north": { "uv": [0, 0], "uv_size": [0, 0] },
+								"south": { "uv": [0, 0], "uv_size": [0, 0] },
+								"east": { "uv": [0, 0], "uv_size": [0, 0] },
+								"west": { "uv": [0, 0], "uv_size": [0, 0] }
+							}
+						}
+					]
+				},
+				{
+					"name": "litter_4",
+					"pivot": [0, 0, 0],
+					"cubes": [
+						{
+							"origin": [0, 0, 0],
+							"size": [8, 0.5, 8],
+							"uv": {
+								"up": { "uv": [8, 8], "uv_size": [8, 8] },
+								"down": { "uv": [8, 16], "uv_size": [8, -8] },
+								"north": { "uv": [0, 0], "uv_size": [0, 0] },
+								"south": { "uv": [0, 0], "uv_size": [0, 0] },
+								"east": { "uv": [0, 0], "uv_size": [0, 0] },
+								"west": { "uv": [0, 0], "uv_size": [0, 0] }
 							}
 						}
 					]

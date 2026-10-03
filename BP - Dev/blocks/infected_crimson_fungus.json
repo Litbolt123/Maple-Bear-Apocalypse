@@ -70,6 +70,15 @@
 					}
 				]
 			},
+			"minecraft:liquid_detection": {
+				"detection_rules": [
+					{
+						"liquid_type": "water",
+						"can_contain_liquid": false,
+						"on_liquid_touches": "broken"
+					}
+				]
+			},
 			"minecraft:flammable": {
 				"catch_chance_modifier": 30,
 				"destroy_chance_modifier": 60

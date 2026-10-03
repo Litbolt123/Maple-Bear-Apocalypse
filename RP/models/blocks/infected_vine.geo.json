@@ -12,71 +12,17 @@
 			},
 			"bones": [
 				{
-					"name": "north",
+					"name": "plane",
 					"pivot": [0, 0, 0],
 					"cubes": [
 						{
-							"origin": [-8, 0, -8],
-							"size": [16, 16, 0.8],
+							"origin": [-8, 0, 7.4],
+							"size": [16, 16, 0.2],
 							"uv": {
 								"north": { "uv": [0, 0], "uv_size": [16, 16] },
 								"south": { "uv": [16, 0], "uv_size": [-16, 16] },
 								"east": { "uv": [0, 0], "uv_size": [0, 0] },
 								"west": { "uv": [0, 0], "uv_size": [0, 0] },
-								"up": { "uv": [0, 0], "uv_size": [0, 0] },
-								"down": { "uv": [0, 0], "uv_size": [0, 0] }
-							}
-						}
-					]
-				},
-				{
-					"name": "south",
-					"pivot": [0, 0, 0],
-					"cubes": [
-						{
-							"origin": [-8, 0, 7.2],
-							"size": [16, 16, 0.8],
-							"uv": {
-								"north": { "uv": [16, 0], "uv_size": [-16, 16] },
-								"south": { "uv": [0, 0], "uv_size": [16, 16] },
-								"east": { "uv": [0, 0], "uv_size": [0, 0] },
-								"west": { "uv": [0, 0], "uv_size": [0, 0] },
-								"up": { "uv": [0, 0], "uv_size": [0, 0] },
-								"down": { "uv": [0, 0], "uv_size": [0, 0] }
-							}
-						}
-					]
-				},
-				{
-					"name": "west",
-					"pivot": [0, 0, 0],
-					"cubes": [
-						{
-							"origin": [-8, 0, -8],
-							"size": [0.8, 16, 16],
-							"uv": {
-								"west": { "uv": [0, 0], "uv_size": [16, 16] },
-								"east": { "uv": [16, 0], "uv_size": [-16, 16] },
-								"north": { "uv": [0, 0], "uv_size": [0, 0] },
-								"south": { "uv": [0, 0], "uv_size": [0, 0] },
-								"up": { "uv": [0, 0], "uv_size": [0, 0] },
-								"down": { "uv": [0, 0], "uv_size": [0, 0] }
-							}
-						}
-					]
-				},
-				{
-					"name": "east",
-					"pivot": [0, 0, 0],
-					"cubes": [
-						{
-							"origin": [7.2, 0, -8],
-							"size": [0.8, 16, 16],
-							"uv": {
-								"east": { "uv": [0, 0], "uv_size": [16, 16] },
-								"west": { "uv": [16, 0], "uv_size": [-16, 16] },
-								"north": { "uv": [0, 0], "uv_size": [0, 0] },
-								"south": { "uv": [0, 0], "uv_size": [0, 0] },
 								"up": { "uv": [0, 0], "uv_size": [0, 0] },
 								"down": { "uv": [0, 0], "uv_size": [0, 0] }
 							}

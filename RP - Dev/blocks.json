@@ -357,8 +357,11 @@
 	"mb:infected_leaf_litter": {
 		"sound": "grass"
 	},
-	"mb:infected_vine": {
+	"mb:infected_wildflowers": {
 		"sound": "grass"
+	},
+	"mb:infected_vine": {
+		"sound": "vines"
 	},
 	"mb:infected_brown_mushroom_block": {
 		"sound": "wood"
@@ -388,6 +391,78 @@
 		"sound": "grass"
 	},
 	"mb:infected_weeping_vines": {
+		"sound": "grass"
+	},
+	"mb:infected_dandelion": {
+		"sound": "grass"
+	},
+	"mb:infected_poppy": {
+		"sound": "grass"
+	},
+	"mb:infected_blue_orchid": {
+		"sound": "grass"
+	},
+	"mb:infected_allium": {
+		"sound": "grass"
+	},
+	"mb:infected_azure_bluet": {
+		"sound": "grass"
+	},
+	"mb:infected_red_tulip": {
+		"sound": "grass"
+	},
+	"mb:infected_orange_tulip": {
+		"sound": "grass"
+	},
+	"mb:infected_white_tulip": {
+		"sound": "grass"
+	},
+	"mb:infected_pink_tulip": {
+		"sound": "grass"
+	},
+	"mb:infected_oxeye_daisy": {
+		"sound": "grass"
+	},
+	"mb:infected_cornflower": {
+		"sound": "grass"
+	},
+	"mb:infected_lily_of_the_valley": {
+		"sound": "grass"
+	},
+	"mb:infected_wither_rose": {
+		"sound": "grass"
+	},
+	"mb:infected_torchflower": {
+		"sound": "grass"
+	},
+	"mb:infected_open_eyeblossom": {
+		"sound": "grass"
+	},
+	"mb:infected_closed_eyeblossom": {
+		"sound": "grass"
+	},
+	"mb:infected_cactus_flower": {
+		"sound": "grass"
+	},
+	"mb:infected_sunflower": {
+		"sound": "grass"
+	},
+	"mb:infected_lilac": {
+		"sound": "grass"
+	},
+	"mb:infected_rose_bush": {
+		"sound": "grass"
+	},
+	"mb:infected_peony": {
+		"sound": "grass"
+	},
+	"mb:infected_pitcher_plant": {
+		"sound": "grass"
+	},
+	"mb:infected_pink_petals": {
+		"sound": "grass"
+	},
+	"mb:infected_bush": {
 		"sound": "grass"
 	}
 }

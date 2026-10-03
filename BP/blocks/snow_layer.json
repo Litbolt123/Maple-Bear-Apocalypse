@@ -51,6 +51,16 @@
 			"minecraft:loot": "loot_tables/blocks/snow_layer.json",
 			"mb:snow_infects_leaves": {},
 			"tag:minecraft:is_shovel_item_destructible": {},
+			"minecraft:liquid_detection": {
+				"detection_rules": [
+					{
+						"liquid_type": "water",
+						"can_contain_liquid": true,
+						"on_liquid_touches": "blocking",
+						"use_liquid_clipping": false
+					}
+				]
+			},
 			"minecraft:placement_filter": {
 				"conditions": [
 					{
@@ -59,17 +69,8 @@
 						],
 						"block_filter": [
 							{
-								"tags": "!q.any_tag('mb:maple_bear_snow_layer')"
+								"tags": "q.any_tag('minecraft:is_shovel_item_destructible', 'minecraft:is_pickaxe_item_destructible', 'minecraft:is_axe_item_destructible', 'minecraft:is_hoe_item_destructible', 'dirt', 'sand', 'stone', 'wood', 'log', 'leaves', 'grass', 'gravel', 'metal') && !q.any_tag('mb:maple_bear_snow_layer', 'plant', 'crop')"
 							}
-						]
-					},
-					{
-						"allowed_faces": [
-							"down",
-							"north",
-							"south",
-							"east",
-							"west"
 						]
 					}
 				]
