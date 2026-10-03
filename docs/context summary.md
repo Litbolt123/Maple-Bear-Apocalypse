@@ -6,6 +6,275 @@ Running log of **what changed and why** (gameplay, scripts, assets, docs). Used 
 
 ---
 
+## 2026-09-27 — Beta testers on current dev build (heads up)
+
+- **Note (August):** Sharing the current beta-beta dev build with beta testers — not an official beta release. Will report back on how it goes.
+- **Open:** Tester feedback TBD. MP block-spread polish still needs 2+ player playtest.
+
+## 2026-09-27 — MP block-spread polish playtest (solo day ~105)
+
+- **Playtest (August):** Solo around journal day 105 — block infection spread still working after the drain polish.
+- **Open:** Multiplayer with 2+ people not tested yet (August will playtest with multiple players later).
+
+## 2026-09-27 — MP block-spread drain polish
+
+- **Ask:** Final optimizations for multiplayer block infection spreading.
+- **Done:** Cooldown sources no longer eat drain visits. Each 32-block player pocket gets its own MP visit budget (2 pockets per poll; distant fronts get 2 visits). Trunk height cached ~40t. MP leaf dust advances 6 per visit (solo 18). Day curve unchanged.
+- **Verify:** Solo day ~105 worked (August). MP still open: together on one lawn + far apart in two forests; guest hitch on cream canopy.
+
+## 2026-09-26 — Day 2 wood spread speed (asked)
+
+- **Ask:** How fast should wood infection spread on day 2?
+- **Answer:** Hard is about a 4.8% chance per try on a log that already touches dusty ground or an infected leaf. First log is often around half a minute if you stand on that edge. After that the trunk climbs about one log per second. Nothing before day 2. Mushroom blocks wait until day 25.
+
+## 2026-09-26 — Day 2 tiny bears with two players
+
+- **Ask:** Tiny maple bears are scarce on day 2. August and Compoohter, Hardcore, addon Hard.
+- **Done:** Day 2–3 no longer cuts a pair down to one spawn slot. Hard raises that opening count. Tiny attempts wait 5 seconds instead of 10. They still need dusty ground or powder.
+- **Verify:** Fully exit. Day 2 on dusty ground with both players. Tinies should show up faster.
+
+## 2026-09-26 — Script villages crashed on toggle
+
+- **Ask:** Turning scripted villages on in the book lagged hard, then crashed. The error was a handler that was not accepted.
+- **Done:** Village scans read at most 12 biomes per pass and wait 5 seconds after the toggle. Saving a village when someone leaves no longer runs inside a before-event.
+- **Verify:** Fully exit. Turn script villages on and stay in the world. It should not crash on the toggle.
+
+## 2026-09-26 — Dev pack: vanilla villages on for now
+
+- **Ask:** Let normal villages spawn in the dev pack.
+- **Done:** The ten village biome files are back, with `minecraft:village_type` restored. Infected biomes were never removed. Schema 4 turns villager despawn off unless the journal toggle is on. New chunks can roll a vanilla village.
+- **Verify:** Fully exit. Explore new land. Old chunks stay empty of villages.
+
+## 2026-09-26 — Vanilla villages: dev off, public on
+
+- **Ask:** Did we remove normal villages?
+- **Answer:** The dev pack still replaces plains, desert, savanna, taiga, and meadow so vanilla villages do not generate, and villagers stay suppressed unless turned on. Public beta.5 removed that override, so normal villages generate there. Script abandoned villages stay off unless the dev setting is on.
+
+## 2026-09-26 — Mushroom blocks wait until day 25
+
+- **Ask:** Mushroom blocks and stems should wait until day 25 and infect as slowly as mycelium.
+- **Done:** Brown blocks, red blocks, and the stem use the same day gate and ×0.2 as mycelium. A neighboring log does not flip the whole cap in one hop.
+- **Verify:** Fully exit. Before day 25 they stay vanilla. After that, stand by a giant mushroom on dusted dirt and expect a slow crawl.
+
+## 2026-09-26 — Mushroom blocks and stems can infect
+
+- **Ask:** Brown and red mushroom blocks, and the stem, should be able to infect.
+- **Was:** They were left vanilla so a mooshroom island stayed mostly clean.
+- **Done:** They convert on the same path as logs. The cap face pattern is stored and put back if the block is cleared. Small red and brown mushrooms stay slow and wait until day 25.
+- **Verify:** Fully exit. Journal day 2+. Stand by a giant mushroom that touches dusted dirt. The stem and the cap should turn dusty.
+
+## 2026-09-26 — Infected leaf litter keeps its pile size
+
+- **Ask:** Infected leaf litter should have a small or large amount on one spot, like vanilla leaf litter.
+- **Done:** `mb:growth` keeps vanilla `growth` 0–7. One through four pieces show. Five through seven still look full, and the amount is kept. Old litter with no state stays a four-piece pile.
+- **Verify:** Fully exit. Infect a one-piece pile and a full pile. The dusty litter should match those sizes.
+
+## 2026-09-26 — Infected logs dust the dirt at the trunk
+
+- **Ask:** The bottom logs of a tree, once infected, should infect the dirt around them.
+- **Failed:** The wood drain no longer called the grass helper, and a finished log was removed before it could dust the ground.
+- **Done:** An infected log tries the dirt under it and the four blocks around that base. It stays queued until that ring is dusted.
+- **Verify:** Fully exit. Journal day 2+. Stand by an infected trunk. The grass under the log and the ring around it should turn to dusted dirt.
+
+## 2026-09-24 — Vine side view playtest
+
+- **Playtest (worked):** Thin side view is right. No texture fighting. He cannot climb infected vines.
+- **Decision:** Leave climbing off. `minecraft:climbable` rejects this block format. August: infected blocks are less useful than vanilla. Do not add climbing.
+
+## 2026-09-24 — Vine side thickness
+
+- **Playtest:** Texture fighting is gone. From the side, infected vines are a thick white slab. Vanilla vines are a thin line.
+- **Done:** Plane is 0.2 pixels thick and still stops short of the block edge. Placement and outline stay.
+- **Verify:** Fully exit. Look along a vine the way the vanilla screenshot does. It should be a hairline, not a slab.
+
+## 2026-09-24 — Vine texture fighting
+
+- **Playtest:** Placement is how he wants it. Texture and outline are on the clicked face. Minor texture fighting on the vines.
+- **Done:** The plane sits half a pixel inside the block edge so it does not fight the face it is on. Rotations and outline are unchanged.
+- **Verify:** Fully exit. Look at a vine on leaves. The white pattern should stay still, not flicker against the leaves.
+
+## 2026-09-24 — Vine outline rotates with the texture
+
+- **Playtest:** The outline is still left or right of the vine, not on the face he placed.
+- **Done:** One outline, on the vine plane. The same rotation moves both. Rotations are unchanged.
+- **Verify:** Fully exit. Place a new vine on each side of one block. The thin box should cover the white texture, not sit beside it.
+
+## 2026-09-24 — Vine outline aligned to the texture
+
+- **Playtest:** Texture stays on the face he clicks. The outline was on that face sometimes, beside it sometimes, and in the air sometimes.
+- **Done:** Outline only. It now uses the same edge as the rotated plane. Rotations are unchanged.
+- **Verify:** Fully exit. Place a new vine on each side of one block. The thin box should sit on the texture.
+
+## 2026-09-24 — Vine outline moved onto the block
+
+- **Playtest:** The vine texture is on the face he faces when placing. The outline was still in the air in front of the block.
+- **Done:** Outline only. Rotations stay as they are. The 1-pixel box is now on the block face.
+- **Verify:** Fully exit. Place a new vine on a wall. The thin outline should sit on the stone with the texture.
+
+## 2026-09-24 — Vine plane rotates onto the clicked face
+
+- **Playtest:** Both sides of the vine show. It still misses the clicked face from some angles. The screenshot has a gap in front of the stone.
+- **Failed:** Swapping bones still put the plane on the near side of the cell.
+- **Done:** One plane, rotated onto the clicked face. Outline follows that face. Sound stays `vines`.
+- **Verify:** Fully exit. Place a new vine on each side of one stone block. It should be flush, with no gap.
+
+## 2026-09-24 — Vine clings to the clicked face
+
+- **Ask:** The vine is still not on the block side he places it on, more than half the time. That tracks which way he is facing. Sound is good.
+- **Failed:** Same-name `block_face` put the plane on the air side of the vine cell.
+- **Done:** Plane and thin outline are the opposite face, flush against the block he clicked. Sound stays `vines`.
+- **Verify:** Fully exit. Place a new vine on each side of one log. Each one should sit on the bark he clicked.
+
+## 2026-09-24 — Vine visible from both sides
+
+- **Playtest:** Place sound is good. The vine face is right about half the time, and it depends on which way August is looking.
+- **Done:** Vine world material is `alpha_test` instead of `alpha_test_single_sided`, so the texture draws on both sides of the plane.
+- **Verify:** Fully exit. Place a new vine, then look at it from both sides. It should stay on the face you clicked.
+
+## 2026-09-24 — Vine face and place sound, second pass
+
+- **Ask (screenshot):** Vine placement is still wrong. Place sounds like stone.
+- **Failed:** Opposite bone (`block_face` south showed the north plane) sat on the air side. Sound id `vine` is invalid and falls back to stone.
+- **Done:** Plane and thin outline use the same name as `minecraft:block_face`. Sound is `vines`. Converted vines write that same face once.
+- **Verify:** Fully exit. Place a new vine on a log and on leaves. It should sit on the face you clicked, and place/break should sound like a vanilla vine.
+
+## 2026-09-24 — Plant icons warmed to the placed color
+
+- **Ask:** Minor touches so plant item icons match the placed plants.
+- **Done:** Icons whose placed block is powder-colored (grass, ferns, vine, mushrooms, bush, litter) now use that cream. Flowers that are still colored in the world, such as lilac, stay that color. Shapes stay the vanilla item silhouettes.
+
+## 2026-09-24 — Cursor Project started
+
+- **August:** Opened Create Project in the Agents Window. Name **Maple Bear Apocalypse**, workspace **maple-bear-apocalypse**, coordinator **Grok 4.7 High**. This chat is still the local agent, not that coordinator.
+
+## 2026-09-24 — Vine face is set on place
+
+- **Done:** `minecraft:block_face` chooses the vine plane and the thin outline when placed. Sound is `vine`. The later script repair is gone. Converted vanilla vines copy their direction once into that same state.
+- **Verify:** Fully exit. Place an infected vine on a log. The plane and outline should sit on the bark immediately, and place/break should sound like a vanilla vine.
+
+## 2026-09-24 — Tomorrow: vine face and sound
+
+- **Screenshots (August):** Infected vine plane sits off the log, on the air side of the cell. The outline is still the whole cell in these shots. Vanilla vine is flush on the bark, with a thin outline on that same face.
+- **Why it jumps later:** New vines default to `mb:south`. `repairInfectedVineIfNeeded` fixes the face on a later scan. Vanilla chooses the face when you place it.
+- **Tomorrow:** Set the face from the clicked side at place time with the `minecraft:block_face` trait, not a script repair. Selection box on that same face. Sound is `grass` in `RP/blocks.json`; change it to `vine`.
+- **Rule (August):** Blocks that mirror vanilla (vines, plants, layers) get placement, face, hitbox, and sound from block data. Scripts are for infection, not for fixing a face after the fact.
+- **Parked still:** Plant icon touch-ups. Force-feed mobs `"snow"`. Ocean infection.
+
+## 2026-09-24 — Session wrap
+
+- **Playtest (worked):** `"snow"` layers sit in water on a solid floor. They do not sit on the surface, on seagrass, or bridge sideways across water.
+- **Vines:** They were stuck to litter and dirt because the item only allowed soil, so oak logs failed. They now use solid side faces. A nearby vine can dust one neighboring leaf or grass plant. Hitbox was a full cube; it is now a 1-pixel face like vanilla vines. Walk-through stays (no collision). Not playtested yet.
+- **Parked:** Force-feed mobs `"snow"`. Ocean infection (seagrass, seaweed, infected water). Minor plant icon touch-ups.
+- **Do not:** Commit, tag, or merge PR #6. Public build stays `beta.5`. Stashes stay.
+
+## 2026-09-24 — Infected vines attach to solid sides
+
+- **Ask:** Vines stick to leaf litter and dirt sides, but not oak logs. Infected vines should spread into nearby leaves and grass. Plant icon touch-ups later.
+- **Why:** The vine item’s `use_on` list was only soil, so logs were refused. Litter is not a solid side.
+- **Done:** Vines place on solid side faces (logs, leaves, dirt). Litter does not count. A nearby vine can dust one neighboring leaf or grass plant.
+
+## 2026-09-24 — Powder placement playtest
+
+- **Playtest (August, worked):** `"snow"` layers sit in water on a solid floor. They do not sit on the water surface, on seagrass, or bridge sideways across water. He said the mechanic is working and the issues he found are solved.
+
+## 2026-09-24 — Powder bridge over water
+
+- **Playtest (same session, before the support reload):** Layers could be placed beside each other across the water surface, even though a direct place on water failed.
+- **Already in the last sync:** Side faces are not a support. A layer only stays if the block under it is solid.
+
+## 2026-09-24 — Powder needs a solid block under it
+
+- **Playtest:** A `"snow"` layer placed on double seagrass broke the seagrass and stayed floating. Water beside it counted as support.
+- **Done:** The layer only survives on the top of a solid block. Air, water, and plants do not hold it.
+- **Later (not now):** Ocean infection — seagrass, seaweed, and maybe infected water. Same shelf as force-feeding mobs `"snow"`.
+
+## 2026-09-24 — Later: force-feed mobs "snow"
+
+- **Idea (August, not now):** It would be funny to force-feed mobs `"snow"` (infection powder). Do not build this until he asks.
+
+## 2026-09-24 — Powder goes in water, not on it
+
+- **Playtest:** `"snow"` layers place on the water surface, not inside it.
+- **Done:** `mb:snow` is `liquid_clipped: false`, so the click passes through the surface and the layer occupies the water.
+
+## 2026-09-24 — Powder layers waterlog
+
+- **Ask:** `"snow"` layers should be waterloggable. Ground plants staying out of water is confirmed working.
+- **Done:** `mb:snow_layer` can contain water. The powder item can place into it.
+
+## 2026-09-24 — Flower item names
+
+- **Playtest:** Infected Flowers showed `item.mb:infected_lily_of_the_valley`. Other creative groups were fine.
+- **Done:** The replacement plant items now use the block’s display name (`Infected Lily of the Valley`).
+
+## 2026-09-24 — Plants must not place into water
+
+- **Playtest (August):** Large infected fern still places in water, then vanishes. He wants the vanilla refusal, not a break after place.
+- **Done:** Plant items use `liquid_clipped` and `use_on` soil only, so a click on water is not a valid place.
+
+## 2026-09-24 — Plant icons were the block tile, not the vanilla item
+
+- **Playtest (August screenshot):** Grass, tall grass, fern, and large fern hotbar icons do not match the vanilla item shapes. They were not “the same icon, just white.”
+- **Failed:** Pointing `item_visual` at the block texture. That tile is the cross, and the earlier item pass had flattened every pixel to white.
+- **Done:** Item icons are the vanilla item sprites again, dusted with the world mix so the shading stays. Journal still `0.9.0-beta.5.19`.
+
+## 2026-09-24 — Creative groups, icon color, no placing in water
+
+- **Asked:** Group creative inventory the way the flashlight pack does. Plant icons match the placed plant, not a whiter copy. Plants must not be placeable in water.
+- **Done:** Item catalog groups (plants, flowers, leaves, wood, ground). Icons use the block texture. Walkable plants cancel a place into water. Journal `0.9.0-beta.5.19`.
+
+## 2026-09-24 — Pitcher plant item icon
+
+- **Asked (August screenshot):** Infected Pitcher Plant hotbar icon is a brown square. Plant item icons should match the vanilla shape, only the color changes.
+- **Done:** Pitcher item is the vanilla pitcher silhouette, dusty white. Other plant item icons were already that. Journal `0.9.0-beta.5.18`.
+
+## 2026-09-24 — Load errors after the group fix
+
+- **Playtest (August, Beta 5.16):** Creative-group namespace fix held. Scripts loaded. Leftover rejects: `minecraft:climbable: {}` on the vine, and `ambient_occlusion: false` on 1.26.40 tall plants including `item_visual`.
+- **Done:** Occlusion is `0` on those blocks and their item icons. Climbable component removed so the vine registers. It is one face, not a ladder. Journal `0.9.0-beta.5.17`.
+
+## 2026-09-23 — Creative groups, water plants, day-25 mushrooms
+
+- **Playtest (August):** Content log swarm: infected blocks missing from the registry. Infected mushrooms place in rivers. Mushroom plants should infect after day 25, always as slow as mycelium. Mycelium is the mushroom category. Mushroom blocks stay uninfectable.
+- **Done:** Creative groups are `mb:infected_*` (the lang key was rejected: identifier must have a namespace). Ground plants break in water and cannot waterlog. Mushroom plants convert from day 25 at ×0.2. Journal **What's new** `0.9.0-beta.5.16`. Not a release.
+- **Verify:** Fully exit. No `blocks.json` registry swarm. A mushroom will not stay in a river. Before day 25 mushroom plants stay vanilla.
+
+## 2026-09-23 — Nether starts after a portal trip; mushrooms do not infect
+
+- **Asked:** Infection enters the nether once a portal is opened, then spreads better there. Red and brown mushrooms should not have an infected form. Mushroom blocks should not infect, so the mooshroom biome stays mostly clean. Mycelium should infect a lot slower.
+- **Done:** `mb_nether_breach` is set the first time a player is in the nether. Until then nether scans do nothing. After that, nether spread is ×1.65. Mushroom plants and mushroom blocks are not convertible and are hidden from creative. Mycelium is ×0.2 (podzol stays ×0.45). The biome is not immune. Journal **What's new** `0.9.0-beta.5.15`. Not a release.
+- **Verify:** Fully exit. Nether stays clean until someone goes through. Mooshroom mushrooms and mushroom blocks stay vanilla. Mycelium crawls.
+
+## 2026-09-23 — Vines, foliage icons, blast queue
+
+- **Asked:** Vines should be one climbable face, like a ladder. Foliage item icons should be white copies of the normal icons. Blast-infected leaves should keep spreading.
+- **Done:** One vine face plus climbable. `item_visual` uses whitened vanilla sprites. Partial blast dust now joins the leaf queue. Journal **What's new** `0.9.0-beta.5.14`. Not a release.
+
+## 2026-09-23 — Every flower and bushes infect; creative groups
+
+- **Asked:** Every flower variant infected. Organize creative inventory. Infect bushes.
+- **Done:** Dusty versions of the flower set, pink petals, and `minecraft:bush`. Tall flowers stay two blocks. Creative groups: Flowers, Plants, Leaves, Wood, Ground. No forest scatter. Journal **What's new** `0.9.0-beta.5.13`. Not a release.
+- **Verify:** Fully exit. Infect flowers and a bush. Creative nature tab is grouped.
+
+## 2026-09-23 — Wildflowers: stems until finished, then sunken with no yellow edge
+
+- **Playtest (August):** A little yellow thing on the edge of the infected wildflower. He likes the sunken, stemless look. Stems like normal until fully infected, then no stems.
+- **Done:** Sunken plane no longer draws side faces (that rim was the yellow sliver). Fresh converts use short stems; the next infection touch drops them and sinks the flowers. Journal **What's new** `0.9.0-beta.5.12`. Not a release. Public semver stays beta.5.
+- **Playtest follow-up:** First stage should match vanilla wildflowers, only the colors change. Stem geometry is now the vanilla flowerbed (quadrant planes plus the stem crosses under them). Sunken finished stage stays.
+- **Verify:** Fully exit. Infect a wildflower patch. Stems first, then flat with no yellow edge. Leaf litter unchanged.
+
+## 2026-09-23 — Playtest: spreading works here; more players still needed
+
+- **Playtest (August):** “Spreading seems to be working, but I will need to test with some more players.”
+- **Counts as:** his session. The 2+ player day-100 checklist in `docs/development/testing/infection-spread-efficiency-check.md` is still open.
+- **Do not:** treat this as a Realm pass, or slow solo spread to match a multiplayer budget.
+
+## 2026-09-23 — Dusty wildflowers, flat like leaf litter
+
+- **Asked:** Wild flowers block needs a texture. Similar to leaf litter.
+- **Done:** `mb:infected_wildflowers` uses the leaf-litter plane. Texture keeps yellow and pale-blue petals with powder on the highlights. Converts from vanilla wildflowers. Does not scatter in every infected forest. Journal **What's new** `0.9.0-beta.5.11`. Not a release.
+- **Verify:** Fully exit. Infect a wildflower patch. It should sit flat and still look like flowers.
+
 ## 2026-09-23 — Testing baseline: cloud PR #6 plus local infection progress
 
 - Combined the cloud write queue, shared ambient sample, and ground-check round-robin with the local pack work (dusty plants, firefly off forest scatter, podzol → dusty dirt, air grass was worldgen).

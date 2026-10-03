@@ -299,6 +299,31 @@ def bake_powder_stage(leaves, snow, holes=True):
 DRY_FOLIAGE = (163, 117, 70)
 
 
+def bake_dusted_wildflowers(src, snow):
+    """Flat flower cutout, same plane as leaf litter. Keep petal colors; dust with powder."""
+    pal = snow_palette(snow)
+    w, h = src.size
+    px = src.load()
+    out = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    dst = out.load()
+    for y in range(h):
+        for x in range(w):
+            r, g, b, a = px[x, y]
+            if a < 16:
+                continue
+            luma = (0.299 * r + 0.587 * g + 0.114 * b) / 255.0
+            sr, sg, sb = lerp_palette(pal, 0.55 + 0.40 * luma)
+            mix = 0.22 + 0.28 * luma
+            dst[x, y] = (
+                int(r * (1.0 - mix) + sr * mix),
+                int(g * (1.0 - mix) + sg * mix),
+                int(b * (1.0 - mix) + sb * mix),
+                255,
+            )
+    fill_hole_rgb(out)
+    return out
+
+
 def bake_dusted_leaf_litter(src, snow):
     """Keep leaf-shaped holes and brown dry-foliage color; dust with powder cream."""
     pal = snow_palette(snow)
@@ -398,6 +423,7 @@ FOLIAGE = (
     {"id": "red_mushroom", "file": "mushroom_red"},
     {"id": "red_shrub", "file": "red_shrub"},
     {"id": "leaf_litter", "file": "leaf_litter"},
+    {"id": "wildflowers", "file": "wildflowers"},
     {"id": "vine", "file": "vine"},
     {"id": "brown_mushroom_block", "file": "mushroom_block_skin_brown"},
     {"id": "red_mushroom_block", "file": "mushroom_block_skin_red"},
@@ -416,15 +442,19 @@ FOLIAGE = (
 KEEP_FOLIAGE_IDS = {"short_grass", "tall_grass", "fern", "large_fern", "leaf_litter"}
 
 
-def build_foliage(snow):
+def build_foliage(snow, only=None):
     force_keep = "--force-keep" in sys.argv
     for spec in FOLIAGE:
+        if only and spec["id"] != only:
+            continue
         if spec["id"] in KEEP_FOLIAGE_IDS and not force_keep:
             print("keep", spec["id"])
             continue
         src = load_sample(spec["file"])
         if spec["id"] == "leaf_litter":
             im = bake_dusted_leaf_litter(src, snow)
+        elif spec["id"] == "wildflowers":
+            im = bake_dusted_wildflowers(src, snow)
         elif spec["id"] == "vine":
             im = bake_white_tinted_cutout(src, 0.58)
         else:
@@ -502,6 +532,13 @@ def build_dusted_podzol(snow):
 
 def main():
     snow = Image.open(SNOW_LAYER).convert("RGBA")
+    only = None
+    if "--only" in sys.argv:
+        only = sys.argv[sys.argv.index("--only") + 1]
+    if only:
+        build_foliage(snow, only=only)
+        print(f"ok vegetation textures (only {only})")
+        return
     foliage_only = "--foliage" in sys.argv
     if not foliage_only:
         build_leaves(snow)

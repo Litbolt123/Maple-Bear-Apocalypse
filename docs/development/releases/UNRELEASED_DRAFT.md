@@ -1,7 +1,7 @@
 # Unreleased — draft release notes (next **public** beta)
 
 **Public pack semver:** still **`v0.9.0-beta.5`** until maintainer tags.  
-**Journal What's new / Dev pack label:** **`v0.9.0-beta.5.10`**.  
+**Journal What's new / Dev pack label:** **`v0.9.0-beta.5.19`**.  
 **Last GitHub Release body file:** `docs/RELEASE_BODY.md` is still the **beta.4** tag text — replace it from this draft on the next tag.
 
 **Status:** Player-facing work after beta.5 is listed below. Do **not** tag GitHub until the maintainer says release.  
@@ -13,6 +13,9 @@
 
 ### Infection & world (2026-09-16)
 
+- **The nether** stays clean until someone goes through a portal. After that, infection spreads faster there.
+- **Red and brown mushrooms, and mushroom blocks,** do not infect. Mycelium infects much slower. The mooshroom biome is mostly clean because those blocks stay vanilla, not because the whole biome is immune.
+- **Dusty wildflowers** keep short stems until they finish, then sink flat with no stems. They convert when infection reaches them. They do not scatter across every infected forest.
 - **Dusty grass plants** grow on the ground, not in the air in the trees.
 - **Dusty firefly bushes** do not grow in infected forests. Vanilla firefly bushes by water still convert when infection reaches them.
 - **Podzol** infects to dusty dirt for now. **Coarse dirt** does not infect.

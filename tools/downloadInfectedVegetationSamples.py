@@ -111,6 +111,7 @@ FILES = [
     "red_shrub",
     "vine",
     "leaf_litter",
+    "wildflowers",
     "mushroom_block_skin_brown",
     "mushroom_block_skin_red",
     "mushroom_block_skin_stem",

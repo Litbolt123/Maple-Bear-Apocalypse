@@ -4,20 +4,231 @@ What worked and what did not. **Read this before repeating a fix.** After a fix 
 
 Vault index: `C:\Users\Augus\OneDrive\Documents\Obsidian Vault\Atlas\Lessons.md`
 
+## 2026-09-27 — MP block-spread drain polish
+
+**Symptom:** Two-plus-player block infection drains wasted visits on cooldown sources and shared one global MP budget across the whole world. Leaf drains could dust 18 blocks per visit and re-walk full trunks every 8t.
+
+**Failed:** Counting cooldown sources as visits (poll every 8t, retry 16–40t). One halved MP cap for all players even when forests were far apart. Re-measuring 48-block columns every drain.
+
+**Worked:** `drainKnownSourcesRoundRobin` in `mb_workSpread.js` — only ready sources count; each active 32-block player pocket gets its own visit cap (max 2 pockets per poll); 2 distant visits for off-player fronts. `resolveTreeColumnY` caches trunk height ~40t; MP leaf dust cap 6 (solo 18). Solo visit counts unchanged.
+
+**Verify:** **Playtest (August 2026-09-27):** Solo ~day 105 spread still working. MP 2+ still open — together on one lawn, far apart in two forests, guest hitch on cream canopy.
+
+**Do not regress:** Do not starve solo to match MP. Do not put `minecraft:tick` on leaves/wood. Do not convert whole columns in one pass.
+
+## 2026-09-26 — Day 2 tiny bears felt missing with two players
+
+**Symptom (August):** Day 2 tiny maple bears were hard to find compared to before. He and Compoohter are on Hardcore with addon Hard.
+
+**Failed:** Day 2–3 allows 2 spawns per pass. Two players multiplied that by 0.62 and floored it to 1. A pair standing together is processed as one player, so they got half of solo. Addon Hard only multiplied the chance, not that slot count. Tiny attempts also waited 10 seconds.
+
+**Worked:** Day 2–3 with two players keeps the solo slot count. Hard scales that count (1.3). Tiny attempts on day 2–3 wait 5 seconds. They still only appear on dusty ground or powder.
+
+**Verify:** Fully exit. Day 2, two players, addon Hard, stand on dusty ground. Tiny bears should show up faster than the last session. Clean grass with no dust still will not spawn them.
+
+**Do not regress:** Do not put the 0.62 two-player cut back on day 2–3. Later days still use that cut.
+
+## 2026-09-26 — Script villages crashed when turned on
+
+**Symptom (August):** Journal script villages on. Huge lag, then a crash. The message was about a handler that was not accepted.
+
+**Failed:** One scan read every nearby chunk's biome in a single tick, and it cleared that work every scan so the spike repeated. Saving a village on player leave ran inside `beforeEvents`, which the engine rejects.
+
+**Worked:** At most 12 biome reads per scan, and a finished read is kept. Scans wait 5 seconds after the toggle turns on. Leave-save uses `afterEvents.playerLeave`.
+
+**Verify:** Fully exit. Turn script villages on from the book and stay in the world. It may hitch later, but it should not crash on the toggle.
+
+**Do not regress:** Do not put world saves back in `beforeEvents.playerLeave`. Do not clear the proximity cache at the start of every scan.
+
+## 2026-09-26 — Dev pack can generate vanilla villages again
+
+**Symptom (August):** The dev world had no normal villages. He wants them on for now.
+
+**Failed:** Leaving `BP - Dev/biomes/worldgen_no_village/` in the pack. Those files replace plains, desert, savanna, taiga, and meadow and drop `minecraft:village_type`. Dev also defaulted `mb_suppress_villagers` to ON, and existing worlds already had that saved, so villagers were deleted after a village generated.
+
+**Worked:** The ten village biomes stay as overrides. Each one has `minecraft:village_type` again, so the village roll is back. Schema 4 turns villager despawn off once. The journal toggle can turn script despawn back on. Abandoned script villages stay off. Infected biome files were never removed.
+
+**Verify:** Fully exit. Walk into chunks that have not been generated yet. Plains, desert, savanna, or taiga should have a normal village with villagers.
+
+**Do not regress:** Do not delete `worldgen_no_village` to get villages. Do not strip `minecraft:village_type` from those files. Do not run `generateNoVillageBiomeOverrides.js` into the live pack. Already generated chunks will not grow a village.
+
+## 2026-09-26 — Infected leaf litter keeps the vanilla pile size
+
+**Symptom:** Infected leaf litter was always a full carpet. Vanilla leaf litter on one block can be a small pile or a full patch (`growth` 0–3).
+
+**Worked:** `mb:growth` stores vanilla `growth` 0–7. 0 is one piece, 1–2 add pieces, 3–7 look like four pieces. Convert copies the exact amount. Default is 3 so older full patches stay full.
+
+**Verify:** Fully exit. Infect a sparse pile and a full pile. The dusty litter matches.
+
+**Do not regress:** Do not flatten every infected litter to one full plane.
+
+## 2026-09-24 — Infected vines use solid sides, not the soil list
+
+**Symptom (August):** Infected vines place on the side of leaf litter and on dirt, but not on oak logs.
+
+**Failed:** The vine item reused the ground-plant `use_on` soil list, so logs were not a valid click.
+
+**Worked:** No soil `use_on`. The block only attaches to north/south/east/west faces of solid blocks (axe, pickaxe, shovel, hoe, log, leaves, dirt). Leaf litter is not solid, so it is not a support. A vine near the player can infect one neighboring leaf or grass plant.
+
+**Do not regress:** Do not put the soil `use_on` list back on `mb:infected_vine`. Do not let vines attach to leaf litter. Do not give the vine a full-cube selection box. Collision stays off so you walk through it. The outline is one pixel on the attached face.
+
+**Failed (2026-09-24 playtest):** Showing the opposite bone (`north` when `block_face` is `south`) left the plane on the air side of the cell. Sound string `vine` is not a Bedrock sound id, so place and break fall back to stone.
+
+**Failed (playtest):** Same-name bones (`block_face` south showed the south plane) put the vine on the far side of the cell, not the face August clicked. That was wrong on more than half of placements and tracked which way he was facing. Sound `vines` is good.
+
+**Failed (playtest):** Opposite bones still left a gap on some facings. The plane sat in the cell in front of the block instead of on the face he clicked. Both sides of the texture do show (`alpha_test`).
+
+**Playtest (visual worked):** The rotated plane sits on the face he is looking at when he places it. Do not change those rotations.
+
+**Failed:** Moving every outline to the opposite edge put it on the texture for some faces and beside it or in the air for others.
+
+**Failed (playtest):** A separate outline per face sat to the left or right of the texture. The face rotation was also turning that outline.
+
+**Playtest (August, worked):** Texture and outline both sit on the face he clicks. Do not change the rotations or the outline.
+
+**Failed:** The plane’s outer face was exactly on the block edge, so the vine texture fought the block it was on.
+
+**Playtest (fighting, worked):** Inset stopped the flicker. Do not put the plane back on the block edge.
+
+**Failed:** A 1-pixel-thick plane looks like a white slab from the side. Vanilla vines are a hairline.
+
+**Playtest (August, worked):** Side view is a hairline, like vanilla. Fighting stays gone. He cannot climb them.
+
+**Why climbing is off:** `minecraft:climbable` is not in the 1.26 block schema. Adding it rejects the whole vine. August is fine with that: infected blocks are less useful than the vanilla ones. Leave climbing off.
+
+**Verify:** Fully exit. Place a new infected vine on a log and on leaves. The plane and outline sit on the bark or leaf you clicked. Place and break sound like vanilla vines, not stone. Old vines already in the world keep their old face.
+
+**Do not regress:** Do not bring back `mb:north` / `mb:south` states or `repairInfectedVineIfNeeded`. Do not set the vine sound to `vine` or `grass`.
+
+## 2026-09-24 — Plant item icons use the vanilla silhouette
+
+**Symptom (August screenshot):** Infected Pitcher Plant in the hotbar is a solid brown square.
+
+**Failed:** No `minecraft:item_visual`. The hotbar drew the crop bottom texture, which is a filled block, not the pitcher plant item.
+
+**Worked:** Item icon is a dusty recolor of the vanilla pitcher plant item (same silhouette). `item_visual` uses `minecraft:geometry.cross` and `ambient_occlusion: 0` because this block is format 1.26.40. Other plant items were already whitened vanilla silhouettes.
+
+**Do not regress:** Do not use the crop bottom texture as the item icon. Do not put boolean `ambient_occlusion` on 1.26.40 `item_visual`.
+
+## 2026-09-24 — Custom creative groups live in the item catalog
+
+**Symptom (August):** Creative inventory should be grouped, the way the flashlight pack (BFA) does it. Plant icons are much whiter than the placed plant. Plants break in water but can still be placed there.
+
+**Failed:** Putting `itemGroup.name.mb_infected_wood` on the block rejects it (`Identifier must have a namespace`). Putting `mb:infected_plants` on `menu_category.group` does not build the collapsible groups. Item icons were a second, stronger white pass than the world dust.
+
+**Worked:** `BP/item_catalog/crafting_item_catalog.json` is the only group source. Blocks keep `"menu_category": { "category": "nature" }` with no `group`. Lang is `mb:itemGroup.name.infected_plants=Infected Plants` (and flowers, leaves, wood, ground). Plant **item** icons are the vanilla item sprites with the same dust mix as the world plants (shading kept). Do not flatten them to one white, and do not use the block tile as the hotbar icon — that tile is the cross texture and does not match the vanilla item. Pitcher uses the pitcher item silhouette with that same dust. Placement into water is cancelled for walkable infected plants; water that arrives later still breaks them.
+
+**Worked (water place, 2026-09-24 follow-up):** Cancelling `playerInteractWithBlock` does not stop a block item from replacing water, so the plant still appears and `on_liquid_touches: broken` deletes it. Each walkable plant has an item with `replace_block_item`, `liquid_clipped: true`, and `use_on` limited to soil. The click hits the water, water is not a valid support, and the place is refused. That replacement item does not inherit the block name, so it shows `item.mb:…` unless `minecraft:display_name` is set to the same string as the block (flowers were the ones August saw).
+
+## 2026-09-23 — Custom creative groups need a namespace or the block is rejected
+
+**Symptom (August Content Log):** Swarm of `mb:infected_* used in blocks.json does not exist in the registry`, starting around jungle logs. Sound `normal`/`fly` is existing noise.
+
+**Failed:** Treating it as missing block files or a script export. The block JSON failed first: `itemGroup.name.mb_infected_wood | Identifier must have a namespace`.
+
+**Worked (superseded 2026-09-24):** A namespaced group on the block stopped the reject, but it does not create the collapsible creative groups. Those come from `item_catalog/crafting_item_catalog.json` only. Do not put `group` on the block.
+
+**Do not regress:** Do not put a lang key in `menu_category.group`. Do not put `menu_category.group` on MBA blocks.
+
+## 2026-09-24 — Powder layers are waterloggable
+
+**Symptom:** `"snow"` layers (`mb:snow_layer`) do not sit in water. Ground plants must still refuse water.
+**Worked:** `can_contain_liquid: true` and `on_liquid_touches: blocking` on the powder layer, `use_liquid_clipping: false` so the water stays a full block around the thin layer. The `mb:snow` item must be `liquid_clipped: false`. `true` places the layer on the water surface. `false` lets the click pass through so the layer occupies the water cell. Support is only the block underneath, and that block must be solid. A side-face rule with no filter treated nearby water as support, so a layer stayed up after it broke the seagrass under it. The same rule let a layer on the shore accept another layer beside it, bridging across the water. Do not add side or down faces back.
+**Verify (August 2026-09-24, worked):** After a full exit, the layer sits in water on a solid floor, does not sit on the water surface, does not sit on seagrass, and cannot be chained sideways across the water. He said the mechanic is working and the issues he found are solved.
+**Do not regress:** Do not waterlog ground plants. Do not turn powder into vanilla snow.
+
+## 2026-09-23 — Ground plants are not waterloggable
+
+**Symptom (August):** Infected mushrooms can be placed in a river and do not waterlog.
+
+**Worked:** Plant blocks (`collision_box: false`) use `minecraft:liquid_detection` with `can_contain_liquid: false` and `on_liquid_touches: broken`. Logs, leaves, and mushroom blocks stay solid.
+
+**Do not regress:** Do not waterlog ground plants. Do not add this rule to logs or leaves.
+
+## 2026-09-23 — Blast leaves must join the spread queue; vines are one climbable face
+
+**Symptom (August):** Infected vines wrap every edge. Foliage item icons do not match the normal plant shapes. Leaves hit by a torpedo or buff blast stay partly dusty and never finish.
+
+**Failed:** Vine states defaulted to every face on, and repair copied every supporting neighbor. Blast `forceDust` only queued a leaf after it was already fully dusty.
+
+**Worked:** One face (the supported side, otherwise south). Item icons are white copies of the vanilla sprites via `minecraft:item_visual`. Any successful leaf convert, including a partial blast stage, calls `rememberKnownLeafSource`. `minecraft:climbable: {}` is **not** in the 1.26 block schema — it rejects the whole vine (`child not valid here`). Climbing is not available on this custom block until that component exists.
+
+**Do not regress:** Do not turn all vine faces on. Do not queue a leaf only at the cream stage. Do not put `minecraft:climbable` on the vine JSON.
+
+## 2026-09-23 — Flowers and bushes convert; creative menu is grouped
+
+**Symptom (August):** Every flower variant should infect. Creative inventory should be organized. Bushes are another plant block and should infect too.
+
+**Worked:** Each vanilla flower, pink petals, and `minecraft:bush` converts to a dusty block (tall flowers keep both halves). `worldgenWeight` 0 so forests do not scatter them. Creative groups: Infected Flowers, Plants, Leaves, Wood, Ground.
+
+**Verify:** Fully exit. Infect a flower patch and a bush. Creative nature tab shows those groups.
+
+**Do not regress:** Do not add flowers or bushes to the forest floor weighted list. Do not run the full foliage generator (it rewrites KEEP grass).
+
+## 2026-09-23 — Wildflower edge speck is the plane’s side faces; stems drop only when finished
+
+**Symptom (August screenshot):** A little yellow mark on the edge of an infected wildflower. He likes the sunken, stemless look. He wants stems like normal until the flower is fully infected, then no stems.
+
+**Failed:** Sharing `geometry.infected_leaf_litter`. Its north/south/east/west faces sample texture row 15, and that row is yellow petal pixels, so the thin rim draws a yellow sliver. One texture with no stem state cannot show both looks.
+
+**Worked:** `geometry.infected_wildflowers` draws only the top and bottom, so the rim is gone. Fresh converts set `mb:stem` true. Stem Z follows the up-face (texture row 0 is +Z); the first pass used row 0 as −Z, so the posts sat beside the petals. The next infection touch sets `mb:stem` false, sinks the flower, and swaps to the whiter `infected_wildflowers_full` texture. Default state is false, so flowers already finished stay sunken.
+
+**Verify:** Fully exit. A vanilla wildflower next to infection should show short stems, then sink flat with no yellow edge. Leaf litter should look unchanged.
+
+**Do not regress:** Do not put side faces back on the sunken plane. Do not change leaf-litter UVs. Do not stand wildflowers up on `geometry.cross`.
+
+## 2026-09-23 — Wildflowers are a flat flower cutout, same plane as leaf litter
+
+**Symptom (August):** Wild flowers block needs a texture. It is similar to leaf litter.
+
+**Failed:** No `mb:infected_wildflowers`. A standing cross would make a flower carpet look like a tall plant. Remapping the sprite to brown litter would erase the yellow and pale-blue petals.
+
+**Worked:** Same thin plane as `geometry.infected_leaf_litter`. Bake keeps petal colors and dusts highlights with powder. Convert when infection reaches `minecraft:wildflowers`. `worldgenWeight` 0 so infected forests do not scatter them.
+
+**Verify:** Fully exit. A vanilla wildflower patch next to infection should become a flat dusty flower carpet. Birch and meadow flowers should still read as flowers, not brown leaves.
+
+**Do not regress:** Do not put wildflowers on `geometry.cross` or the snow-layer slab. Do not rebake KEEP leaf litter. Do not add wildflowers to the general floor weighted list.
+
 ## 2026-09-23 — Ground fast path round-robin after day 3
 
 - **Symptom:** `spreadPlayersForWork` only rotates players through day 3. At day 100 the infected-ground fast loop still checks every player every pass.
 - **Failed:** Turning the day-3 gate off globally would also rotate biome, inventory, and other callers.
 - **Worked:** Optional `forceRoundRobin` on `spreadPlayersForWork`, used only by the ground fast path when the world has 2+ players. One on-ground player per pass. Timers stay in seconds.
-- **Verify:** Change C in `docs/development/testing/infection-spread-efficiency-check.md`. Two players on infected ground both still infect. Solo cadence unchanged.
+- **Verify:** Change C in `docs/development/testing/infection-spread-efficiency-check.md`. Two players on infected ground both still infect. Solo cadence unchanged. **Playtest (August 2026-09-23):** spreading looks good in his session. He still needs more players before this is signed off.
 
 ## 2026-09-23 — Infection writes must drain, not drop
 
 - **Symptom:** Day-100 hitch from kill `setType` bursts and storm snow waves, plus a full `dustedDirtCache` walk per player on infected ground.
 - **Failed:** Clamping storm placement back to the day-40 count. `fillBlocks` on the whole radius is one spike. A custom tick on every infected block gets worse as the area grows.
 - **Worked:** One host queue and `system.runJob`. Yield between slices of 24 dust writes and 8 snow attempts. Leave the tail queued. Ambient pressure: one spatial sample per 32-block player cluster.
-- **Verify:** `docs/development/testing/infection-spread-efficiency-check.md` with 2+ players on a day-100 world. Self-test should show the write queue return to empty.
+- **Verify:** `docs/development/testing/infection-spread-efficiency-check.md` with 2+ players on a day-100 world. Self-test should show the write queue return to empty. **Playtest (August 2026-09-23):** “Spreading seems to be working,” but he still needs to test with more players. Do not call the multiplayer gate done.
 
+
+## 2026-09-19 — Mycelium/podzol biomes slow spread; mushrooms do not convert
+
+**Symptom (August):** Spread should take longer in biomes with mycelium and podzol. Later: infected red and brown mushrooms look the same as vanilla, so they should not have an infected form. Mushroom blocks should not infect. That is why the mooshroom biome is mostly uninfectable. Mycelium should infect a lot slower.
+
+**Failed:** Treating mycelium like grass. Slowing only the podzol *block* left grass/dirt in giant taiga and mushroom fields at full speed. Making mushroom island immune (or letting mushrooms purify neighbors) would be a turtle box. A slower mushroom-plant convert still looked identical to vanilla.
+
+**Worked:** Red and brown mushroom plants convert only from day 25, at the same ×0.2 as mycelium. Mushroom fields + giant/old-growth taiga still apply ×0.55 on top. Dirt, grass, and trees in those biomes can still infect. Those biomes stay off infected `replace_biomes`.
+
+**2026-09-26:** August reversed the block ban, then matched the slow rate. Brown and red mushroom blocks and the stem convert on the wood path, but only from day 25 and at ×0.2, the same as mycelium. Guaranteed log hops still roll that chance, so a cap does not flip all at once. `mb:bits` keeps `huge_mushroom_bits` so a cleared cap is the same shape. The dusty texture is still one cube. Small mushroom plants stay on that same day and rate.
+
+**Verify:** Fully exit. Before day 25, mushroom plants, blocks, and stems stay vanilla. After that, a giant mushroom next to dusted dirt turns dusty slowly, like mycelium. Mycelium crawls at that same rate.
+
+**Do not regress:** Do not add mushroom_island / mega_taiga to infected `replace_biomes`. Do not make those biomes immune. Do not let mushroom plants, blocks, or stems convert before day 25, or at full wood speed. Do not drop `mb:bits` on convert. Do not implement mushrooms purifying / fighting back until August asks. Do not extra-roll plains grass.
+
+## 2026-09-23 — Nether infection starts when a player enters, then spreads faster
+
+**Symptom (August):** Lore is that opening the portal lets infection enter the nether, and it spreads better there even though the nether is hot.
+
+**Failed:** Nether leaf and wood scans ran whenever a player was already in the nether, with no portal gate and no speed bonus. Ground scans skipped the nether entirely.
+
+**Worked:** World flag `mb_nether_breach` is set the first time a player is in the nether. Until then, nether leaf, wood, and ground scans do nothing. After that, nether spread chance is ×1.65 versus the overworld. Nylium still converts to dusty dirt. Nether plants are not scattered in overworld forests.
+
+**Verify:** Fully exit. A nether that nobody has entered stays clean. After one trip through, nether infection starts and moves faster than the overworld.
+
+**Do not regress:** Do not infect the nether before a player has entered. Do not skip nylium. Do not turn dusty nether ground back into grass_block. Do not scatter nether plants in overworld forests.
 
 ## 2026-09-19 — Floor plants attach to soil; do not place grass in the air
 
@@ -66,18 +277,6 @@ Vault index: `C:\Users\Augus\OneDrive\Documents\Obsidian Vault\Atlas\Lessons.md`
 **Verify:** Fully exit to title. What's new **Beta 5.8**. No duplicate-ingredient recipe warning. Coarse dirt + powder should not craft dusty dirt.
 
 **Do not regress:** Do not copy-only into Bridge or development packs. Fully exit after sync — one leave/rejoin can still run the old scripts.
-
-## 2026-09-19 — Mycelium/podzol biomes slow spread; mushrooms resist, they do not purify
-
-**Symptom (August):** Spread should take longer in biomes with mycelium and podzol. Mushrooms could be the bane of the infection. Maybe.
-
-**Failed:** Treating mycelium like grass. Slowing only the podzol *block* left grass/dirt in giant taiga and mushroom fields at full speed. Making mushroom island immune (or letting mushrooms purify neighbors) would be a turtle box. Applying the neighbor-chance roll to *all* foliage would stall plains grass that already felt good.
-
-**Worked:** Mycelium uses the same ×0.45 as podzol. Mushroom fields + giant/old-growth taiga apply an extra ×0.55 on ground, foliage, and kill-burst (`dimension.getBiome` once per burst). Vanilla brown/red mushrooms take an extra ×0.4 fail vs grass. Grass in plains stays full neighbor hops. Those biomes stay off infected `replace_biomes`. Stacking podzol × biome is slower, not immune.
-
-**Verify:** Fully exit. Mushroom fields / giant taiga crawl slower than plains. Vanilla mushrooms convert slower than grass. Coarse dirt still never infects. **Playtest (August log 2026-09-19):** second join loaded **Beta 5.8**. First rejoin was still **5.3**. Biome crawl speed not confirmed yet.
-
-**Do not regress:** Do not add mushroom_island / mega_taiga to infected `replace_biomes`. Do not make those biomes immune. Do not implement mushrooms purifying / fighting back until August asks. Do not extra-roll plains grass just to resist mushrooms.
 
 ## 2026-09-19 — Wall vines need direction bits; do not cream-box all four faces
 
@@ -145,11 +344,9 @@ Vault index: `C:\Users\Augus\OneDrive\Documents\Obsidian Vault\Atlas\Lessons.md`
 
 **Failed:** Copying 1.26.10 plant JSON onto format **1.26.40**. That format rejects: `is_experimental`, boolean `ambient_occlusion` (must be float **0.0–10.0**), `use_efficiency` on `destructible_by_mining` (object is only `seconds_to_destroy` + optional `item_specific_speeds`), and `tag:*` (1.26.20+ uses `minecraft:tags`). Each extra field **rejects the whole block**. `invalid numeric` / `invalid string` are fallback parsers when the object fails.
 
-**Worked:** `ambient_occlusion: 0`. Mining object without `use_efficiency`. `minecraft:tags: ["minecraft:is_shears_item_destructible"]`. Leave 1.26.10 plants on the old fields.
+**Worked:** `ambient_occlusion: 0` on the block **and** on `minecraft:item_visual` material instances. Mining object without `use_efficiency`. `minecraft:tags: ["minecraft:is_shears_item_destructible"]`. Leave 1.26.10 plants on the old fields. Same float on the 1.26.40 tall flowers (sunflower, lilac, rose bush, peony, pitcher plant).
 
-**Verify:** Fully exit. No `material_instances` / `destructible_by_mining` / unknown-block / `blocks.json` lines for those two IDs. VAN double tall grass next to infection should become a 2-block dusty plant.
-
-**Do not regress:** Do not copy 1.26.10 block fields onto 1.26.40. Do not put `is_experimental`, boolean occlusion, `use_efficiency`, or `tag:*` on 1.26.20+ custom blocks.
+**Do not regress:** Do not copy 1.26.10 block fields onto 1.26.40. Do not put `is_experimental`, boolean occlusion, `use_efficiency`, or `tag:*` on 1.26.20+ custom blocks. Do not leave `ambient_occlusion: false` inside `item_visual` either.
 
 ## 2026-09-19 — Mining/buff chew diamond-slow blocks; only survival-unbreakable stays closed
 
@@ -693,7 +890,9 @@ Vault index: `C:\Users\Augus\OneDrive\Documents\Obsidian Vault\Atlas\Lessons.md`
 
 **Failed:** Grass sources were only dusted dirt, infected leaves, and powder. Wood ticks only chained logs.
 
-**Worked:** Infected wood is a grass infection source (including a log sitting on grass). `onInfectedWoodTick` calls `tryInfectGrassAround` after the log hop. Still no tick on every dusted_dirt or vanilla log.
+**Worked:** Infected wood is a grass infection source (including a log sitting on grass). The wood drain calls `tryInfectGroundBesideWood`: the dirt under the log and the four around that base. A finished log stays in the list until that ring is dusted. Still no tick on every dusted_dirt or vanilla log.
+
+**Failed (2026-09-26):** That grass call was gone, and a fully dusty log with no vanilla wood neighbor was dropped, so the base never dusted the dirt around the trunk.
 
 **Verify:** Fully exit to menu. Place an infected log on grass day 2+ — the grass_block under/beside it becomes dusted dirt; plants on it become powder.
 
@@ -749,7 +948,7 @@ Vault index: `C:\Users\Augus\OneDrive\Documents\Obsidian Vault\Atlas\Lessons.md`
 
 **Verify (August):** Fully exit to menu. Infected oak log next to vanilla oak logs should dust the trunk. Nether: powder on crimson stem / wart block converts (opaque, not see-through). Mine infected leaves — snow drops more often than dusted dirt. Buff explosion near trees Snow-stages remaining canopy.
 
-**Do not regress:** No tick on every vanilla log or dusted_dirt. Do not render nether wart/stems with leaf cutout geo. No bamboo/mushroom stems yet. Do not overwrite `mb_buildConfig.js`.
+**Do not regress:** No tick on every vanilla log or dusted_dirt. Do not render nether wart/stems with leaf cutout geo. No bamboo yet. Mushroom blocks and stems convert (2026-09-26). Do not overwrite `mb_buildConfig.js`.
 
 ## 2026-08-31 — Planned vegetation + sheep pass
 

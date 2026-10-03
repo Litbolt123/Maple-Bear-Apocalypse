@@ -5,12 +5,13 @@ Bump **`PLAYER_CHANGELOG_VERSION`** in `mb_playerChangelog.js` when you ship a n
 
 Keep **`docs/development/releases/UNRELEASED_DRAFT.md`** in lockstep. On tag day copy into **`docs/RELEASE_BODY.md`**.
 
-## Unreleased — v0.9.0-beta.5.10 (next public / current Dev notes)
+## Unreleased — v0.9.0-beta.5.13 (next public / current Dev notes)
 
-Landed in **`BP/`** + **`BP - Dev/`** after public **beta.5**. Journal **What's new** version is **`0.9.0-beta.5.10`**. Public pack semver stays **`0.9.0-beta.5`** until the next GitHub / store tag. Dev pack display is **`beta.5.10`**.
+Landed in **`BP/`** + **`BP - Dev/`** after public **beta.5**. Journal **What's new** version is **`0.9.0-beta.5.12`**. Public pack semver stays **`0.9.0-beta.5`** until the next GitHub / store tag. Dev pack display is **`beta.5.12`**.
 
 ### Infection & world
 
+- **Dusty wildflowers** keep short stems until they finish, then sink flat with no stems. They convert when infection reaches them. They do not scatter across every infected forest.
 - **Dusty grass plants** grow on the ground, not in the air in the trees.
 - **Dusty firefly bushes** do not grow in infected forests. Vanilla firefly bushes by water still convert when infection reaches them.
 - **Podzol** infects to dusty dirt for now. **Coarse dirt** does not infect.

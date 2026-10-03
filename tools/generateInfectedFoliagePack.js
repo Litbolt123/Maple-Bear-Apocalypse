@@ -101,6 +101,15 @@ const FOLIAGE = [
         worldgenWeight: 3
     },
     {
+        id: "wildflowers",
+        title: "Wildflowers",
+        vanilla: ["minecraft:wildflowers"],
+        kind: "litter",
+        sound: "grass",
+        walkable: true,
+        worldgenWeight: 0
+    },
+    {
         id: "vine",
         title: "Vines",
         vanilla: ["minecraft:vine"],
@@ -440,7 +449,8 @@ function mayReplacePlants() {
         "minecraft:brown_mushroom",
         "minecraft:red_mushroom",
         "minecraft:red_shrub",
-        "minecraft:leaf_litter"
+        "minecraft:leaf_litter",
+        "minecraft:wildflowers"
     ];
 }
 
